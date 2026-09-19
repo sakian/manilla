@@ -28,8 +28,13 @@ export type Band = 'high' | 'medium' | 'low';
 /**
  * CA-7. `high` is pre-assigned and bulk-confirmable; `medium` is shown as a
  * suggestion to glance at; `low` is left uncategorized with candidates listed.
+ *
+ * The high cutoff is 0.95 because that is where measurement put it, not by
+ * taste. On a real month of history, 0.95 auto-confirms 14% of transactions at
+ * 98.4% precision, while the 0.85 originally proposed auto-confirms 26% at only
+ * 79.5% - roughly one wrong entry in five, which is worse than not automating.
  */
-export const BAND_THRESHOLDS = { high: 0.85, medium: 0.5 } as const;
+export const BAND_THRESHOLDS = { high: 0.95, medium: 0.5 } as const;
 
 export function bandOf(confidence: number): Band {
   if (confidence >= BAND_THRESHOLDS.high) return 'high';

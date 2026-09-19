@@ -6,7 +6,7 @@ them without doing it all by hand.
 
 Requirements live in the [requirements doc](https://claude.ai/code/artifact/5da0430a-8b8f-44cd-af2b-277fb6345fb5).
 
-## Status: Phase 0 (de-risking)
+## Status: Phase 0 (de-risking) - complete except the AI layer
 
 Phase 0 exists to answer questions that would be expensive to get wrong later,
 using real files rather than assumptions. No app yet - just the parsers and the
@@ -17,6 +17,24 @@ measurement harness.
 | Stack | TypeScript, Next.js + Postgres, self-hosted in Docker |
 | Banking | Canada (OFX/QFX import; aggregator choice deferred to Phase 5) |
 | AI | Hosted Claude API (`claude-opus-5`), minimal payload, off switch |
+| Users | Single user for now; multi-user deferred |
+
+Measured against a real 7,957-row GoodBudget export (2021-2026) and a real TD
+OFX file. The headline result is that **categorization accuracy is capped at
+64.6% by the data itself**, not by the model: 68% of transactions happen at
+merchants used for more than one envelope (Amazon Marketplace alone spans 21
+envelopes across 712 transactions). Whether an Amazon order was Clothing or
+Groceries is simply not in the bank feed.
+
+Consequences, recorded in section 12 of the requirements doc:
+
+- The history layer reaches 60.3%, already near the 64.6% ceiling. Tuning moves
+  it by 1-3 points, so there is little left there.
+- The auto-confirm threshold is **0.95**, not the 0.85 first proposed. At 0.95
+  it confirms 14% of transactions at 98.4% precision; at 0.85 it confirms 26%
+  at 79.5%, which means one wrong entry in five.
+- The fast review queue matters more than the AI layer, because roughly half of
+  all transactions will always need a human decision.
 
 ## Requirements
 
@@ -50,7 +68,7 @@ Put real exports in `data/private/` first. That folder is gitignored, so
 financial data never reaches version control.
 
 ```bash
-npm test                 # 54 tests, no network, no spend
+npm test                 # 66 tests, no network, no spend
 npm run typecheck
 
 npm run ofx              # profile bank OFX/QFX files
@@ -80,6 +98,12 @@ silently guessed.
 date is a calendar date, not an instant. Parsing `20250903000000[-6:MDT]` into a
 `Date` and reading it elsewhere can shift a transaction into the previous day,
 and therefore into the wrong budget month.
+
+**Date *format* is decided per file, never per row.** The real GoodBudget export
+is D/M/Y despite being a North American file. The format is inferred from rows
+that can only be read one way - a first component above 12 - and 4,450 such rows
+settle it. Guessing per row would have silently misdated thousands of
+transactions.
 
 **Automation proposes, you confirm.** Imported transactions arrive as
 *pending review* with a suggested envelope and a confidence score. High

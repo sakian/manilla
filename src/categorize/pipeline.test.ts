@@ -29,8 +29,11 @@ function fakeAi(answers: Record<string, Suggestion>) {
 }
 
 test('confidence bands', () => {
+  assert.equal(bandOf(0.97), 'high');
   assert.equal(bandOf(0.95), 'high');
-  assert.equal(bandOf(0.85), 'high');
+  // 0.85 is deliberately NOT auto-confirmable: measured precision there was
+  // 79.5%, so bulk-confirming would introduce an error in roughly one in five.
+  assert.equal(bandOf(0.85), 'medium');
   assert.equal(bandOf(0.7), 'medium');
   assert.equal(bandOf(0.49), 'low');
   assert.equal(bandOf(0), 'low');

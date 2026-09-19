@@ -41,7 +41,7 @@ test('a single sighting is a hint, not a conclusion', () => {
 
 test('confidence grows with consistent repetition', () => {
   // The months immediately before the query date: decay is tested separately.
-  const months = ['2025-05-01', '2025-06-01', '2025-07-01', '2025-08-01'];
+  const months = ['2025-03-01', '2025-04-01', '2025-05-01', '2025-06-01', '2025-07-01', '2025-08-01'];
   const seen = (count: number) => {
     const history = months.slice(-count).map((date) => txn(date, 'BLUE DOOR COFFEE', -540, 'Dining'));
     return new HistoryIndex(history).suggest({
@@ -52,7 +52,8 @@ test('confidence grows with consistent repetition', () => {
   };
 
   assert.ok(seen(1) < seen(2) && seen(2) < seen(4), 'more evidence, more confidence');
-  assert.equal(bandOf(seen(4)), 'high', 'four consistent sightings are auto-confirmable');
+  assert.equal(bandOf(seen(1)), 'medium', 'one sighting is only a suggestion');
+  assert.equal(bandOf(seen(6)), 'high', 'six consistent recent sightings are auto-confirmable');
 });
 
 test('recent decisions outweigh old ones', () => {
