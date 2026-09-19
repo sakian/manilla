@@ -1,16 +1,24 @@
 /**
- * GoodBudget export loader (MG-1, MG-2).
+ * GoodBudget export loader (MG-1 to MG-5).
  *
- * The exact column names in a GoodBudget CSV export are not yet confirmed
- * against a real file, so columns are detected by matching header names against
- * a list of aliases rather than hard-coded positions. `describeMapping` reports
- * what it matched, which is how the Phase 0 inspector shows whether the guess
- * was right before any data is trusted.
+ * Verified against a real 7,957-row, six-year export. Three things that export
+ * taught us, each of which would have corrupted the migration silently:
+ *
+ *  1. Dates are D/M/Y, not the M/D/Y a North American file suggests. The format
+ *     is therefore decided once for the whole file from rows that can only be
+ *     read one way (a first component above 12), never guessed per row.
+ *  2. Splits live in the `Details` column as `Envelope|Amount` pairs separated
+ *     by `||`, on a parent row whose own `Envelope` is blank.
+ *  3. Income arrives as a split into the pseudo-envelope `[Available]`, which is
+ *     GoodBudget's unallocated pool - the Income envelope of FR-28.
  */
 
 import { parseCsv, detectDelimiter, toRecords } from '../csv.ts';
 import { parseAmount } from '../money.ts';
 import type { LabeledTransaction } from '../categorize/types.ts';
+
+/** GoodBudget's unallocated pool, equivalent to Manilla's Income envelope. */
+export const AVAILABLE = '[Available]';
 
 /** Candidate header names per field, lowercased, most specific first. */
 const ALIASES = {
@@ -19,12 +27,12 @@ const ALIASES = {
   envelope: ['envelope', 'category', 'envelope name', 'bucket'],
   amount: ['amount', 'value', 'debit/credit'],
   account: ['account', 'account name'],
-  notes: ['notes', 'note', 'memo', 'details', 'description2'],
+  notes: ['notes', 'note', 'memo'],
   status: ['status', 'cleared'],
+  details: ['details', 'split', 'splits'],
 } as const;
 
 export type FieldName = keyof typeof ALIASES;
-
 export type ColumnMapping = Partial<Record<FieldName, string>>;
 
 export function detectColumns(headers: string[]): ColumnMapping {
@@ -46,49 +54,142 @@ export function detectColumns(headers: string[]): ColumnMapping {
   return mapping;
 }
 
+export type DateFormat = 'iso' | 'dmy' | 'mdy' | 'ambiguous';
+
 /**
- * Normalize the date formats an export might use into `YYYY-MM-DD`.
- * Ambiguous day/month ordering is reported rather than guessed.
+ * Decide the file's date format from the whole column rather than row by row.
+ *
+ * A component above 12 can only be a day, so a single such row settles the
+ * question for the file. If both positions exceed 12 somewhere the file is
+ * inconsistent, which is reported rather than averaged over.
  */
-export function parseExportDate(raw: string): { date?: string; ambiguous?: boolean } {
+export function detectDateFormat(values: string[]): { format: DateFormat; evidence: string } {
+  let firstOver12 = 0;
+  let secondOver12 = 0;
+  let iso = 0;
+  let slashed = 0;
+
+  for (const value of values) {
+    const text = value.trim();
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(text)) {
+      iso += 1;
+      continue;
+    }
+    const match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(text);
+    if (!match) continue;
+    slashed += 1;
+    if (Number(match[1]) > 12) firstOver12 += 1;
+    if (Number(match[2]) > 12) secondOver12 += 1;
+  }
+
+  if (iso > 0 && slashed === 0) return { format: 'iso', evidence: `${iso} ISO-formatted rows` };
+  if (firstOver12 > 0 && secondOver12 > 0) {
+    return {
+      format: 'ambiguous',
+      evidence: `inconsistent: ${firstOver12} row(s) need D/M/Y and ${secondOver12} need M/D/Y`,
+    };
+  }
+  if (firstOver12 > 0) {
+    return { format: 'dmy', evidence: `${firstOver12} row(s) have a first component above 12` };
+  }
+  if (secondOver12 > 0) {
+    return { format: 'mdy', evidence: `${secondOver12} row(s) have a second component above 12` };
+  }
+  return { format: 'ambiguous', evidence: 'every row could be read either way' };
+}
+
+export function parseExportDate(raw: string, format: DateFormat): string | undefined {
   const text = raw.trim();
 
   const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
-  if (iso) {
-    return { date: `${iso[1]}-${iso[2]!.padStart(2, '0')}-${iso[3]!.padStart(2, '0')}` };
+  if (iso) return `${iso[1]}-${iso[2]!.padStart(2, '0')}-${iso[3]!.padStart(2, '0')}`;
+
+  const match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(text);
+  if (!match) return undefined;
+
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  const year = match[3]!.length === 2 ? `20${match[3]}` : match[3]!;
+
+  // A component above 12 settles the row regardless of the file-level format.
+  let day: number;
+  let month: number;
+  if (first > 12) {
+    day = first;
+    month = second;
+  } else if (second > 12) {
+    month = first;
+    day = second;
+  } else if (format === 'dmy') {
+    day = first;
+    month = second;
+  } else {
+    month = first;
+    day = second;
   }
 
-  const slashed = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(text);
-  if (slashed) {
-    const first = Number(slashed[1]);
-    const second = Number(slashed[2]);
-    const year = slashed[3]!.length === 2 ? `20${slashed[3]}` : slashed[3]!;
-    // North American exports are M/D/Y. If the first number cannot be a month,
-    // it must be D/M/Y; if both are <= 12 the file is genuinely ambiguous.
-    const monthFirst = first <= 12;
-    const month = monthFirst ? first : second;
-    const day = monthFirst ? second : first;
-    return {
-      date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-      ambiguous: first <= 12 && second <= 12 && first !== second,
-    };
-  }
-
-  const parsed = Date.parse(text);
-  if (!Number.isNaN(parsed)) return { date: new Date(parsed).toISOString().slice(0, 10) };
-
-  return {};
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
+
+/** One `Envelope|Amount` pair from the Details column. */
+export type SplitPart = { envelope: string; amountCents: number };
+
+/** `Living:Groceries|-12.00||Health:Equipment|-24.40` -> two parts. */
+export function parseDetails(details: string): SplitPart[] {
+  const text = details.trim();
+  if (text === '') return [];
+
+  const parts: SplitPart[] = [];
+  for (const chunk of text.split('||')) {
+    const separator = chunk.lastIndexOf('|');
+    if (separator < 0) continue;
+    const envelope = chunk.slice(0, separator).trim();
+    const rawAmount = chunk.slice(separator + 1).trim();
+    if (envelope === '' || rawAmount === '') continue;
+    try {
+      parts.push({ envelope, amountCents: parseAmount(rawAmount).cents });
+    } catch {
+      // Reported by the caller as an unreadable split rather than dropped silently.
+      return [];
+    }
+  }
+  return parts;
+}
+
+export type RowKind =
+  /** A normal categorized transaction. */
+  | 'spending'
+  /** A parent row split across several envelopes. */
+  | 'split'
+  /** Money into the unallocated pool. */
+  | 'income'
+  /** Between the user's own accounts; no envelope, never spending (FR-5). */
+  | 'transfer'
+  /**
+   * Money moved between envelopes (FR-34). Exported as a matched +/- pair with
+   * no account. Not spending, and poisonous as categorization training data:
+   * in the sample export these 284 rows spanned 42 envelopes with no payee
+   * signal at all.
+   */
+  | 'envelopeTransfer'
+  /** A monthly "Fill Envelopes" marker. Carries no allocation data in the export. */
+  | 'fill';
+
+/** GoodBudget's fixed payee name for an envelope-to-envelope move. */
+const ENVELOPE_TRANSFER_PAYEE = 'envelope transfer';
 
 export type LoadResult = {
   mapping: ColumnMapping;
+  dateFormat: DateFormat;
+  dateEvidence: string;
+  /** Envelope-bearing lines, with splits expanded into one line per envelope. */
   transactions: LabeledTransaction[];
-  /** Rows that could not be read, with the reason. */
+  counts: Record<RowKind, number>;
+  /** Rows expanded from split parents. */
+  splitLines: number;
   skipped: { row: number; reason: string }[];
-  /** Non-fatal observations worth showing before committing a migration. */
   warnings: string[];
-  /** Rows whose date format could have been read two ways. */
-  ambiguousDates: number;
 };
 
 export function loadGoodBudgetExport(source: string): LoadResult {
@@ -99,66 +200,117 @@ export function loadGoodBudgetExport(source: string): LoadResult {
   const skipped: LoadResult['skipped'] = [];
   const warnings: string[] = [];
   const transactions: LabeledTransaction[] = [];
-  let ambiguousDates = 0;
+  const counts: Record<RowKind, number> = {
+    spending: 0, split: 0, income: 0, transfer: 0, envelopeTransfer: 0, fill: 0,
+  };
+  let splitLines = 0;
 
   const missing = (['date', 'payee', 'amount'] as FieldName[]).filter((field) => !mapping[field]);
   if (missing.length > 0) {
     warnings.push(
       `Could not find a column for: ${missing.join(', ')}. Headers seen: ${table.headers.join(', ') || '(none)'}`,
     );
-    return { mapping, transactions, skipped, warnings, ambiguousDates };
+    return {
+      mapping, dateFormat: 'ambiguous', dateEvidence: 'not determined',
+      transactions, counts, splitLines, skipped, warnings,
+    };
   }
-  if (!mapping.envelope) {
-    warnings.push('No envelope/category column found; transactions will load uncategorized');
+
+  const { format: dateFormat, evidence: dateEvidence } = detectDateFormat(
+    records.map((record) => record[mapping.date!] ?? ''),
+  );
+  if (dateFormat === 'ambiguous') {
+    warnings.push(
+      `Date format could not be determined (${dateEvidence}). Reading as M/D/Y; confirm before committing a migration.`,
+    );
   }
 
   records.forEach((record, index) => {
     const rowNumber = index + 2; // 1-based, plus the header row
-    const { date, ambiguous } = parseExportDate(record[mapping.date!] ?? '');
+    const date = parseExportDate(record[mapping.date!] ?? '', dateFormat);
     if (!date) {
       skipped.push({ row: rowNumber, reason: `Unreadable date "${record[mapping.date!]}"` });
       return;
     }
-    if (ambiguous) ambiguousDates += 1;
+
+    const payeeRaw = (record[mapping.payee!] ?? '').trim();
+    const envelope = (mapping.envelope ? record[mapping.envelope] : '')?.trim() ?? '';
+    const details = (mapping.details ? record[mapping.details] : '')?.trim() ?? '';
+    const account = mapping.account ? record[mapping.account] : undefined;
+    const memo = mapping.notes ? record[mapping.notes]?.trim() : undefined;
 
     const rawAmount = record[mapping.amount!] ?? '';
-    if (rawAmount.trim() === '') {
-      skipped.push({ row: rowNumber, reason: 'Empty amount' });
-      return;
+    let amountCents = 0;
+    if (rawAmount.trim() !== '') {
+      try {
+        const parsed = parseAmount(rawAmount);
+        amountCents = parsed.cents;
+        if (parsed.warning) warnings.push(`Row ${rowNumber}: ${parsed.warning}`);
+      } catch (error) {
+        skipped.push({ row: rowNumber, reason: (error as Error).message });
+        return;
+      }
     }
 
-    let amountCents: number;
-    try {
-      const parsedAmount = parseAmount(rawAmount);
-      amountCents = parsedAmount.cents;
-      if (parsedAmount.warning) warnings.push(`Row ${rowNumber}: ${parsedAmount.warning}`);
-    } catch (error) {
-      skipped.push({ row: rowNumber, reason: (error as Error).message });
-      return;
-    }
-
-    transactions.push({
+    const base = {
       date,
-      payeeRaw: record[mapping.payee!] ?? '',
-      amountCents,
-      envelope: (mapping.envelope ? record[mapping.envelope] : '')?.trim() || '(uncategorized)',
-      ...(mapping.account ? { account: record[mapping.account] } : {}),
-      ...(mapping.notes && record[mapping.notes] ? { memo: record[mapping.notes] } : {}),
-    });
+      payeeRaw,
+      ...(account ? { account } : {}),
+      ...(memo ? { memo } : {}),
+    };
+
+    // A monthly fill marker. GoodBudget exports these with no amount and no
+    // per-envelope breakdown, so historical allocations are not recoverable.
+    if (payeeRaw === 'Fill Envelopes') {
+      counts.fill += 1;
+      return;
+    }
+
+    // An envelope-to-envelope move. It carries an envelope, so it would
+    // otherwise be mistaken for spending.
+    if (payeeRaw.toLowerCase() === ENVELOPE_TRANSFER_PAYEE) {
+      counts.envelopeTransfer += 1;
+      return;
+    }
+
+    if (envelope !== '') {
+      counts.spending += 1;
+      transactions.push({ ...base, amountCents, envelope });
+      return;
+    }
+
+    const parts = parseDetails(details);
+    if (parts.length > 0) {
+      const onlyAvailable = parts.every((part) => part.envelope === AVAILABLE);
+      counts[onlyAvailable ? 'income' : 'split'] += 1;
+
+      const sum = parts.reduce((total, part) => total + part.amountCents, 0);
+      if (sum !== amountCents) {
+        warnings.push(
+          `Row ${rowNumber}: split parts sum to ${sum} but the row total is ${amountCents}`,
+        );
+      }
+
+      for (const part of parts) {
+        splitLines += 1;
+        transactions.push({ ...base, amountCents: part.amountCents, envelope: part.envelope });
+      }
+      return;
+    }
+
+    if (details !== '') {
+      warnings.push(`Row ${rowNumber}: unreadable Details "${details.slice(0, 40)}"`);
+    }
+
+    // No envelope and no split detail: a transfer between the user's own accounts.
+    counts.transfer += 1;
   });
 
-  if (ambiguousDates > 0) {
-    warnings.push(
-      `${ambiguousDates} row(s) have a D/M/Y-or-M/D/Y date. Confirm the export's date format before committing.`,
-    );
-  }
-
-  return { mapping, transactions, skipped, warnings, ambiguousDates };
+  return { mapping, dateFormat, dateEvidence, transactions, counts, splitLines, skipped, warnings };
 }
 
 export function describeMapping(mapping: ColumnMapping): string {
-  const fields = Object.keys(ALIASES) as FieldName[];
-  return fields
+  return (Object.keys(ALIASES) as FieldName[])
     .map((field) => `  ${field.padEnd(9)} -> ${mapping[field] ?? '(not found)'}`)
     .join('\n');
 }

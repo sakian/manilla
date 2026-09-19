@@ -201,6 +201,54 @@ if (ai) {
     (handled > 0 ? ` (~$${((cost / handled) * 1000).toFixed(2)} per 1,000)` : ''));
 }
 
+// How safe is the auto-confirm band? A wrong high-confidence suggestion is
+// worse than an honest low-confidence one, so the threshold should be chosen
+// from measured precision, not picked in advance (CA-7).
+console.log('\n  Auto-confirm threshold sweep:');
+console.log('    cutoff   confirmed   of all   correct');
+for (const cutoff of [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.97]) {
+  let confirmed = 0;
+  let right = 0;
+  test.forEach((transaction, index) => {
+    const suggestion = suggestions[index]!;
+    if (suggestion.envelope === null || suggestion.confidence < cutoff) return;
+    confirmed += 1;
+    if (suggestion.envelope === transaction.envelope) right += 1;
+  });
+  console.log(
+    `    ${cutoff.toFixed(2)}     ${String(confirmed).padStart(6)}   ${pct(confirmed, test.length)}   ${pct(right, confirmed)}`,
+  );
+}
+
+// What is actually reachable? Splits the test set by whether the answer was
+// even present in history, which separates "needs a better model" from
+// "no amount of cleverness would have known".
+const trainEnvelopesByPayee = new Map<string, Set<string>>();
+for (const transaction of train) {
+  const key = normalizePayee(transaction.payeeRaw).key;
+  const set = trainEnvelopesByPayee.get(key) ?? new Set<string>();
+  set.add(transaction.envelope);
+  trainEnvelopesByPayee.set(key, set);
+}
+
+let unseenMerchant = 0;
+let reachableSingle = 0;
+let reachableAmbiguous = 0;
+let unreachable = 0;
+for (const transaction of test) {
+  const seen = trainEnvelopesByPayee.get(normalizePayee(transaction.payeeRaw).key);
+  if (!seen) unseenMerchant += 1;
+  else if (!seen.has(transaction.envelope)) unreachable += 1;
+  else if (seen.size === 1) reachableSingle += 1;
+  else reachableAmbiguous += 1;
+}
+
+console.log('\n  What history could possibly get right:');
+console.log(`    merchant never seen before      ${String(unseenMerchant).padStart(5)}  ${pct(unseenMerchant, test.length)}  -> only the AI layer can help`);
+console.log(`    seen, always one envelope       ${String(reachableSingle).padStart(5)}  ${pct(reachableSingle, test.length)}  -> history should get these`);
+console.log(`    seen, but several envelopes     ${String(reachableAmbiguous).padStart(5)}  ${pct(reachableAmbiguous, test.length)}  -> needs the amount or a rule to disambiguate`);
+console.log(`    seen, never this envelope       ${String(unreachable).padStart(5)}  ${pct(unreachable, test.length)}  -> history cannot reach these`);
+
 console.log(`\n  Misses (first 20 of ${misses.length}):`);
 for (const { transaction, suggestion } of misses.slice(0, 20)) {
   const guess = suggestion.envelope ?? '(none)';

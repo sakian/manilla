@@ -109,6 +109,17 @@ export function normalizePayee(raw: string): NormalizedPayee {
   if (star) text = star[2]!;
   text = text.replace(/\*[A-Z0-9]{4,}\b/g, ' ');
 
+  // Masked recipient tokens on Interac e-transfers: "SEND E-TFR ***UpZ". The
+  // mask changes every time, so leaving it in makes each transfer a new payee.
+  text = text.replace(/\*{2,}\s*[A-Z0-9]+/g, ' ');
+
+  // Canadian postal codes in the descriptor: "GRNDBRDG ENR L9R7K7". Same
+  // merchant, different branch, so they must not fork the key.
+  text = text.replace(/\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/g, ' ');
+
+  // Trailing channel markers such as the "_F" on foreign-currency card rows.
+  text = text.replace(/\b_[A-Z]+\b/g, ' ');
+
   // Store and terminal numbers.
   text = text.replace(/#\s*\d+/g, ' ');
   text = text.replace(/\b\d{4,}\b/g, ' ');
@@ -117,6 +128,11 @@ export function normalizePayee(raw: string): NormalizedPayee {
   // digits, so there is no word boundary to match: "SPOTIFY P1747", "REF00912".
   text = text.replace(/\b[A-Z]{1,3}\d{3,}\b/g, ' ');
   text = text.replace(/\b\d{3,}[A-Z]{1,3}\b/g, ' ');
+
+  // Longer mixed reference codes that interleave letters and digits, such as
+  // "P4549d89f1" or "5Q1RN4GA0". Three or more digits distinguishes these from
+  // names that merely contain a digit ("7-ELEVEN", "A1 STEAKHOUSE").
+  text = text.replace(/\b(?=[A-Z0-9]*\d[A-Z0-9]*\d[A-Z0-9]*\d)[A-Z0-9]{5,}\b/g, ' ');
 
   // Embedded dates such as "09/03" or "SEP 03".
   text = text.replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, ' ');

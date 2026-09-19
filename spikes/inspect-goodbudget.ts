@@ -43,6 +43,13 @@ function inspect(path: string): void {
   console.log('\n  Column mapping:');
   console.log(describeMapping(result.mapping));
 
+  console.log(`\n  Date format: ${result.dateFormat.toUpperCase()} (${result.dateEvidence})`);
+  console.log('  Row kinds:');
+  for (const [kind, count] of Object.entries(result.counts)) {
+    console.log(`    ${kind.padEnd(9)} ${String(count).padStart(6)}`);
+  }
+  console.log(`    ${'(split lines)'.padEnd(9)} ${String(result.splitLines).padStart(6)} envelope lines expanded from splits`);
+
   for (const warning of result.warnings.slice(0, 10)) console.log(`  ! ${warning}`);
   if (result.warnings.length > 10) console.log(`  ! ...and ${result.warnings.length - 10} more warnings`);
 
@@ -68,7 +75,7 @@ function inspect(path: string): void {
   const zero = transactions.filter((t) => t.amountCents === 0);
   const merchants = new Set(transactions.map((t) => normalizePayee(t.payeeRaw).key));
 
-  console.log(`\n  Loaded ${transactions.length} transactions, ${result.skipped.length} skipped`);
+  console.log(`\n  Loaded ${transactions.length} envelope lines, ${result.skipped.length} skipped`);
   console.log(`  Date range:  ${dates[0]} to ${dates[dates.length - 1]}`);
   console.log(`  Money in:    ${income.length} rows`);
   console.log(`  Money out:   ${spend.length} rows`);
