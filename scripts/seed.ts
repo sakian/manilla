@@ -66,14 +66,23 @@ for (const [groupName, names] of Object.entries(GROUPS)) {
 const envelopeCount = await db.select({ id: envelopes.id }).from(envelopes);
 console.log(`created ${Object.keys(GROUPS).length} groups, ${envelopeCount.length} envelopes`);
 
-// The external id matches the sample bank export, so `npm run import` maps it
-// to this account automatically (FR-7).
+// The external id is the account number as the bank's export states it, which
+// is how an imported statement finds its account (FR-7). It is a real financial
+// identifier, so it comes from the environment rather than living in the repo:
+// set SEED_ACCOUNT_EXTERNAL_ID in .env to the ACCTID in your own export.
 const accountId = await openAccount(db, {
-  name: 'Main Chequing',
+  name: process.env.SEED_ACCOUNT_NAME ?? 'Main Chequing',
   kind: 'chequing',
-  externalAccountId: '000000000',
+  externalAccountId: process.env.SEED_ACCOUNT_EXTERNAL_ID ?? '000000000',
   openingBalanceCents: 0,
 });
+
+if (!process.env.SEED_ACCOUNT_EXTERNAL_ID) {
+  console.log(
+    'note: SEED_ACCOUNT_EXTERNAL_ID is unset, so the account uses a placeholder\n' +
+      '      number and no statement will map to it. Set it in .env to import.',
+  );
+}
 console.log(`created account Main Chequing (${accountId})`);
 
 await (db as unknown as { $client: { end: () => Promise<void> } }).$client.end();

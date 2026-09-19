@@ -53,6 +53,7 @@ test('real TD descriptors collapse to one merchant', () => {
   assert.equal(key('GRNDBRDG ENR L9R7K7'), 'GRNDBRDG ENR');
   assert.equal(key('COSTCO WHOLESAL   _F'), key('COSTCO WHOLESAL'), 'the _F foreign-currency marker');
   assert.equal(key('EQUITABLE LIFE   INS'), 'EQUITABLE LIFE INS', 'padded spacing collapses');
+  // Account numbers here are invented; only the descriptor shape is real.
   assert.equal(key('UR001 TFR-FR 9876543'), key('HI174 TFR-FR 9876543'), 'transfer reference prefixes');
   assert.equal(key('UR125 TFR-TO C/C'), key('LM265 TFR-TO C/C'));
 });
