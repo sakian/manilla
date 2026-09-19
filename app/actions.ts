@@ -7,8 +7,13 @@ import {
   highConfidenceIds,
   recategorize,
 } from '../src/queue/queue.ts';
+import { requireUser } from './auth.ts';
+
+// A server action is a POST endpoint, reachable without going through the page
+// that renders the button, so each one checks the session itself (NF-3).
 
 export async function confirmAction(ids: string[]) {
+  await requireUser();
   const count = await confirmTransactions(db(), ids);
   revalidatePath('/review');
   revalidatePath('/');
@@ -16,6 +21,7 @@ export async function confirmAction(ids: string[]) {
 }
 
 export async function confirmHighConfidenceAction() {
+  await requireUser();
   const ids = await highConfidenceIds(db());
   const count = await confirmTransactions(db(), ids);
   revalidatePath('/review');
@@ -28,6 +34,7 @@ export async function recategorizeAction(
   envelopeId: string,
   options: { createRule?: boolean } = {},
 ) {
+  await requireUser();
   await recategorize(db(), {
     transactionId,
     envelopeId,

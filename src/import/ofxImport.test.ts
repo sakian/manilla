@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { Database } from '../../db/client.ts';
 import { parseOfx, type OfxStatement } from '../ofx/parse.ts';
-import { openAccount, accountBalances, checkInvariant, recordTransaction } from '../ledger/ledger.ts';
+import {
+  openAccount,
+  accountBalances,
+  checkInvariant,
+  envelopeBalances,
+  recordTransaction,
+} from '../ledger/ledger.ts';
 import {
   commitImport,
   previewImport,
@@ -225,6 +231,50 @@ describe(
       // The bank ids went with them, so the file can be imported again.
       const after = await previewImport(db, bankStatement(), accountId, { categorize: false });
       assert.equal(after.counts.new, 5);
+    });
+
+    test('income with nowhere else to go lands in the income pool (FR-28)', async () => {
+      const preview = await previewImport(db, bankStatement(), accountId, { useAi: false });
+      const payroll = preview.rows.find((row) => row.transaction.amountCents > 0)!;
+
+      assert.equal(payroll.suggestion?.envelope, env.unallocatedId);
+      assert.equal(payroll.suggestion?.layer, 'rule');
+      assert.match(payroll.suggestion!.reason, /until you allocate it/);
+
+      await commitImport(db, preview, acceptAll);
+
+      // It is applied at once so the pool is accurate before review is finished,
+      // and still awaits confirmation like everything else (RQ-4, FR-12).
+      const balances = await envelopeBalances(db);
+      const pool = balances.find((row) => row.envelopeId === env.unallocatedId)!;
+      assert.equal(pool.balanceCents, 320000);
+    });
+
+    test('a refund at a known merchant is not treated as income', async () => {
+      // History says this merchant's money comes out of Groceries...
+      for (const date of ['2025-06-03', '2025-07-03', '2025-08-03']) {
+        await recordTransaction(db, {
+          accountId,
+          date,
+          amountCents: -12000,
+          payeeRaw: 'SAFEWAY #212',
+          status: 'confirmed',
+          lines: [{ envelopeId: env.groceriesId, amountCents: -12000 }],
+        });
+      }
+
+      // ...so money coming back from it belongs there too, not in the pool.
+      const statement = bankStatement();
+      const refund = { ...statement.transactions[1]!, fitId: 'refund-1', amountCents: 2500 };
+      const preview = await previewImport(
+        db,
+        { ...statement, transactions: [refund] },
+        accountId,
+        { useAi: false },
+      );
+
+      assert.equal(preview.rows[0]!.suggestion?.envelope, env.groceriesId);
+      assert.equal(preview.rows[0]!.suggestion?.layer, 'history');
     });
 
     test('history from earlier imports drives the suggestions', async () => {

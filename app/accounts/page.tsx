@@ -1,31 +1,40 @@
-import { desc, eq } from 'drizzle-orm';
+import Link from 'next/link';
 import { db } from '../../db/client.ts';
-import { accounts, envelopes, transactions, txnLines } from '../../db/schema.ts';
-import { accountBalances } from '../../src/ledger/ledger.ts';
-import { Money } from '../Money.tsx';
+import {
+  accountTransactions,
+  listAccounts,
+  recentTransactions,
+} from '../../src/accounts/manage.ts';
+import { transferOptions } from '../../src/envelopes/transfer.ts';
+import { requireUser } from '../auth.ts';
+import TransactionList from '../transactions/TransactionList.tsx';
+import AccountManager from './AccountManager.tsx';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AccountsPage() {
+export default async function AccountsPage(props: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  await requireUser();
+  const searchParams = await props.searchParams;
+  const requested = Array.isArray(searchParams.account)
+    ? searchParams.account[0]
+    : searchParams.account;
   const connection = db();
-  const balances = await accountBalances(connection);
 
-  const recent = await connection
-    .select({
-      id: transactions.id,
-      date: transactions.date,
-      payeeRaw: transactions.payeeRaw,
-      amountCents: transactions.amountCents,
-      status: transactions.status,
-      accountName: accounts.name,
-      envelopeName: envelopes.name,
-    })
-    .from(transactions)
-    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-    .leftJoin(txnLines, eq(txnLines.transactionId, transactions.id))
-    .leftJoin(envelopes, eq(txnLines.envelopeId, envelopes.id))
-    .orderBy(desc(transactions.date), desc(transactions.createdAt))
-    .limit(60);
+  const managed = await listAccounts(connection, { includeArchived: true });
+  const selected = managed.find((account) => account.id === requested) ?? null;
+
+  const [rows, envelopes] = await Promise.all([
+    selected
+      ? accountTransactions(connection, selected.id, { limit: 100 })
+      : recentTransactions(connection, { limit: 60 }),
+    transferOptions(connection),
+  ]);
+
+  const live = managed
+    .filter((account) => account.archivedAt === null)
+    .map((account) => ({ id: account.id, name: account.name }));
 
   return (
     <>
@@ -34,33 +43,26 @@ export default async function AccountsPage() {
         <p className="muted">Real money, as the bank sees it.</p>
       </div>
 
-      <section className="panel">
-        <h3>Balances</h3>
-        {balances.length === 0 && <p className="muted">No accounts yet.</p>}
-        {balances.map((account) => (
-          <div key={account.accountId} className="row">
-            <span>
-              {account.name} <span className="muted">· {account.kind.replace('_', ' ')}</span>
-            </span>
-            <Money cents={account.balanceCents} />
-          </div>
-        ))}
-      </section>
+      <AccountManager accounts={managed} selectedId={selected?.id ?? null} />
 
       <section className="panel">
-        <h3>Recent transactions</h3>
-        {recent.length === 0 && <p className="muted">Nothing recorded yet.</p>}
-        {recent.map((row) => (
-          <div key={row.id} className="txn">
-            <span className="muted txn-date">{row.date}</span>
-            <span className="txn-payee">{row.payeeRaw}</span>
-            <span className="muted txn-env">
-              {row.envelopeName ?? 'uncategorized'}
-              {row.status === 'pending_review' && ' · pending'}
-            </span>
-            <Money cents={Number(row.amountCents)} />
-          </div>
-        ))}
+        {selected && (
+          <p className="muted">
+            Showing {selected.name}.{' '}
+            <Link href="/accounts">Show every account</Link>
+          </p>
+        )}
+        <TransactionList
+          rows={rows}
+          accounts={live}
+          envelopes={envelopes.map((envelope) => ({
+            id: envelope.id,
+            name: envelope.name,
+            groupName: envelope.groupName,
+          }))}
+          {...(selected ? { defaultAccountId: selected.id } : {})}
+          showAccount={!selected}
+        />
       </section>
     </>
   );

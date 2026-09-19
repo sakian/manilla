@@ -89,7 +89,8 @@ export async function truncateAll(db: Database): Promise<void> {
       txn_lines, suggestions, transaction_external_ids, transactions,
       envelope_moves, budget_lines, rules, import_batches,
       envelopes, envelope_groups, accounts,
-      sessions, credentials, recovery_codes, users
+      sessions, credentials, recovery_codes, webauthn_challenges, users,
+      app_settings
     restart identity cascade
   `);
 }

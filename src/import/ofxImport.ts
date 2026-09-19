@@ -25,6 +25,7 @@ import {
 import type { OfxStatement, OfxTransaction } from '../ofx/parse.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 import { buildCategorizer } from '../categorize/fromDb.ts';
+import { unallocatedEnvelope } from '../ledger/ledger.ts';
 import type { Suggestion } from '../categorize/types.ts';
 
 export class ImportError extends Error {}
@@ -206,6 +207,28 @@ export async function previewImport(
     fresh.forEach((row, position) => {
       row.suggestion = suggestions[position];
     });
+
+    // FR-28: income lands in the income pool and waits there to be allocated.
+    // The categorizer is left alone for this on purpose - it is measured against
+    // held-out history, and a rule about which envelope income belongs in is a
+    // property of the app, not of how well the model predicts. History still wins
+    // where it has an opinion: a refund at a known merchant belongs where that
+    // merchant's spending goes, not in the pool.
+    const unplacedIncome = fresh.filter(
+      (row) => row.transaction.amountCents > 0 && !row.suggestion?.envelope,
+    );
+    if (unplacedIncome.length > 0) {
+      const pool = await unallocatedEnvelope(db);
+      for (const row of unplacedIncome) {
+        row.suggestion = {
+          envelope: pool.id,
+          confidence: 1,
+          layer: 'rule',
+          reason: `Income, held in ${pool.name} until you allocate it`,
+          alternatives: [],
+        };
+      }
+    }
   }
 
   const counts: Record<RowVerdict, number> = {

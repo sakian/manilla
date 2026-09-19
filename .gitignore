@@ -10,5 +10,10 @@ next-env.d.ts
 data/private/*
 !data/private/.gitkeep
 
+# Development certificates for reaching the app from a phone over the LAN. The CA
+# key can mint a certificate for any name a device trusting it visits, so it
+# never leaves this machine.
+certs/
+
 # Spike output
 out/

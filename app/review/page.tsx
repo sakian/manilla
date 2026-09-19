@@ -1,10 +1,12 @@
 import { db } from '../../db/client.ts';
 import { envelopeOptions, highConfidenceIds, pendingTransactions } from '../../src/queue/queue.ts';
+import { requireUser } from '../auth.ts';
 import ReviewQueue from './ReviewQueue.tsx';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ReviewPage() {
+  await requireUser();
   const connection = db();
   const [rows, envelopes, high] = await Promise.all([
     pendingTransactions(connection),

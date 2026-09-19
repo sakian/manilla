@@ -44,15 +44,18 @@ services:
       NODE_ENV: production
       # Passkeys are bound to this hostname; it must match what you type in the
       # browser, e.g. manilla.your-tailnet.ts.net. The localhost defaults are for
-      # development only - the app refuses to start in production with them, so a
-      # missing value fails loudly at boot rather than silently accepting logins
-      # for the wrong origin.
+      # development only: in production the boot-time check in instrumentation.ts
+      # rejects them, and the app then serves nothing but 500s with the reason in
+      # the log (`docker compose logs app`). That is deliberate - a session issued
+      # for the wrong origin is worse than no session at all.
       MANILLA_RP_ID: ${MANILLA_RP_ID:-localhost}
       MANILLA_ORIGIN: ${MANILLA_ORIGIN:-http://localhost:3000}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
-      # Loopback only. Nginx proxies to this; nothing else can reach it.
-      - '127.0.0.1:${MANILLA_PORT:-3000}:3000'
+      # Loopback only. Nginx proxies to this; nothing else can reach it. The host
+      # side defaults to 3001 because this machine already has something on 3000;
+      # the container side is always 3000 and needs no thought.
+      - '127.0.0.1:${MANILLA_PORT:-3001}:3000'
     healthcheck:
       test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
       interval: 30s

@@ -67,6 +67,9 @@ export const suggestionLayer = pgEnum('suggestion_layer', ['rule', 'history', 'a
 /** An envelope move is either funding from the unallocated pool, or a shuffle between envelopes. */
 export const moveKind = pgEnum('move_kind', ['allocation', 'transfer']);
 
+/** Which WebAuthn ceremony a stored challenge belongs to. */
+export const webauthnPurpose = pgEnum('webauthn_purpose', ['registration', 'authentication']);
+
 export const externalIdKind = pgEnum('external_id_kind', [
   /** OFX FITID. */
   'fitid',
@@ -362,6 +365,37 @@ export const budgetLines = pgTable(
   (table) => [uniqueIndex('budget_lines_envelope_month_idx').on(table.envelopeId, table.month)],
 );
 
+/**
+ * A WebAuthn ceremony in flight (NF-3).
+ *
+ * The challenge lives server-side and is deleted the moment it is used, which is
+ * what makes a passkey assertion single-use. Keeping it in a cookie instead
+ * would hand the value that proves freshness to the party being authenticated.
+ */
+export const webauthnChallenges = pgTable(
+  'webauthn_challenges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    challenge: text('challenge').notNull(),
+    purpose: webauthnPurpose('purpose').notNull(),
+    /** Set when the ceremony belongs to a known user, i.e. adding a device. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('webauthn_challenges_expires_idx').on(table.expiresAt)],
+);
+
+/**
+ * Single-row-per-key settings, for the handful of values that are the user's
+ * choice rather than data: expected monthly income (FR-27), and later the AI
+ * off switch and call budget (NF-5).
+ */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** User rules (CA-2), normally created in one click from a correction. */
 export const rules = pgTable(
   'rules',
@@ -430,3 +464,5 @@ export type TxnLine = typeof txnLines.$inferSelect;
 export type EnvelopeMove = typeof envelopeMoves.$inferSelect;
 export type BudgetLine = typeof budgetLines.$inferSelect;
 export type Rule = typeof rules.$inferSelect;
+export type Credential = typeof credentials.$inferSelect;
+export type User = typeof users.$inferSelect;

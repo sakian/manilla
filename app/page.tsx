@@ -1,16 +1,19 @@
 import Link from 'next/link';
 import { db } from '../db/client.ts';
-import { accountBalances, checkInvariant, envelopeBalances } from '../src/ledger/ledger.ts';
+import { listAccounts } from '../src/accounts/manage.ts';
+import { checkInvariant, envelopeBalances } from '../src/ledger/ledger.ts';
 import { pendingCount } from '../src/queue/queue.ts';
+import { requireUser } from './auth.ts';
 import { Money } from './Money.tsx';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
+  await requireUser();
   const connection = db();
   const [envelopes, accounts, invariant, waiting] = await Promise.all([
     envelopeBalances(connection),
-    accountBalances(connection),
+    listAccounts(connection),
     checkInvariant(connection),
     pendingCount(connection),
   ]);
@@ -49,12 +52,12 @@ export default async function Dashboard() {
           </Link>
         )}
         {unallocated && unallocated.balanceCents !== 0 && (
-          <div className="callout">
+          <Link href="/budget" className="callout">
             <strong>
               <Money cents={unallocated.balanceCents} />
             </strong>{' '}
             unallocated
-          </div>
+          </Link>
         )}
         {overspent.length > 0 && (
           <div className="callout warn">
@@ -82,7 +85,7 @@ export default async function Dashboard() {
               {list.map((envelope) => (
                 <div key={envelope.envelopeId} className="row">
                   <span>
-                    {envelope.name}
+                    <Link href={`/envelopes/${envelope.envelopeId}`}>{envelope.name}</Link>
                     {envelope.isUnallocated && <span className="tag">income pool</span>}
                   </span>
                   <Money cents={envelope.balanceCents} />
@@ -96,7 +99,7 @@ export default async function Dashboard() {
       <section className="panel">
         <h3>Accounts</h3>
         {accounts.map((account) => (
-          <div key={account.accountId} className="row">
+          <div key={account.id} className="row">
             <span>
               {account.name} <span className="muted">· {account.kind.replace('_', ' ')}</span>
             </span>
