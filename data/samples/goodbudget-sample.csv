@@ -1,0 +1,578 @@
+Date,Envelope,Name,Notes,Amount,Account,Status
+07/01/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+07/01/2024,Groceries,CALGARY CO-OP #6194,,-106.62,Visa,Cleared
+07/01/2024,Dining,TIM HORTONS #2386,,-17.12,Chequing,Cleared
+07/02/2024,Gas,SHELL #3036 CALGARY AB,,-56.49,Visa,Cleared
+07/03/2024,Subscriptions,NETFLIX.COM,,-18.99,Chequing,Cleared
+07/04/2024,Gas,PETRO-CANADA 9094,,-73.99,Visa,Cleared
+07/08/2024,Dining,SKIPTHEDISHES 8326,,-34.97,Chequing,Cleared
+07/08/2024,Household,PUROLATOR 1577,,-29.12,Visa,Cleared
+07/09/2024,Dining,SQ *BLUE DOOR COFFEE,,-20.30,Visa,Cleared
+07/11/2024,Groceries,SAFEWAY #6845,,-67.28,Chequing,Cleared
+07/11/2024,Dining,TIM HORTONS #6527,,-14.26,Visa,Cleared
+07/11/2024,Household,SHOPPERS DRUG MART #5862,,-28.78,Visa,Cleared
+07/11/2024,Fun,MEC CALGARY,,-141.50,Visa,Cleared
+07/12/2024,Utilities,CITY POWER 6666,,-127.41,Chequing,Cleared
+07/14/2024,Groceries,SAFEWAY #3530,,-169.41,Chequing,Cleared
+07/15/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+07/15/2024,Household,AMZN Mktp CA*SPR4BK,,-128.05,Chequing,Cleared
+07/16/2024,Groceries,CALGARY CO-OP #7914,,-72.57,Visa,Cleared
+07/16/2024,Household,SHOPPERS DRUG MART #4757,,-25.60,Chequing,Cleared
+07/17/2024,Subscriptions,SPOTIFY P9947,,-11.99,Chequing,Cleared
+07/17/2024,Fitness,GOODLIFE FITNESS 5033,,-49.99,Chequing,Cleared
+07/17/2024,Clothing,SPORT CHEK #3085,,-75.11,Visa,Cleared
+07/19/2024,Gas,SHELL #5677 CALGARY AB,,-81.60,Visa,Cleared
+07/19/2024,Vehicle Repairs,CANADIAN TIRE #6357,,-58.66,Chequing,Cleared
+07/20/2024,Household,AMZN Mktp CA*XE7DBM,,-57.12,Chequing,Cleared
+07/22/2024,Groceries,COSTCO WHOLESALE #8681,,-282.56,Chequing,Cleared
+07/22/2024,Phone,TELUS MOBILITY 5768,,-85.00,Visa,Cleared
+07/22/2024,Fun,CINEPLEX ODEON #5571,,-22.71,Chequing,Cleared
+07/22/2024,Household,HOME DEPOT #3594,,-219.52,Visa,Cleared
+07/23/2024,Gas,PETRO-CANADA 7041,,-54.48,Chequing,Cleared
+07/24/2024,Gas,SHELL #7204 CALGARY AB,,-65.84,Chequing,Cleared
+07/24/2024,Groceries,SAFEWAY #9667,,-164.65,Chequing,Cleared
+07/24/2024,Water,EPCOR WATER & SEWER,,-88.19,Chequing,Cleared
+07/26/2024,Dining,TIM HORTONS #4850,,-16.85,Chequing,Cleared
+07/26/2024,Dining,SQ *BLUE DOOR COFFEE,,-15.54,Chequing,Cleared
+07/26/2024,Household,LONDON DRUGS 6361,,-22.39,Visa,Cleared
+07/26/2024,Household,AMZN Mktp CA*EHL3C7,,-73.14,Visa,Cleared
+07/27/2024,Dining,TIM HORTONS #3608,,-4.25,Chequing,Cleared
+07/30/2024,Vehicle Repairs,CITY OF CALGARY PARKING,,-16.41,Visa,Cleared
+08/01/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+08/01/2024,Dining,TIM HORTONS #8382,,-11.91,Chequing,Cleared
+08/02/2024,Gas,PETRO-CANADA 8362,,-40.37,Visa,Cleared
+08/02/2024,Water,EPCOR WATER & SEWER,,-75.80,Chequing,Cleared
+08/02/2024,Vehicle Repairs,CITY OF CALGARY PARKING,,-22.04,Visa,Cleared
+08/03/2024,Groceries,SAFEWAY #7317,,-85.17,Visa,Cleared
+08/04/2024,Household,LONDON DRUGS 7290,,-22.73,Visa,Cleared
+08/04/2024,Fitness,GOODLIFE FITNESS 6822,,-49.99,Visa,Cleared
+08/04/2024,Fun,CHAPTERS INDIGO #9142,,-49.36,Visa,Cleared
+08/05/2024,Dining,SKIPTHEDISHES 2570,,-25.17,Chequing,Cleared
+08/06/2024,Gas,SHELL #5061 CALGARY AB,,-54.65,Visa,Cleared
+08/06/2024,Dining,SQ *BLUE DOOR COFFEE,,-5.31,Chequing,Cleared
+08/08/2024,Household,STAPLES #6949,,-45.68,Visa,Cleared
+08/09/2024,Gas,PETRO-CANADA 1505,,-48.00,Chequing,Cleared
+08/09/2024,Household,SHOPPERS DRUG MART #4778,,-53.86,Chequing,Cleared
+08/10/2024,Groceries,SAFEWAY #4411,,-131.46,Chequing,Cleared
+08/10/2024,Groceries,CALGARY CO-OP #6441,,-135.01,Visa,Cleared
+08/13/2024,Groceries,CALGARY CO-OP #1488,,-48.75,Visa,Cleared
+08/13/2024,Dining,TIM HORTONS #1329,,-10.62,Visa,Cleared
+08/14/2024,Fun,CINEPLEX ODEON #3147,,-38.54,Chequing,Cleared
+08/15/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+08/17/2024,Vehicle Repairs,CANADIAN TIRE #7681,,-100.03,Visa,Cleared
+08/17/2024,Household,AMZN Mktp CA*NX58CU,,-58.41,Chequing,Cleared
+08/18/2024,Groceries,COSTCO WHOLESALE #6153,,-299.44,Visa,Cleared
+08/20/2024,Dining,TIM HORTONS #8587,,-13.45,Visa,Cleared
+08/20/2024,Household,SHOPPERS DRUG MART #8670,,-37.60,Visa,Cleared
+08/20/2024,Household,AMZN Mktp CA*1TGUO7,,-47.80,Visa,Cleared
+08/21/2024,Utilities,CITY POWER 4682,,-90.45,Chequing,Cleared
+08/22/2024,Groceries,SAFEWAY #7489,,-147.24,Chequing,Cleared
+08/22/2024,Dining,SQ *BLUE DOOR COFFEE,,-7.78,Visa,Cleared
+08/22/2024,Subscriptions,SPOTIFY P4430,,-11.99,Visa,Cleared
+08/22/2024,Household,AMZN Mktp CA*9VZ7NV,,-23.42,Chequing,Cleared
+08/24/2024,Gas,SHELL #6773 CALGARY AB,,-54.66,Visa,Cleared
+08/24/2024,Phone,TELUS MOBILITY 7197,,-85.00,Chequing,Cleared
+08/26/2024,Dining,TIM HORTONS #8798,,-4.70,Chequing,Cleared
+08/26/2024,Household,STAPLES #6554,,-16.74,Visa,Cleared
+08/27/2024,Subscriptions,NETFLIX.COM,,-18.99,Chequing,Cleared
+08/30/2024,Gas,SHELL #2530 CALGARY AB,,-46.27,Chequing,Cleared
+08/31/2024,Vehicle Repairs,JIFFY LUBE #1355,,-83.92,Visa,Cleared
+09/01/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+09/01/2024,Dining,SQ *BLUE DOOR COFFEE,,-6.92,Chequing,Cleared
+09/01/2024,Household,AMZN Mktp CA*Q7QMQ7,,-104.57,Chequing,Cleared
+09/02/2024,Household,SHOPPERS DRUG MART #3813,,-30.68,Chequing,Cleared
+09/03/2024,Household,SHOPPERS DRUG MART #7958,,-39.31,Visa,Cleared
+09/03/2024,Fitness,GOODLIFE FITNESS 9283,,-49.99,Visa,Cleared
+09/06/2024,Groceries,COSTCO WHOLESALE #3687,,-175.99,Chequing,Cleared
+09/06/2024,Utilities,CITY POWER 7706,,-120.05,Visa,Cleared
+09/07/2024,Gas,SHELL #2705 CALGARY AB,,-70.22,Visa,Cleared
+09/08/2024,Groceries,SAFEWAY #1238,,-99.12,Visa,Cleared
+09/08/2024,Groceries,CALGARY CO-OP #7570,,-131.83,Visa,Cleared
+09/08/2024,Dining,TIM HORTONS #4502,,-16.11,Visa,Cleared
+09/11/2024,Dining,TIM HORTONS #6331,,-17.33,Chequing,Cleared
+09/11/2024,Dining,SKIPTHEDISHES 6817,,-52.07,Chequing,Cleared
+09/11/2024,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+09/11/2024,Vehicle Repairs,CANADIAN TIRE #9549,,-209.97,Chequing,Cleared
+09/11/2024,Household,HOME DEPOT #1973,,-189.79,Visa,Cleared
+09/13/2024,Groceries,CALGARY CO-OP #3776,,-46.74,Chequing,Cleared
+09/13/2024,Fun,CINEPLEX ODEON #6154,,-54.92,Chequing,Cleared
+09/15/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+09/18/2024,Travel,FAIRMONT BANFF SPRINGS,,-392.31,Visa,Cleared
+09/19/2024,Gas,SHELL #1824 CALGARY AB,,-82.11,Chequing,Cleared
+09/19/2024,Gas,PETRO-CANADA 7732,,-69.02,Visa,Cleared
+09/20/2024,Gas,SHELL #5792 CALGARY AB,,-71.96,Visa,Cleared
+09/21/2024,Dining,TIM HORTONS #2166,,-14.74,Visa,Cleared
+09/21/2024,Household,AMZN Mktp CA*DN6NBS,,-123.26,Chequing,Cleared
+09/21/2024,Vehicle Repairs,CITY OF CALGARY PARKING,,-11.04,Chequing,Cleared
+09/23/2024,Water,EPCOR WATER & SEWER,,-80.36,Visa,Cleared
+09/24/2024,Household,PUROLATOR 3877,,-44.78,Visa,Cleared
+09/25/2024,Dining,SQ *BLUE DOOR COFFEE,,-6.64,Visa,Cleared
+09/25/2024,Subscriptions,SPOTIFY P1370,,-11.99,Chequing,Cleared
+09/26/2024,Dining,TIM HORTONS #2656,,-7.51,Visa,Cleared
+09/26/2024,Household,LONDON DRUGS 8107,,-81.11,Chequing,Cleared
+09/27/2024,Household,AMZN Mktp CA*E8J8Q5,,-72.18,Chequing,Cleared
+09/28/2024,Groceries,SAFEWAY #3933,,-104.95,Chequing,Cleared
+09/29/2024,Gas,PETRO-CANADA 2247,,-77.35,Chequing,Cleared
+09/29/2024,Household,PUROLATOR 7122,,-21.76,Visa,Cleared
+09/30/2024,Groceries,SAFEWAY #2211,,-171.18,Chequing,Cleared
+09/30/2024,Phone,TELUS MOBILITY 5449,,-85.00,Chequing,Cleared
+09/30/2024,Travel,PARK N FLY YYC,,-44.10,Visa,Cleared
+10/01/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+10/01/2024,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+10/03/2024,Gas,PETRO-CANADA 5182,,-57.37,Chequing,Cleared
+10/03/2024,Groceries,SAFEWAY #2719,,-169.67,Chequing,Cleared
+10/04/2024,Fun,CINEPLEX ODEON #2348,,-47.11,Visa,Cleared
+10/06/2024,Gas,SHELL #2501 CALGARY AB,,-83.25,Chequing,Cleared
+10/06/2024,Groceries,SAFEWAY #4194,,-98.87,Chequing,Cleared
+10/06/2024,Dining,TIM HORTONS #5888,,-4.34,Chequing,Cleared
+10/06/2024,Phone,TELUS MOBILITY 6738,,-85.00,Visa,Cleared
+10/07/2024,Groceries,SAFEWAY #9408,,-114.95,Visa,Cleared
+10/07/2024,Dining,TIM HORTONS #7121,,-15.85,Visa,Cleared
+10/07/2024,Household,LONDON DRUGS 8655,,-46.12,Visa,Cleared
+10/07/2024,Household,AMZN Mktp CA*C17BUA,,-117.96,Visa,Cleared
+10/09/2024,Dining,TIM HORTONS #2454,,-16.87,Visa,Cleared
+10/09/2024,Clothing,SPORT CHEK #2892,,-115.02,Visa,Cleared
+10/12/2024,Fun,CHAPTERS INDIGO #3572,,-55.86,Visa,Cleared
+10/14/2024,Gas,SHELL #3572 CALGARY AB,,-82.45,Visa,Cleared
+10/14/2024,Groceries,CALGARY CO-OP #7779,,-130.83,Chequing,Cleared
+10/15/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+10/15/2024,Fun,MEC CALGARY,,-68.52,Visa,Cleared
+10/16/2024,Household,AMZN Mktp CA*B47JJV,,-32.60,Chequing,Cleared
+10/18/2024,Household,SHOPPERS DRUG MART #9922,,-17.36,Chequing,Cleared
+10/19/2024,Household,AMZN Mktp CA*ZWDYAR,,-82.29,Visa,Cleared
+10/19/2024,Vehicle Repairs,CITY OF CALGARY PARKING,,-10.61,Visa,Cleared
+10/20/2024,Groceries,COSTCO WHOLESALE #5774,,-296.68,Visa,Cleared
+10/20/2024,Vehicle Repairs,CANADIAN TIRE #2981,,-133.38,Chequing,Cleared
+10/22/2024,Gas,SHELL #6580 CALGARY AB,,-62.25,Visa,Cleared
+10/22/2024,Dining,SQ *BLUE DOOR COFFEE,,-7.90,Chequing,Cleared
+10/22/2024,Utilities,CITY POWER 6863,,-157.84,Visa,Cleared
+10/24/2024,Water,EPCOR WATER & SEWER,,-91.30,Visa,Cleared
+10/24/2024,Fitness,GOODLIFE FITNESS 5998,,-49.99,Visa,Cleared
+10/26/2024,Subscriptions,SPOTIFY P5755,,-11.99,Visa,Cleared
+10/27/2024,Gas,PETRO-CANADA 4206,,-48.17,Chequing,Cleared
+10/27/2024,Dining,TIM HORTONS #8407,,-7.85,Chequing,Cleared
+10/27/2024,Dining,SKIPTHEDISHES 6094,,-40.74,Visa,Cleared
+10/29/2024,Groceries,CALGARY CO-OP #8444,,-130.70,Visa,Cleared
+10/29/2024,Dining,SQ *BLUE DOOR COFFEE,,-11.50,Visa,Cleared
+10/29/2024,Travel,PARK N FLY YYC,,-115.61,Visa,Cleared
+10/30/2024,Household,SHOPPERS DRUG MART #3936,,-49.33,Chequing,Cleared
+11/01/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+11/01/2024,Gas,SHELL #7997 CALGARY AB,,-67.19,Chequing,Cleared
+11/01/2024,Groceries,CALGARY CO-OP #6838,,-135.03,Chequing,Cleared
+11/02/2024,Dining,TIM HORTONS #6709,,-4.40,Chequing,Cleared
+11/02/2024,Fitness,GOODLIFE FITNESS 2962,,-49.99,Visa,Cleared
+11/03/2024,Dining,TIM HORTONS #1295,,-13.53,Chequing,Cleared
+11/03/2024,Household,AMZN Mktp CA*J4WP2W,,-66.50,Visa,Cleared
+11/04/2024,Dining,SKIPTHEDISHES 1730,,-52.24,Chequing,Cleared
+11/05/2024,Gas,PETRO-CANADA 9904,,-45.68,Visa,Cleared
+11/05/2024,Household,AMZN Mktp CA*WPSYNR,,-125.38,Chequing,Cleared
+11/07/2024,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+11/08/2024,Phone,TELUS MOBILITY 6344,,-85.00,Visa,Cleared
+11/09/2024,Groceries,COSTCO WHOLESALE #3367,,-256.86,Visa,Cleared
+11/12/2024,Groceries,SAFEWAY #2136,,-130.32,Visa,Cleared
+11/12/2024,Vehicle Repairs,CITY OF CALGARY PARKING,,-3.15,Chequing,Cleared
+11/12/2024,Clothing,MARK'S WORK WEARHOUSE 7951,,-86.54,Visa,Cleared
+11/13/2024,Gas,SHELL #8091 CALGARY AB,,-58.17,Visa,Cleared
+11/14/2024,Groceries,SAFEWAY #8334,,-147.66,Chequing,Cleared
+11/14/2024,Household,SHOPPERS DRUG MART #1906,,-34.84,Chequing,Cleared
+11/15/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+11/15/2024,Dining,SQ *BLUE DOOR COFFEE,,-21.70,Chequing,Cleared
+11/15/2024,Household,LONDON DRUGS 8853,,-28.24,Chequing,Cleared
+11/16/2024,Travel,FAIRMONT BANFF SPRINGS,,-316.04,Visa,Cleared
+11/17/2024,Dining,TIM HORTONS #3840,,-5.65,Chequing,Cleared
+11/18/2024,Gas,PETRO-CANADA 7669,,-61.04,Chequing,Cleared
+11/18/2024,Fun,CINEPLEX ODEON #7939,,-32.91,Visa,Cleared
+11/22/2024,Utilities,CITY POWER 3501,,-129.48,Chequing,Cleared
+11/22/2024,Water,EPCOR WATER & SEWER,,-91.14,Visa,Cleared
+11/24/2024,Household,AMZN Mktp CA*1N8ONX,,-91.76,Visa,Cleared
+11/25/2024,Groceries,CALGARY CO-OP #3014,,-138.22,Visa,Cleared
+11/25/2024,Dining,SQ *BLUE DOOR COFFEE,,-9.38,Visa,Cleared
+11/27/2024,Groceries,SAFEWAY #5114,,-94.36,Visa,Cleared
+11/27/2024,Subscriptions,SPOTIFY P9250,,-11.99,Chequing,Cleared
+11/28/2024,Gas,SHELL #4624 CALGARY AB,,-65.57,Visa,Cleared
+11/28/2024,Household,SHOPPERS DRUG MART #9731,,-32.17,Visa,Cleared
+11/29/2024,Vehicle Repairs,CANADIAN TIRE #2662,,-112.74,Chequing,Cleared
+11/30/2024,Dining,TIM HORTONS #7604,,-10.53,Visa,Cleared
+12/01/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+12/01/2024,Dining,SQ *BLUE DOOR COFFEE,,-21.61,Chequing,Cleared
+12/02/2024,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+12/04/2024,Gas,SHELL #8234 CALGARY AB,,-53.18,Chequing,Cleared
+12/04/2024,Dining,TIM HORTONS #2871,,-13.21,Chequing,Cleared
+12/04/2024,Utilities,CITY POWER 8086,,-118.41,Visa,Cleared
+12/05/2024,Dining,THE COPPER POT 2080,,-39.72,Visa,Cleared
+12/06/2024,Dining,TIM HORTONS #3164,,-11.32,Visa,Cleared
+12/06/2024,Fitness,GOODLIFE FITNESS 7890,,-49.99,Chequing,Cleared
+12/08/2024,Fun,CINEPLEX ODEON #3525,,-56.40,Visa,Cleared
+12/09/2024,Groceries,COSTCO WHOLESALE #1968,,-289.72,Chequing,Cleared
+12/09/2024,Dining,THE COPPER POT 6003,,-99.95,Visa,Cleared
+12/10/2024,Vehicle Repairs,CITY OF CALGARY PARKING,,-8.75,Chequing,Cleared
+12/12/2024,Gas,SHELL #1194 CALGARY AB,,-47.83,Chequing,Cleared
+12/13/2024,Groceries,CALGARY CO-OP #6800,,-112.03,Visa,Cleared
+12/14/2024,Dining,TIM HORTONS #8200,,-5.36,Visa,Cleared
+12/14/2024,Household,SHOPPERS DRUG MART #2487,,-40.61,Visa,Cleared
+12/15/2024,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+12/19/2024,Household,LONDON DRUGS 2606,,-82.53,Visa,Cleared
+12/21/2024,Household,AMZN Mktp CA*7M1Q50,,-110.41,Chequing,Cleared
+12/22/2024,Gas,PETRO-CANADA 8444,,-45.96,Visa,Cleared
+12/22/2024,Groceries,SAFEWAY #8220,,-179.00,Chequing,Cleared
+12/22/2024,Dining,TIM HORTONS #5539,,-6.57,Chequing,Cleared
+12/23/2024,Dining,SQ *BLUE DOOR COFFEE,,-10.92,Visa,Cleared
+12/24/2024,Dining,SKIPTHEDISHES 6042,,-66.31,Chequing,Cleared
+12/24/2024,Phone,TELUS MOBILITY 6409,,-85.00,Chequing,Cleared
+12/25/2024,Groceries,SAFEWAY #7843,,-112.80,Visa,Cleared
+12/25/2024,Household,AMZN Mktp CA*3S7E41,,-28.14,Chequing,Cleared
+12/26/2024,Groceries,SAFEWAY #2419,,-172.24,Chequing,Cleared
+12/26/2024,Vehicle Repairs,CANADIAN TIRE #5958,,-247.93,Visa,Cleared
+12/28/2024,Gas,PETRO-CANADA 8052,,-69.18,Chequing,Cleared
+12/28/2024,Household,AMZN Mktp CA*2XANK2,,-104.13,Chequing,Cleared
+12/29/2024,Groceries,CALGARY CO-OP #6822,,-99.92,Visa,Cleared
+12/29/2024,Household,SHOPPERS DRUG MART #8311,,-62.79,Visa,Cleared
+12/30/2024,Subscriptions,SPOTIFY P6446,,-11.99,Visa,Cleared
+12/30/2024,Water,EPCOR WATER & SEWER,,-66.10,Chequing,Cleared
+12/31/2024,Gas,SHELL #1635 CALGARY AB,,-48.16,Chequing,Cleared
+01/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+01/01/2025,Dining,TIM HORTONS #7859,,-16.74,Visa,Cleared
+01/02/2025,Groceries,CALGARY CO-OP #6790,,-50.31,Visa,Cleared
+01/02/2025,Water,EPCOR WATER & SEWER,,-72.50,Chequing,Cleared
+01/02/2025,Household,AMZN Mktp CA*A2WDMP,,-40.12,Chequing,Cleared
+01/03/2025,Gas,PETRO-CANADA 5133,,-46.39,Visa,Cleared
+01/03/2025,Dining,TIM HORTONS #5415,,-15.43,Chequing,Cleared
+01/03/2025,Fitness,GOODLIFE FITNESS 6840,,-49.99,Chequing,Cleared
+01/04/2025,Gas,PETRO-CANADA 6505,,-42.98,Chequing,Cleared
+01/04/2025,Fun,BANFF UPPER HOT SPRINGS,,-56.56,Visa,Cleared
+01/05/2025,Gas,SHELL #1580 CALGARY AB,,-53.26,Chequing,Cleared
+01/05/2025,Dining,SQ *BLUE DOOR COFFEE,,-14.67,Visa,Cleared
+01/05/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-4.69,Visa,Cleared
+01/06/2025,Dining,SQ *BLUE DOOR COFFEE,,-11.15,Visa,Cleared
+01/07/2025,Dining,TIM HORTONS #1867,,-15.06,Chequing,Cleared
+01/07/2025,Household,LONDON DRUGS 5500,,-89.20,Visa,Cleared
+01/08/2025,Gas,SHELL #9717 CALGARY AB,,-64.46,Chequing,Cleared
+01/08/2025,Groceries,SAFEWAY #3731,,-102.81,Chequing,Cleared
+01/09/2025,Dining,SKIPTHEDISHES 4169,,-62.22,Chequing,Cleared
+01/09/2025,Phone,TELUS MOBILITY 6168,,-85.00,Chequing,Cleared
+01/09/2025,Vehicle Repairs,CANADIAN TIRE #6237,,-165.86,Chequing,Cleared
+01/10/2025,Dining,TIM HORTONS #2542,,-7.09,Chequing,Cleared
+01/12/2025,Household,AMZN Mktp CA*62MA8J,,-136.64,Visa,Cleared
+01/12/2025,Dining,THE COPPER POT 2753,,-43.82,Visa,Cleared
+01/14/2025,Household,SHOPPERS DRUG MART #5364,,-42.79,Chequing,Cleared
+01/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+01/15/2025,Clothing,WINNERS #2006,,-78.07,Visa,Cleared
+01/17/2025,Gas,SHELL #3438 CALGARY AB,,-62.10,Chequing,Cleared
+01/17/2025,Household,AMZN Mktp CA*1QKXMJ,,-132.54,Chequing,Cleared
+01/19/2025,Household,SHOPPERS DRUG MART #3446,,-46.28,Chequing,Cleared
+01/21/2025,Groceries,SAFEWAY #6772,,-89.09,Chequing,Cleared
+01/22/2025,Fun,BANFF UPPER HOT SPRINGS,,-45.05,Visa,Cleared
+01/23/2025,Fun,CINEPLEX ODEON #8778,,-20.07,Chequing,Cleared
+01/24/2025,Subscriptions,SPOTIFY P5712,,-11.99,Visa,Cleared
+01/24/2025,Utilities,CITY POWER 1331,,-101.84,Visa,Cleared
+01/25/2025,Groceries,COSTCO WHOLESALE #8763,,-139.46,Visa,Cleared
+01/27/2025,Subscriptions,NETFLIX.COM,,-18.99,Chequing,Cleared
+01/28/2025,Groceries,SAFEWAY #6020,,-79.21,Chequing,Cleared
+01/31/2025,Groceries,CALGARY CO-OP #3754,,-129.57,Chequing,Cleared
+02/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+02/01/2025,Dining,SKIPTHEDISHES 5189,,-52.61,Chequing,Cleared
+02/02/2025,Household,SHOPPERS DRUG MART #4202,,-30.64,Chequing,Cleared
+02/02/2025,Travel,PARK N FLY YYC,,-105.75,Visa,Cleared
+02/04/2025,Groceries,CALGARY CO-OP #6668,,-139.47,Chequing,Cleared
+02/06/2025,Dining,TIM HORTONS #4165,,-14.07,Chequing,Cleared
+02/07/2025,Gas,SHELL #4185 CALGARY AB,,-61.52,Chequing,Cleared
+02/08/2025,Fun,CINEPLEX ODEON #9634,,-29.24,Chequing,Cleared
+02/09/2025,Dining,TIM HORTONS #8992,,-8.60,Visa,Cleared
+02/09/2025,Water,EPCOR WATER & SEWER,,-87.16,Chequing,Cleared
+02/10/2025,Household,AMZN Mktp CA*Z32K9D,,-96.26,Chequing,Cleared
+02/11/2025,Household,AMZN Mktp CA*TE2GNO,,-32.95,Visa,Cleared
+02/12/2025,Groceries,SAFEWAY #7811,,-116.19,Chequing,Cleared
+02/14/2025,Gas,SHELL #9915 CALGARY AB,,-64.40,Chequing,Cleared
+02/14/2025,Groceries,COSTCO WHOLESALE #6614,,-253.35,Chequing,Cleared
+02/14/2025,Dining,TIM HORTONS #7222,,-9.96,Chequing,Cleared
+02/14/2025,Fitness,GOODLIFE FITNESS 7280,,-49.99,Chequing,Cleared
+02/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+02/15/2025,Gas,PETRO-CANADA 4263,,-71.34,Chequing,Cleared
+02/16/2025,Groceries,SAFEWAY #8037,,-68.33,Visa,Cleared
+02/16/2025,Subscriptions,SPOTIFY P1246,,-11.99,Chequing,Cleared
+02/17/2025,Groceries,CALGARY CO-OP #4988,,-67.78,Visa,Cleared
+02/18/2025,Household,AMZN Mktp CA*VFP6OE,,-23.44,Chequing,Cleared
+02/19/2025,Dining,SQ *BLUE DOOR COFFEE,,-8.42,Visa,Cleared
+02/19/2025,Household,PUROLATOR 2184,,-25.60,Visa,Cleared
+02/20/2025,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+02/21/2025,Utilities,CITY POWER 3500,,-162.93,Chequing,Cleared
+02/21/2025,Household,SHOPPERS DRUG MART #7130,,-15.97,Visa,Cleared
+02/22/2025,Gas,PETRO-CANADA 2410,,-65.61,Visa,Cleared
+02/22/2025,Groceries,SAFEWAY #5129,,-92.46,Chequing,Cleared
+02/22/2025,Vehicle Repairs,CANADIAN TIRE #9966,,-183.21,Visa,Cleared
+02/23/2025,Gas,SHELL #9830 CALGARY AB,,-69.48,Visa,Cleared
+02/23/2025,Dining,TIM HORTONS #8074,,-11.11,Visa,Cleared
+02/23/2025,Dining,SQ *BLUE DOOR COFFEE,,-6.17,Chequing,Cleared
+02/23/2025,Household,LONDON DRUGS 9818,,-27.55,Chequing,Cleared
+02/27/2025,Phone,TELUS MOBILITY 3058,,-85.00,Visa,Cleared
+02/27/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-24.02,Visa,Cleared
+03/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+03/01/2025,Gas,PETRO-CANADA 4705,,-59.75,Visa,Cleared
+03/01/2025,Dining,TIM HORTONS #9498,,-8.46,Chequing,Cleared
+03/02/2025,Groceries,CALGARY CO-OP #2056,,-73.77,Chequing,Cleared
+03/02/2025,Utilities,CITY POWER 6485,,-148.48,Chequing,Cleared
+03/04/2025,Dining,SQ *BLUE DOOR COFFEE,,-7.27,Chequing,Cleared
+03/06/2025,Gas,PETRO-CANADA 7116,,-77.72,Chequing,Cleared
+03/06/2025,Groceries,SAFEWAY #1021,,-163.49,Visa,Cleared
+03/07/2025,Gas,SHELL #6590 CALGARY AB,,-52.70,Visa,Cleared
+03/09/2025,Dining,TIM HORTONS #3171,,-4.50,Visa,Cleared
+03/09/2025,Household,SHOPPERS DRUG MART #6779,,-48.94,Chequing,Cleared
+03/09/2025,Household,LONDON DRUGS 1914,,-68.42,Chequing,Cleared
+03/11/2025,Subscriptions,SPOTIFY P4820,,-11.99,Visa,Cleared
+03/11/2025,Vehicle Repairs,CANADIAN TIRE #1986,,-42.59,Chequing,Cleared
+03/11/2025,Household,AMZN Mktp CA*8WUV7O,,-69.27,Chequing,Cleared
+03/12/2025,Groceries,CALGARY CO-OP #2256,,-75.33,Chequing,Cleared
+03/13/2025,Groceries,SAFEWAY #7467,,-118.26,Visa,Cleared
+03/13/2025,Subscriptions,NETFLIX.COM,,-18.99,Chequing,Cleared
+03/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+03/19/2025,Gas,SHELL #8775 CALGARY AB,,-84.32,Visa,Cleared
+03/19/2025,Dining,TIM HORTONS #2564,,-11.77,Chequing,Cleared
+03/19/2025,Dining,SQ *BLUE DOOR COFFEE,,-19.00,Visa,Cleared
+03/20/2025,Dining,TIM HORTONS #7780,,-6.63,Visa,Cleared
+03/21/2025,Dining,SKIPTHEDISHES 2799,,-27.51,Chequing,Cleared
+03/21/2025,Household,AMZN Mktp CA*YUS3SC,,-69.69,Visa,Cleared
+03/21/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-5.90,Chequing,Cleared
+03/22/2025,Fun,CINEPLEX ODEON #3019,,-44.87,Chequing,Cleared
+03/24/2025,Phone,TELUS MOBILITY 2784,,-85.00,Visa,Cleared
+03/24/2025,Fitness,GOODLIFE FITNESS 2511,,-49.99,Chequing,Cleared
+03/26/2025,Fun,MEC CALGARY,,-115.73,Visa,Cleared
+03/27/2025,Gas,SHELL #1765 CALGARY AB,,-77.70,Chequing,Cleared
+03/27/2025,Groceries,SAFEWAY #3482,,-145.40,Chequing,Cleared
+03/27/2025,Household,AMZN Mktp CA*RQUTYM,,-55.46,Chequing,Cleared
+03/27/2025,Travel,WESTJET AIRLINES,,-325.47,Visa,Cleared
+03/28/2025,Household,SHOPPERS DRUG MART #5164,,-58.37,Visa,Cleared
+03/30/2025,Water,EPCOR WATER & SEWER,,-88.51,Visa,Cleared
+03/31/2025,Groceries,COSTCO WHOLESALE #8878,,-211.45,Visa,Cleared
+04/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+04/01/2025,Groceries,COSTCO WHOLESALE #5439,,-133.50,Chequing,Cleared
+04/02/2025,Dining,SQ *BLUE DOOR COFFEE,,-19.77,Visa,Cleared
+04/02/2025,Phone,TELUS MOBILITY 8776,,-85.00,Chequing,Cleared
+04/03/2025,Household,LONDON DRUGS 1284,,-72.16,Chequing,Cleared
+04/06/2025,Vehicle Repairs,CANADIAN TIRE #4681,,-34.04,Visa,Cleared
+04/07/2025,Gas,SHELL #9720 CALGARY AB,,-76.46,Chequing,Cleared
+04/07/2025,Groceries,CALGARY CO-OP #5674,,-148.07,Chequing,Cleared
+04/07/2025,Fun,CHAPTERS INDIGO #8733,,-28.10,Visa,Cleared
+04/08/2025,Dining,SQ *BLUE DOOR COFFEE,,-10.90,Visa,Cleared
+04/08/2025,Travel,PARK N FLY YYC,,-101.33,Visa,Cleared
+04/10/2025,Gas,SHELL #2458 CALGARY AB,,-50.06,Chequing,Cleared
+04/10/2025,Gas,PETRO-CANADA 9397,,-74.91,Chequing,Cleared
+04/13/2025,Subscriptions,NETFLIX.COM,,-18.99,Chequing,Cleared
+04/14/2025,Dining,TIM HORTONS #4600,,-8.34,Chequing,Cleared
+04/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+04/15/2025,Dining,TIM HORTONS #5316,,-11.25,Chequing,Cleared
+04/15/2025,Subscriptions,SPOTIFY P6797,,-11.99,Chequing,Cleared
+04/17/2025,Dining,TIM HORTONS #7849,,-16.82,Visa,Cleared
+04/18/2025,Household,SHOPPERS DRUG MART #8797,,-26.55,Visa,Cleared
+04/19/2025,Gas,SHELL #5032 CALGARY AB,,-58.12,Visa,Cleared
+04/19/2025,Travel,FAIRMONT BANFF SPRINGS,,-599.57,Visa,Cleared
+04/20/2025,Groceries,SAFEWAY #7882,,-169.70,Visa,Cleared
+04/20/2025,Travel,FAIRMONT BANFF SPRINGS,,-298.24,Visa,Cleared
+04/21/2025,Gas,PETRO-CANADA 5053,,-48.26,Chequing,Cleared
+04/21/2025,Groceries,CALGARY CO-OP #2611,,-44.82,Visa,Cleared
+04/21/2025,Utilities,CITY POWER 3739,,-122.49,Visa,Cleared
+04/21/2025,Fun,CINEPLEX ODEON #7670,,-38.16,Chequing,Cleared
+04/23/2025,Groceries,SAFEWAY #7973,,-144.25,Visa,Cleared
+04/23/2025,Dining,TIM HORTONS #6794,,-4.35,Chequing,Cleared
+04/24/2025,Water,EPCOR WATER & SEWER,,-77.15,Visa,Cleared
+04/24/2025,Household,AMZN Mktp CA*HNJAJM,,-42.77,Visa,Cleared
+04/25/2025,Household,AMZN Mktp CA*9VCGNF,,-55.42,Visa,Cleared
+04/25/2025,Household,AMZN Mktp CA*WULRDO,,-52.56,Visa,Cleared
+04/25/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-9.80,Chequing,Cleared
+04/25/2025,Clothing,WINNERS #6711,,-43.54,Visa,Cleared
+04/26/2025,Dining,SKIPTHEDISHES 4027,,-58.76,Chequing,Cleared
+04/27/2025,Groceries,SAFEWAY #9703,,-136.56,Chequing,Cleared
+04/29/2025,Fitness,GOODLIFE FITNESS 3464,,-49.99,Visa,Cleared
+04/30/2025,Household,SHOPPERS DRUG MART #8696,,-24.12,Visa,Cleared
+05/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+05/01/2025,Groceries,SAFEWAY #4382,,-187.62,Chequing,Cleared
+05/01/2025,Groceries,COSTCO WHOLESALE #7257,,-179.35,Visa,Cleared
+05/03/2025,Groceries,SAFEWAY #6261,,-66.42,Visa,Cleared
+05/03/2025,Household,LONDON DRUGS 4181,,-62.49,Visa,Cleared
+05/04/2025,Gas,SHELL #5402 CALGARY AB,,-60.54,Chequing,Cleared
+05/04/2025,Dining,TIM HORTONS #8403,,-8.09,Visa,Cleared
+05/04/2025,Vehicle Repairs,CANADIAN TIRE #2497,,-41.63,Visa,Cleared
+05/05/2025,Household,SHOPPERS DRUG MART #6025,,-30.12,Visa,Cleared
+05/06/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-13.56,Visa,Cleared
+05/06/2025,Clothing,WINNERS #8311,,-104.55,Visa,Cleared
+05/07/2025,Gas,PETRO-CANADA 6271,,-48.21,Visa,Cleared
+05/07/2025,Dining,SQ *BLUE DOOR COFFEE,,-10.13,Chequing,Cleared
+05/09/2025,Utilities,CITY POWER 5746,,-164.68,Chequing,Cleared
+05/09/2025,Household,AMZN Mktp CA*XFCVIT,,-86.92,Chequing,Cleared
+05/10/2025,Groceries,SAFEWAY #7655,,-162.26,Visa,Cleared
+05/10/2025,Phone,TELUS MOBILITY 1734,,-85.00,Visa,Cleared
+05/10/2025,Fun,CINEPLEX ODEON #4981,,-47.31,Visa,Cleared
+05/11/2025,Gas,PETRO-CANADA 6205,,-64.95,Visa,Cleared
+05/11/2025,Groceries,CALGARY CO-OP #3513,,-132.66,Chequing,Cleared
+05/11/2025,Dining,TIM HORTONS #5835,,-16.96,Chequing,Cleared
+05/11/2025,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+05/11/2025,Travel,FAIRMONT BANFF SPRINGS,,-206.21,Visa,Cleared
+05/13/2025,Gas,SHELL #4008 CALGARY AB,,-56.18,Visa,Cleared
+05/14/2025,Subscriptions,SPOTIFY P8436,,-11.99,Visa,Cleared
+05/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+05/15/2025,Household,AMZN Mktp CA*ELRPC5,,-62.59,Chequing,Cleared
+05/16/2025,Dining,TIM HORTONS #7974,,-11.26,Chequing,Cleared
+05/16/2025,Dining,SQ *BLUE DOOR COFFEE,,-11.75,Chequing,Cleared
+05/18/2025,Household,AMZN Mktp CA*GYH8QS,,-63.71,Visa,Cleared
+05/20/2025,Dining,TIM HORTONS #3865,,-13.84,Visa,Cleared
+05/20/2025,Household,SHOPPERS DRUG MART #6336,,-59.89,Visa,Cleared
+05/22/2025,Gas,SHELL #3228 CALGARY AB,,-76.37,Chequing,Cleared
+05/22/2025,Dining,SKIPTHEDISHES 1640,,-61.01,Chequing,Cleared
+05/22/2025,Fitness,GOODLIFE FITNESS 2861,,-49.99,Visa,Cleared
+05/26/2025,Groceries,CALGARY CO-OP #2387,,-47.81,Visa,Cleared
+05/28/2025,Water,EPCOR WATER & SEWER,,-65.68,Chequing,Cleared
+06/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+06/02/2025,Clothing,WINNERS #1669,,-30.94,Visa,Cleared
+06/03/2025,Groceries,CALGARY CO-OP #3149,,-45.89,Chequing,Cleared
+06/03/2025,Household,LONDON DRUGS 7822,,-61.34,Chequing,Cleared
+06/03/2025,Clothing,WINNERS #5734,,-112.91,Visa,Cleared
+06/06/2025,Phone,TELUS MOBILITY 2853,,-85.00,Chequing,Cleared
+06/06/2025,Household,AMZN Mktp CA*ZJ3G8T,,-92.18,Chequing,Cleared
+06/07/2025,Groceries,CALGARY CO-OP #7604,,-40.38,Visa,Cleared
+06/07/2025,Groceries,COSTCO WHOLESALE #1055,,-232.84,Visa,Cleared
+06/07/2025,Dining,TIM HORTONS #8729,,-8.25,Chequing,Cleared
+06/08/2025,Groceries,SAFEWAY #6085,,-152.58,Chequing,Cleared
+06/08/2025,Subscriptions,SPOTIFY P8725,,-11.99,Visa,Cleared
+06/08/2025,Household,SHOPPERS DRUG MART #7979,,-36.00,Chequing,Cleared
+06/08/2025,Household,AMZN Mktp CA*K8JMKR,,-37.48,Chequing,Cleared
+06/09/2025,Gas,PETRO-CANADA 5079,,-48.64,Visa,Cleared
+06/09/2025,Groceries,SAFEWAY #7733,,-128.32,Chequing,Cleared
+06/11/2025,Water,EPCOR WATER & SEWER,,-89.69,Visa,Cleared
+06/12/2025,Gas,SHELL #9203 CALGARY AB,,-68.07,Visa,Cleared
+06/12/2025,Dining,SQ *BLUE DOOR COFFEE,,-11.05,Chequing,Cleared
+06/12/2025,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+06/12/2025,Utilities,CITY POWER 8728,,-157.46,Visa,Cleared
+06/13/2025,Dining,TIM HORTONS #7684,,-10.52,Chequing,Cleared
+06/13/2025,Vehicle Repairs,CANADIAN TIRE #4179,,-161.14,Visa,Cleared
+06/13/2025,Fun,CINEPLEX ODEON #9842,,-24.65,Chequing,Cleared
+06/14/2025,Gas,PETRO-CANADA 1334,,-57.88,Visa,Cleared
+06/14/2025,Dining,TIM HORTONS #4121,,-15.45,Visa,Cleared
+06/14/2025,Household,BEST BUY #9686,,-245.47,Visa,Cleared
+06/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+06/16/2025,Dining,TIM HORTONS #6704,,-17.48,Chequing,Cleared
+06/18/2025,Dining,SKIPTHEDISHES 2297,,-35.91,Chequing,Cleared
+06/18/2025,Household,PUROLATOR 1491,,-19.97,Visa,Cleared
+06/19/2025,Household,SHOPPERS DRUG MART #4138,,-20.92,Visa,Cleared
+06/20/2025,Household,AMZN Mktp CA*U22MTS,,-88.39,Chequing,Cleared
+06/22/2025,Gas,SHELL #3423 CALGARY AB,,-56.36,Visa,Cleared
+06/22/2025,Fitness,GOODLIFE FITNESS 5301,,-49.99,Chequing,Cleared
+06/22/2025,Travel,FAIRMONT BANFF SPRINGS,,-248.45,Visa,Cleared
+06/27/2025,Groceries,SAFEWAY #7558,,-161.80,Chequing,Cleared
+06/28/2025,Gas,SHELL #7506 CALGARY AB,,-80.71,Visa,Cleared
+06/29/2025,Dining,SQ *BLUE DOOR COFFEE,,-9.67,Chequing,Cleared
+06/30/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-21.07,Chequing,Cleared
+07/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+07/01/2025,Gas,PETRO-CANADA 1531,,-79.73,Visa,Cleared
+07/01/2025,Dining,SQ *BLUE DOOR COFFEE,,-6.35,Visa,Cleared
+07/01/2025,Water,EPCOR WATER & SEWER,,-69.25,Chequing,Cleared
+07/02/2025,Gas,SHELL #9410 CALGARY AB,,-68.21,Chequing,Cleared
+07/02/2025,Household,SHOPPERS DRUG MART #7507,,-32.74,Visa,Cleared
+07/04/2025,Gas,PETRO-CANADA 9157,,-67.49,Chequing,Cleared
+07/05/2025,Phone,TELUS MOBILITY 5964,,-85.00,Chequing,Cleared
+07/06/2025,Household,SHOPPERS DRUG MART #3246,,-27.14,Visa,Cleared
+07/06/2025,Household,LONDON DRUGS 5800,,-24.94,Visa,Cleared
+07/07/2025,Subscriptions,NETFLIX.COM,,-18.99,Chequing,Cleared
+07/08/2025,Groceries,CALGARY CO-OP #3772,,-89.68,Visa,Cleared
+07/09/2025,Groceries,COSTCO WHOLESALE #1780,,-200.17,Visa,Cleared
+07/09/2025,Household,AMZN Mktp CA*MZF550,,-71.49,Chequing,Cleared
+07/11/2025,Gas,SHELL #5488 CALGARY AB,,-74.61,Visa,Cleared
+07/11/2025,Dining,SKIPTHEDISHES 1923,,-66.65,Visa,Cleared
+07/11/2025,Fitness,GOODLIFE FITNESS 4644,,-49.99,Chequing,Cleared
+07/14/2025,Groceries,SAFEWAY #6788,,-158.60,Chequing,Cleared
+07/14/2025,Dining,TIM HORTONS #1926,,-10.80,Chequing,Cleared
+07/14/2025,Household,AMZN Mktp CA*MZPGHU,,-104.17,Visa,Cleared
+07/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+07/16/2025,Clothing,WINNERS #9112,,-64.67,Visa,Cleared
+07/17/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-11.64,Chequing,Cleared
+07/17/2025,Fun,MEC CALGARY,,-63.43,Visa,Cleared
+07/18/2025,Groceries,CALGARY CO-OP #3452,,-54.54,Visa,Cleared
+07/19/2025,Dining,SQ *BLUE DOOR COFFEE,,-14.70,Chequing,Cleared
+07/21/2025,Utilities,CITY POWER 1311,,-173.63,Chequing,Cleared
+07/22/2025,Dining,TIM HORTONS #8158,,-7.32,Visa,Cleared
+07/22/2025,Dining,TIM HORTONS #8864,,-4.38,Visa,Cleared
+07/23/2025,Dining,TIM HORTONS #4998,,-4.37,Chequing,Cleared
+07/23/2025,Subscriptions,SPOTIFY P8709,,-11.99,Chequing,Cleared
+07/24/2025,Gas,SHELL #2615 CALGARY AB,,-66.68,Chequing,Cleared
+07/24/2025,Household,AMZN Mktp CA*EA3OCU,,-122.10,Chequing,Cleared
+07/25/2025,Groceries,SAFEWAY #8887,,-117.23,Chequing,Cleared
+07/25/2025,Fun,CINEPLEX ODEON #8605,,-23.47,Visa,Cleared
+07/25/2025,Fun,BANFF UPPER HOT SPRINGS,,-59.07,Visa,Cleared
+07/27/2025,Vehicle Repairs,CANADIAN TIRE #9749,,-213.96,Chequing,Cleared
+07/29/2025,Groceries,SAFEWAY #5383,,-180.17,Chequing,Cleared
+08/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+08/01/2025,Household,AMZN Mktp CA*7GJ1EX,,-20.23,Visa,Cleared
+08/02/2025,Gas,SHELL #5118 CALGARY AB,,-50.57,Visa,Cleared
+08/02/2025,Gas,PETRO-CANADA 9225,,-63.85,Chequing,Cleared
+08/02/2025,Groceries,COSTCO WHOLESALE #6243,,-257.83,Visa,Cleared
+08/03/2025,Gas,SHELL #3578 CALGARY AB,,-66.25,Visa,Cleared
+08/04/2025,Dining,TIM HORTONS #2958,,-16.99,Chequing,Cleared
+08/04/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-15.08,Visa,Cleared
+08/05/2025,Gas,SHELL #3489 CALGARY AB,,-84.27,Chequing,Cleared
+08/05/2025,Water,EPCOR WATER & SEWER,,-85.93,Visa,Cleared
+08/08/2025,Gas,PETRO-CANADA 4096,,-62.19,Chequing,Cleared
+08/08/2025,Household,BEST BUY #3780,,-203.29,Visa,Cleared
+08/09/2025,Vehicle Repairs,CANADIAN TIRE #8452,,-182.64,Chequing,Cleared
+08/10/2025,Groceries,SAFEWAY #3960,,-67.02,Visa,Cleared
+08/11/2025,Fun,CINEPLEX ODEON #9547,,-24.95,Chequing,Cleared
+08/12/2025,Groceries,SAFEWAY #6393,,-148.80,Visa,Cleared
+08/13/2025,Groceries,CALGARY CO-OP #6440,,-56.80,Chequing,Cleared
+08/13/2025,Household,PUROLATOR 2768,,-28.24,Visa,Cleared
+08/14/2025,Dining,SKIPTHEDISHES 6632,,-57.47,Chequing,Cleared
+08/14/2025,Fitness,GOODLIFE FITNESS 6899,,-49.99,Chequing,Cleared
+08/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+08/16/2025,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+08/18/2025,Household,SHOPPERS DRUG MART #3700,,-23.79,Chequing,Cleared
+08/19/2025,Household,AMZN Mktp CA*02CH2G,,-19.03,Visa,Cleared
+08/20/2025,Dining,DAIRY QUEEN #2184,,-19.65,Visa,Cleared
+08/21/2025,Groceries,SAFEWAY #4331,,-176.93,Chequing,Cleared
+08/24/2025,Household,LONDON DRUGS 3716,,-29.30,Visa,Cleared
+08/25/2025,Dining,SQ *BLUE DOOR COFFEE,,-9.90,Chequing,Cleared
+08/25/2025,Subscriptions,SPOTIFY P1747,,-11.99,Visa,Cleared
+08/29/2025,Dining,TIM HORTONS #7496,,-17.65,Visa,Cleared
+08/29/2025,Dining,SQ *BLUE DOOR COFFEE,,-6.90,Visa,Cleared
+08/29/2025,Phone,TELUS MOBILITY 6215,,-85.00,Visa,Cleared
+08/30/2025,Groceries,CALGARY CO-OP #5657,,-115.09,Visa,Cleared
+08/30/2025,Dining,TIM HORTONS #7457,,-14.01,Chequing,Cleared
+08/30/2025,Dining,TIM HORTONS #8040,,-8.11,Chequing,Cleared
+08/31/2025,Utilities,CITY POWER 7452,,-155.35,Visa,Cleared
+08/31/2025,Household,SHOPPERS DRUG MART #8993,,-58.27,Visa,Cleared
+08/31/2025,Household,AMZN Mktp CA*61OQTO,,-24.44,Chequing,Cleared
+09/01/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+09/01/2025,Vehicle Repairs,CANADIAN TIRE #3166,,-137.11,Chequing,Cleared
+09/02/2025,Subscriptions,NETFLIX.COM,,-18.99,Visa,Cleared
+09/02/2025,Household,AMZN Mktp CA*GMWXNT,,-56.68,Chequing,Cleared
+09/06/2025,Gas,PETRO-CANADA 4416,,-78.80,Chequing,Cleared
+09/06/2025,Dining,TIM HORTONS #8708,,-16.91,Visa,Cleared
+09/07/2025,Gas,SHELL #1810 CALGARY AB,,-49.07,Visa,Cleared
+09/08/2025,Groceries,CALGARY CO-OP #6715,,-129.61,Visa,Cleared
+09/09/2025,Dining,SKIPTHEDISHES 1806,,-37.15,Visa,Cleared
+09/12/2025,Groceries,SAFEWAY #1731,,-165.96,Chequing,Cleared
+09/12/2025,Dining,TIM HORTONS #2628,,-9.96,Visa,Cleared
+09/14/2025,Utilities,CITY POWER 2406,,-114.77,Chequing,Cleared
+09/14/2025,Household,LONDON DRUGS 7077,,-39.25,Chequing,Cleared
+09/14/2025,Household,AMZN Mktp CA*NUM4SS,,-40.56,Chequing,Cleared
+09/14/2025,Fun,CINEPLEX ODEON #7440,,-50.46,Chequing,Cleared
+09/14/2025,Travel,WESTJET AIRLINES,,-451.85,Visa,Cleared
+09/14/2025,Vehicle Repairs,JIFFY LUBE #2012,,-76.75,Visa,Cleared
+09/15/2025,Income,PAYROLL DEPOSIT - NORTHWIND,,4200.00,Chequing,Cleared
+09/16/2025,Groceries,SAFEWAY #2179,,-176.36,Visa,Cleared
+09/16/2025,Fitness,GOODLIFE FITNESS 6776,,-49.99,Visa,Cleared
+09/17/2025,Groceries,SAFEWAY #9630,,-80.11,Chequing,Cleared
+09/18/2025,Gas,SHELL #2805 CALGARY AB,,-55.25,Chequing,Cleared
+09/19/2025,Phone,TELUS MOBILITY 9777,,-85.00,Visa,Cleared
+09/19/2025,Household,SHOPPERS DRUG MART #5112,,-46.68,Chequing,Cleared
+09/21/2025,Gas,SHELL #7480 CALGARY AB,,-68.27,Chequing,Cleared
+09/22/2025,Dining,TIM HORTONS #1848,,-4.36,Chequing,Cleared
+09/23/2025,Dining,TIM HORTONS #8278,,-14.25,Chequing,Cleared
+09/23/2025,Dining,SQ *BLUE DOOR COFFEE,,-13.25,Visa,Cleared
+09/24/2025,Gas,PETRO-CANADA 3894,,-45.37,Visa,Cleared
+09/25/2025,Travel,PARK N FLY YYC,,-102.40,Visa,Cleared
+09/25/2025,Fun,BANFF UPPER HOT SPRINGS,,-23.65,Visa,Cleared
+09/26/2025,Groceries,COSTCO WHOLESALE #9492,,-285.28,Visa,Cleared
+09/26/2025,Water,EPCOR WATER & SEWER,,-64.32,Visa,Cleared
+09/27/2025,Groceries,CALGARY CO-OP #5366,,-114.03,Chequing,Cleared
+09/27/2025,Household,AMZN Mktp CA*EBEABD,,-39.32,Visa,Cleared
+09/28/2025,Household,SHOPPERS DRUG MART #3256,,-38.13,Chequing,Cleared
+09/29/2025,Dining,SQ *BLUE DOOR COFFEE,,-15.72,Chequing,Cleared
+09/29/2025,Subscriptions,SPOTIFY P6703,,-11.99,Chequing,Cleared
+09/29/2025,Vehicle Repairs,CITY OF CALGARY PARKING,,-24.83,Chequing,Cleared
+09/30/2025,Household,BEST BUY #9804,,-310.39,Visa,Cleared

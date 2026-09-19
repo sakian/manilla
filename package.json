@@ -1,0 +1,25 @@
+{
+  "name": "manilla",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Envelope budgeting app - Phase 0 de-risking spikes",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "ofx": "node spikes/parse-ofx.ts",
+    "goodbudget": "node spikes/inspect-goodbudget.ts",
+    "categorize": "node spikes/categorize-eval.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
+    "zod": "^4.6.5"
+  }
+}

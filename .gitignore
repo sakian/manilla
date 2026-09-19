@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# Real financial exports never get committed.
+data/private/*
+!data/private/.gitkeep
+
+# Spike output
+out/
