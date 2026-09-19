@@ -34,7 +34,7 @@ describe(
     let env: Fixture;
 
     before(async () => {
-      db = await setupTestDb();
+      db = await setupTestDb('ledger');
     });
 
     beforeEach(async () => {

@@ -18,7 +18,9 @@
     "db:studio": "drizzle-kit studio",
     "ofx": "node spikes/parse-ofx.ts",
     "goodbudget": "node spikes/inspect-goodbudget.ts",
-    "categorize": "node --env-file-if-exists=.env spikes/categorize-eval.ts"
+    "categorize": "node --env-file-if-exists=.env spikes/categorize-eval.ts",
+    "seed": "node --env-file-if-exists=.env scripts/seed.ts",
+    "import": "node --env-file-if-exists=.env scripts/import.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

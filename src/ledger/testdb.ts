@@ -12,8 +12,22 @@ import { sql } from 'drizzle-orm';
 import { createDb, type Database } from '../../db/client.ts';
 import { envelopeGroups, envelopes } from '../../db/schema.ts';
 
-const TEST_URL =
+const BASE_URL =
   process.env.DATABASE_URL_TEST ?? 'postgres://manilla:manilla@localhost:5433/manilla_test';
+
+/**
+ * Each test file gets its own database.
+ *
+ * `node --test` runs files in parallel, and every suite truncates between
+ * tests. Sharing one database means the files wipe each other's fixtures
+ * mid-run - which shows up as a suite that passes alone and fails in the full
+ * suite, the most misleading kind of failure there is.
+ */
+function urlFor(suite: string): string {
+  return `${BASE_URL}_${suite.replace(/[^a-z0-9_]/gi, '_').toLowerCase()}`;
+}
+
+const TEST_URL = BASE_URL;
 
 /** postgres.js keeps its socket open, so every throwaway connection must be closed. */
 async function withAdmin<T>(run: (admin: Database) => Promise<T>): Promise<T> {
@@ -41,8 +55,10 @@ export async function databaseAvailable(): Promise<boolean> {
 }
 
 /** Create the test database if it does not exist, then bring it up to schema. */
-export async function setupTestDb(): Promise<Database> {
-  const name = TEST_URL.slice(TEST_URL.lastIndexOf('/') + 1);
+/** `suite` names the database, so parallel test files never share one. */
+export async function setupTestDb(suite: string): Promise<Database> {
+  const url = urlFor(suite);
+  const name = url.slice(url.lastIndexOf('/') + 1);
 
   await withAdmin(async (admin) => {
     const existing = await admin.execute(sql`select 1 from pg_database where datname = ${name}`);
@@ -52,7 +68,7 @@ export async function setupTestDb(): Promise<Database> {
     }
   });
 
-  const db = createDb(TEST_URL);
+  const db = createDb(url);
   await migrate(db, { migrationsFolder: './db/migrations' });
   return db;
 }
