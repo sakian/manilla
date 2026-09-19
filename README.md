@@ -20,21 +20,29 @@ measurement harness.
 | Users | Single user for now; multi-user deferred |
 
 Measured against a real 7,957-row GoodBudget export (2021-2026) and a real TD
-OFX file. The headline result is that **categorization accuracy is capped at
-64.6% by the data itself**, not by the model: 68% of transactions happen at
-merchants used for more than one envelope (Amazon Marketplace alone spans 21
-envelopes across 712 transactions). Whether an Amazon order was Clothing or
-Groceries is simply not in the bank feed.
+OFX file, holding out the most recent three months (435 transactions):
 
-Consequences, recorded in section 12 of the requirements doc:
+| | History only | History + AI |
+| --- | --- | --- |
+| Accepted unchanged | 62.8% | **72.4%** |
+| Got any suggestion | 90.6% | 99.5% |
+| Auto-confirm precision at 0.95 | - | 98.6% (covering 15.9%) |
+| Cost per 1,000 transactions | $0 | ~$2 |
 
-- The history layer reaches 60.3%, already near the 64.6% ceiling. Tuning moves
-  it by 1-3 points, so there is little left there.
+Recorded in section 12 of the requirements doc:
+
+- **90% was never reachable from bank data.** 68% of transactions happen at
+  merchants used for more than one envelope - Amazon Marketplace alone spans 21
+  envelopes across 712 transactions. Whether an order was Clothing or Groceries
+  is not in the bank feed, so no model can read it. 72% is the realistic target.
 - The auto-confirm threshold is **0.95**, not the 0.85 first proposed. At 0.95
-  it confirms 14% of transactions at 98.4% precision; at 0.85 it confirms 26%
-  at 79.5%, which means one wrong entry in five.
-- The fast review queue matters more than the AI layer, because roughly half of
-  all transactions will always need a human decision.
+  it confirms 16% of transactions at 98.6% precision; at 0.85 it confirms 30%
+  at 91.7%, which is roughly one wrong entry in twelve.
+- The AI layer earns its place: +9.6 points and near-total coverage for about
+  $1.50 a year at this volume. Its real job is the ~9% of transactions at
+  merchants never seen before, not breaking the ambiguity ceiling.
+- The fast review queue still matters most. Only 16% can be auto-confirmed, so
+  almost everything passes under a human eye either way.
 
 ## Requirements
 
