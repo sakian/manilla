@@ -1,0 +1,64 @@
+# Manilla on the home server.
+#
+# The app listens on 127.0.0.1 only: your existing Nginx terminates TLS and
+# proxies to it, and the whole thing is reachable over Tailscale rather than the
+# public internet. Nothing here publishes a port to the outside world.
+#
+#   docker compose up -d
+#
+# For local development on Windows, `docker compose up -d db` is enough - it
+# brings up only Postgres, on port 5433 to avoid clashing with anything already
+# using 5432.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-manilla}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-manilla}
+      POSTGRES_DB: ${POSTGRES_DB:-manilla}
+      # Deterministic collation, so ordering does not change under a base image bump.
+      POSTGRES_INITDB_ARGS: '--locale=C --encoding=UTF8'
+    volumes:
+      - manilla-db:/var/lib/postgresql/data
+    ports:
+      # Bound to loopback: Postgres is never reachable from the LAN.
+      - '127.0.0.1:5433:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-manilla} -d ${POSTGRES_DB:-manilla}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-manilla}:${POSTGRES_PASSWORD:-manilla}@db:5432/${POSTGRES_DB:-manilla}
+      NODE_ENV: production
+      # Passkeys are bound to this hostname; it must match what you type in the
+      # browser, e.g. manilla.your-tailnet.ts.net. The localhost defaults are for
+      # development only - the app refuses to start in production with them, so a
+      # missing value fails loudly at boot rather than silently accepting logins
+      # for the wrong origin.
+      MANILLA_RP_ID: ${MANILLA_RP_ID:-localhost}
+      MANILLA_ORIGIN: ${MANILLA_ORIGIN:-http://localhost:3000}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      # Loopback only. Nginx proxies to this; nothing else can reach it.
+      - '127.0.0.1:${MANILLA_PORT:-3000}:3000'
+    healthcheck:
+      test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  manilla-db:

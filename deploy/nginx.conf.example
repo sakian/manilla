@@ -1,0 +1,64 @@
+# Manilla behind your existing Nginx.
+#
+# Assumes the app is reachable only over Tailscale, so there is no public
+# hostname and no Let's Encrypt challenge to serve. Two workable setups:
+#
+#   A. Plain HTTP over Tailscale. Tailscale already encrypts the transport, and
+#      the tailnet is private. Simplest, but passkeys need a secure context:
+#      browsers treat *.ts.net as secure only with HTTPS, so prefer B.
+#
+#   B. HTTPS with a Tailscale-issued certificate (recommended). Run:
+#
+#        tailscale cert manilla.your-tailnet.ts.net
+#
+#      which writes a real, browser-trusted certificate and key. Passkeys then
+#      work without warnings, because WebAuthn requires a secure origin.
+#
+# After editing: nginx -t && systemctl reload nginx
+
+server {
+    listen 443 ssl;
+    http2 on;
+
+    # Must match MANILLA_RP_ID / MANILLA_ORIGIN in your .env, exactly.
+    server_name manilla.your-tailnet.ts.net;
+
+    # Written by `tailscale cert`. Paths vary by distro; on Ubuntu with the
+    # official package these are typical.
+    ssl_certificate     /var/lib/tailscale/certs/manilla.your-tailnet.ts.net.crt;
+    ssl_certificate_key /var/lib/tailscale/certs/manilla.your-tailnet.ts.net.key;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    # Bank statements are a few hundred KB; the default 1M is plenty, but be
+    # explicit so a large multi-year import does not fail with a confusing 413.
+    client_max_body_size 25M;
+
+    # The app sets its own security headers; these cover what a proxy should own.
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # Next.js streams server-rendered responses; buffering delays them.
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+}
+
+# Optional: refuse plain HTTP so a passkey is never attempted on an insecure
+# origin, which fails in a confusing way rather than an obvious one.
+server {
+    listen 80;
+    server_name manilla.your-tailnet.ts.net;
+    return 301 https://$host$request_uri;
+}
