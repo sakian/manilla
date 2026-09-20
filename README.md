@@ -37,10 +37,22 @@ monthly call budget, a cost counter and a running accuracy measure. Re-measured
 on three held-out months of the real history at 71.7% accepted unchanged and
 98.6% precision in the auto-confirm band, for $0.36.
 
-Search and filtering are in (VW-5, VW-6): one query behind both the search page
-and the account view, filterable by text, date, amount, direction, envelope,
-account, status and kind, with the filters in the URL so a search can be
-bookmarked and downloaded as the CSV of exactly what is on screen.
+Search and filtering are in (VW-5, VW-6): one query, filterable by text, date,
+amount, direction, envelope, account, status and kind, with the filters in the
+URL so a search can be bookmarked and downloaded as the CSV of exactly what is
+on screen. It lives on the screens that list transactions rather than on a page
+of its own - the account view with no account picked is every transaction.
+
+The screens then went through a usability pass. The dashboard and the envelope
+list were one column of balances shown twice, so they are one screen, with
+renaming, reordering, archiving and planned amounts behind an Edit button and
+funding a button beside the envelopes being filled. Accounts are their own tab.
+The budget screen shows each envelope's plan next to what it actually cost -
+last month, and averaged over a year - with every figure labelled on every row,
+because a phone has scrolled the table header away by the time you reach
+Groceries. Expected income is measured over six months rather than typed. A
+confirmed transaction can be sent back to the review queue, and a transfer
+pairing undone, without deleting anything.
 
 Still outstanding: CSV import with a column-mapping step (FR-8), period
 comparisons and income-against-spending (RP-3, RP-4), progress bars and a pace
@@ -94,16 +106,16 @@ npm install
 
 ```
 app/                    the web app (Next.js App Router)
-  page.tsx              dashboard: envelope balances, callouts, balance check (VW-1, VW-3)
+  page.tsx              home: envelope balances, callouts, balance check (VW-1, VW-3)
+  HomeScreen.tsx        the merged dashboard and envelope list, view and edit modes
   review/               the review queue, keyboard-driven (RQ-1 to RQ-5)
-  budget/               monthly plan, funding and allocation (FR-27 to FR-31)
+  budget/               the monthly plan against what each envelope costs (FR-27, FR-31, FR-32)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
   migrate/              the GoodBudget migration wizard (MG-1 to MG-7)
   reports/              spending by envelope, month by month, with CSV (RP-1 to RP-6)
   transactions/         entering, correcting and deleting by hand (FR-2, FR-4, FR-5)
-  envelopes/            envelopes and groups, transfers, cover an overspend (FR-21 to FR-25, FR-34, FR-35)
+  envelopes/[id]/       one envelope: its history, transfers, cover an overspend (VW-4, FR-34, FR-35)
   accounts/             accounts and their transactions, filterable (FR-1, VW-5)
-  search/               search across every transaction (VW-6)
   login/, settings/     passkey sign-in and registered devices (NF-3)
   auth.ts               the session check every page and action goes through
 proxy.ts                redirects a signed-out browser before a page renders
@@ -124,7 +136,7 @@ src/
   ai/ai.ts              the off switch, budget, merchant cache and accuracy measure (NF-5)
   export/export.ts      the whole ledger as JSON or CSV (NF-6)
   transactions/manage.ts manual entry, edits, deletions, account transfers
-  transactions/search.ts one filter query behind the search page and the account view (VW-5, VW-6)
+  transactions/search.ts the one filter query behind every transaction list (VW-5, VW-6)
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
   auth/                 passkeys, sessions, recovery codes, RP configuration

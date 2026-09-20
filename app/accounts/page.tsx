@@ -66,7 +66,10 @@ export default async function AccountsPage(props: {
     <>
       <div className="page-head">
         <h2>Accounts</h2>
-        <p className="muted">Real money, as the bank sees it.</p>
+        <p className="muted">
+          Real money, as the bank sees it. Every transaction is here: search and filter below, and
+          pick an account to narrow it to one.
+        </p>
       </div>
 
       <AccountManager accounts={managed} selectedId={selected?.id ?? null} />
@@ -87,21 +90,32 @@ export default async function AccountsPage(props: {
           active={filtered}
         />
 
-        {filtered && (
-          <p className="muted">
-            {describeQuery(query, { accounts: accountNames, envelopes: envelopeNames })} ·{' '}
-            {found.total.toLocaleString()} found, spent <Money cents={found.outCents} plain />
-            {found.inCents > 0 && (
-              <>
-                , received <Money cents={found.inCents} plain />
-              </>
-            )}{' '}
-            ·{' '}
-            <a className="button-link" href={withParams('/api/search', params)} download>
-              CSV
-            </a>
-          </p>
-        )}
+        {/* The CSV is offered whether or not anything is filtered: it downloads
+            exactly what the list is showing, and "export my transactions" is a
+            thing people look for without having searched first (#12). */}
+        <p className="muted">
+          {filtered ? (
+            <>
+              {describeQuery(query, { accounts: accountNames, envelopes: envelopeNames })} ·{' '}
+              {found.total.toLocaleString()} found, spent <Money cents={found.outCents} plain />
+              {found.inCents > 0 && (
+                <>
+                  , received <Money cents={found.inCents} plain />
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {found.total.toLocaleString()} transaction{found.total === 1 ? '' : 's'}, spent{' '}
+              <Money cents={found.outCents} plain />, received{' '}
+              <Money cents={found.inCents} plain />
+            </>
+          )}{' '}
+          ·{' '}
+          <a className="button-link" href={withParams('/api/search', params)} download>
+            CSV
+          </a>
+        </p>
 
         <TransactionList
           rows={found.rows}

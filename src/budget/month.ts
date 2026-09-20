@@ -90,6 +90,19 @@ export function monthLabel(month: MonthKey): string {
 }
 
 /**
+ * Short form for a column heading: `2026-09` becomes `Sep 26`.
+ *
+ * A table has room for three letters and two digits, and "September 2026" over a
+ * column of money pushes everything else off a phone.
+ */
+export function shortMonthLabel(month: MonthKey): string {
+  assertMonth(month);
+  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const [year, index] = month.split('-');
+  return `${names[Number(index) - 1]} ${year!.slice(2)}`;
+}
+
+/**
  * The date to stamp on money moved for a given budget month.
  *
  * Funding September's envelopes on the 19th of September is dated the 19th. But

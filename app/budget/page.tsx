@@ -1,10 +1,6 @@
 import { db } from '../../db/client.ts';
-import {
-  budgetMonth,
-  fundingFromBudget,
-  monthAllocations,
-} from '../../src/budget/budget.ts';
-import { addMonths, currentMonth, monthLabel } from '../../src/budget/month.ts';
+import { budgetMonth } from '../../src/budget/budget.ts';
+import { addMonths, currentMonth, monthLabel, shortMonthLabel } from '../../src/budget/month.ts';
 import { requireUser } from '../auth.ts';
 import BudgetScreen from './BudgetScreen.tsx';
 
@@ -25,19 +21,15 @@ export default async function BudgetPage(props: {
   const month = pickMonth(searchParams.month);
   const connection = db();
 
-  // The month is read once; the funding preview is derived from it rather than
-  // asking the same questions again.
   const budget = await budgetMonth(connection, month);
-  const allocations = await monthAllocations(connection, month);
-  const funding = fundingFromBudget(budget);
+  const previousMonth = addMonths(month, -1);
 
   return (
     <BudgetScreen
       budget={budget}
-      funding={funding}
-      allocations={allocations}
       label={monthLabel(month)}
-      previousMonth={addMonths(month, -1)}
+      previousMonth={previousMonth}
+      previousLabel={shortMonthLabel(previousMonth)}
       nextMonth={addMonths(month, 1)}
       thisMonth={currentMonth()}
     />

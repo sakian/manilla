@@ -54,7 +54,13 @@ import { normalizePayee } from '../categorize/normalize.ts';
 
 export class MigrationError extends Error {}
 
-/** GoodBudget's marker for "no account", which is not an account name. */
+/** What a migrated envelope move says in the envelope's own history. */
+export const MIGRATED_NOTE = 'Migrated from your previous budgeting app';
+
+/** What the reconciliation adjustment says, for the same reason. */
+export const CARRIED_OVER_NOTE = 'Opening balance carried over from your previous budgeting app';
+
+/** The export's marker for "no account", which is not an account name. */
 const NO_ACCOUNT = '[none]';
 const FILL_PAYEE = 'fill envelopes';
 const ENVELOPE_TRANSFER_PAYEE = 'envelope transfer';
@@ -844,7 +850,10 @@ export async function commitMigration(
           amountCents: move.amountCents,
           date: move.date,
           kind: 'transfer' as const,
-          note: 'Migrated from GoodBudget',
+          // These notes end up in an envelope's history, where they are read by
+          // the user rather than by us, so they name what happened and not the
+          // app it came from (#11).
+          note: MIGRATED_NOTE,
           importBatchId: batchId,
           externalId: move.externalId,
         })),
@@ -984,7 +993,7 @@ export async function applyReconciliation(
       amountCents: Math.abs(adjustment.differenceCents),
       date: options.date,
       kind: 'allocation' as const,
-      note: 'Opening balance carried over from GoodBudget',
+      note: CARRIED_OVER_NOTE,
       importBatchId: options.batchId ?? null,
     })),
   );

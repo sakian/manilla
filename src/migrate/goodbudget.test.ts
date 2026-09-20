@@ -5,6 +5,7 @@ import { checkInvariant, envelopeBalances, openAccount } from '../ledger/ledger.
 import { listAccounts } from '../accounts/manage.ts';
 import { listEnvelopes } from '../envelopes/manage.ts';
 import {
+  CARRIED_OVER_NOTE,
   MigrationError,
   applyReconciliation,
   commitMigration,
@@ -494,7 +495,10 @@ describe(
       const history = await envelopeHistory(db, env.gasId);
       const adjustment = history.find((event) => event.kind === 'allocation')!;
       assert.equal(adjustment.amountCents, 26020);
-      assert.match(adjustment.description, /carried over from GoodBudget/);
+      // The note names what happened rather than the app it came from, because
+      // it is read in the envelope's own history by the user (#11).
+      assert.equal(adjustment.description, CARRIED_OVER_NOTE);
+      assert.doesNotMatch(adjustment.description, /goodbudget/i);
     });
   },
 );

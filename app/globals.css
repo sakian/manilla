@@ -1441,3 +1441,143 @@ details[open] > summary > .group-summary::before {
 .pager a:hover {
   border-color: var(--accent);
 }
+
+/* --- Labelled figures ---------------------------------------------------- */
+
+/*
+ * Every money cell carries its own label, hidden on a wide screen where the
+ * table header does the job, and shown on a phone where that header is off the
+ * top of the screen by the time you have scrolled to Groceries. A column of
+ * unlabelled money is unreadable, and that was the complaint.
+ */
+.figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.figure-label {
+  display: none;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+/*
+ * Outside a table there is no header row to name the columns, so these labels
+ * are never hidden. Two bare numbers beside an envelope name is the unreadable
+ * thing this whole change was about.
+ */
+.envelope-figures .figure-label,
+.planned-edit .figure-label {
+  display: inline;
+}
+
+.envelope-figures .figure + .figure::before {
+  content: '·';
+  margin: 0 6px 0 2px;
+  color: var(--text-dim);
+}
+
+.budget-row.plan {
+  grid-template-columns: minmax(0, 2fr) repeat(5, minmax(78px, 1fr));
+}
+
+.plan-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.head-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.head-actions button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.planned-edit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.planned-edit input {
+  width: 84px;
+  font-size: 12px;
+  padding: 3px 6px;
+}
+
+.fund-dialog {
+  width: min(680px, 100%);
+}
+
+@media (max-width: 720px) {
+  /* Two labelled figures per line beats six unlabelled columns squeezed into
+     one, and beats a horizontal scroll nobody discovers. */
+  .budget-row.plan {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 6px;
+    padding: 9px 0;
+  }
+  .budget-row.plan > span:first-child {
+    grid-column: 1 / -1;
+  }
+  .budget-row.plan > span:not(:first-child) {
+    text-align: left;
+  }
+  .budget-row.plan .figure {
+    justify-content: space-between;
+  }
+  .figure-label {
+    display: inline;
+  }
+}
+
+/*
+ * Keyboard shortcuts are noise where there is no keyboard to press them on, and
+ * they crowd the label they sit beside. Keyed on the pointer rather than the
+ * width, because a narrow desktop window still has a keyboard and the hints are
+ * worth keeping there.
+ */
+@media (pointer: coarse) {
+  kbd {
+    display: none;
+  }
+}
+
+.inline-search {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.inline-search input {
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 9px;
+  background: var(--surface);
+  color: var(--text);
+  min-width: 0;
+  width: 160px;
+}
+
+.inline-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.inline-search button {
+  font-size: 13px;
+  padding: 5px 10px;
+}

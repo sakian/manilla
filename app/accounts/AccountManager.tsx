@@ -7,8 +7,12 @@
  * because it is an ordinary transaction that lands in the income pool - get it
  * wrong and the two sides of the ledger disagree from the first day.
  *
- * The bank account number is on this screen too: it is what maps an OFX statement
- * to an account on import (FR-7), and the only place it can be corrected.
+ * The bank account number is shown but not editable (#10). It is what maps an OFX
+ * statement to an account on import (FR-7), so it is set when the account is
+ * created and then left alone: changing it afterwards silently re-points every
+ * future statement, and getting it wrong is a mis-import nobody would think to
+ * look for. An account mapped to the wrong number is better archived and opened
+ * again with the right one, which leaves the mistake visible.
  */
 
 import { useCallback, useState, useTransition } from 'react';
@@ -138,21 +142,6 @@ export default function AccountManager({
                 disabled={pending}
               >
                 Rename
-              </button>
-              <button
-                onClick={() => {
-                  const next = window.prompt(
-                    'The account number exactly as your bank export states it (OFX ACCTID). ' +
-                      'Blank to unmap.',
-                    account.externalAccountId ?? '',
-                  );
-                  if (next !== null) {
-                    run(() => editAccountAction(account.id, { externalAccountId: next }));
-                  }
-                }}
-                disabled={pending}
-              >
-                Bank number
               </button>
               <button onClick={() => run(() => archiveAccountAction(account.id))} disabled={pending}>
                 Archive

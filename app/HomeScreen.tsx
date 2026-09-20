@@ -1,7 +1,20 @@
 'use client';
 
 /**
- * The envelope screen (FR-21 to FR-25, FR-34, FR-35, VW-4).
+ * The home screen: what every envelope holds, and everything you do to them
+ * (VW-1, VW-3, FR-21 to FR-25, FR-34, FR-35).
+ *
+ * The dashboard and the envelope list were two screens showing the same column
+ * of balances, so they are one screen. Accounts are not here at all: an account
+ * balance is the bank's view and it has its own tab, while this screen is the
+ * envelope view - the one that answers "can I afford this".
+ *
+ * Reading and rearranging are separated by an Edit button rather than shown at
+ * once. Renaming, reordering, archiving, adding and setting planned amounts are
+ * all things you do occasionally and deliberately; showing their controls on
+ * every row buries the balances, which is what you came for. Nothing is hidden
+ * that changes money - Move and Cover stay visible, because those are answers to
+ * what the screen is telling you.
  *
  * Groups are `<details>` elements, so collapsing (FR-22) works without state,
  * without JavaScript, and with a keyboard. Every group shows its rolled-up
@@ -15,8 +28,10 @@
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { ManagedGroup } from '../../src/envelopes/manage.ts';
-import { Money } from '../Money.tsx';
+import type { FundingPlan } from '../src/budget/budget.ts';
+import type { ManagedGroup } from '../src/envelopes/manage.ts';
+import { Money } from './Money.tsx';
+import { inputFromCents } from './amount.ts';
 import {
   archiveGroupAction,
   createEnvelopeAction,
@@ -26,18 +41,38 @@ import {
   renameGroupAction,
   unarchiveEnvelopeAction,
   unarchiveGroupAction,
-} from './actions.ts';
+} from './envelopes/actions.ts';
 import {
   ArchiveDialog,
   CoverDialog,
   TransferDialog,
   type EnvelopeChoice,
-} from './MoveMoney.tsx';
+} from './envelopes/MoveMoney.tsx';
+import { setPlannedAction } from './budget/actions.ts';
+import FundEnvelopes from './budget/FundEnvelopes.tsx';
 
 export type MonthFigures = Record<
   string,
-  { plannedCents: number; spentCents: number; allocatedCents: number }
+  {
+    plannedCents: number;
+    spentCents: number;
+    allocatedCents: number;
+    lastMonthSpentCents: number;
+    averageSpentCents: number;
+  }
 >;
+
+export type Headline = {
+  /** Transactions waiting in the review queue. */
+  waiting: number;
+  /** What is sitting in the income pool, unassigned to any envelope. */
+  unallocatedCents: number;
+  overspentCount: number;
+  /** FR-37: whether the two sides of the ledger still agree. */
+  invariantOk: boolean;
+  unexplainedCents: number;
+  unassignedCents: number;
+};
 
 function money(cents: number): string {
   const sign = cents < 0 ? '-' : '';
@@ -47,19 +82,30 @@ function money(cents: number): string {
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 
-export default function EnvelopeManager({
+export default function HomeScreen({
   groups,
   figures,
   monthLabel,
+  month,
+  funding,
+  allocatedCents,
+  headline,
 }: {
   groups: ManagedGroup[];
   figures: MonthFigures;
   monthLabel: string;
+  month: string;
+  funding: FundingPlan;
+  /** Net allocated this month, for the funding dialog's send-it-back path. */
+  allocatedCents: number;
+  headline: Headline;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [funded, setFunded] = useState(false);
   const [newEnvelope, setNewEnvelope] = useState<Record<string, string>>({});
   const [newGroup, setNewGroup] = useState('');
   const [transferFrom, setTransferFrom] = useState<string | null>(null);
@@ -120,6 +166,19 @@ export default function EnvelopeManager({
 
   const archivedGroups = groups.filter((group) => group.archivedAt !== null);
 
+  /**
+   * Only write when the figure actually changed. Blurring a field nobody touched
+   * would otherwise turn every scroll past an envelope into a database write and
+   * a page refresh.
+   */
+  const savePlanned = useCallback(
+    (envelopeId: string, figure: MonthFigures[string] | undefined, value: string) => {
+      if (value.trim() === inputFromCents(figure?.plannedCents ?? 0)) return;
+      run(() => setPlannedAction(envelopeId, value));
+    },
+    [run],
+  );
+
   const rename = useCallback(
     (envelopeId: string, current: string) => {
       const next = window.prompt('Rename envelope', current);
@@ -134,14 +193,69 @@ export default function EnvelopeManager({
       <div className="page-head">
         <div className="month-head">
           <h2>Envelopes</h2>
-          <button className="primary" onClick={() => { setTransferFrom(null); setTransferOpen(true); }}>
-            Move money
-          </button>
+          <div className="head-actions">
+            <button
+              className="primary"
+              onClick={() => {
+                setTransferFrom(null);
+                setTransferOpen(true);
+              }}
+              disabled={pending}
+            >
+              Move money
+            </button>
+            {/* Reachable while there is either something to fund or something
+                already funded to send back (FR-30). */}
+            <button
+              onClick={() => setFunded(true)}
+              disabled={pending || (funding.lines.length === 0 && allocatedCents === 0)}
+              title={
+                funding.lines.length === 0 && allocatedCents === 0
+                  ? 'No envelope has a planned amount yet'
+                  : `Move ${money(funding.totalCents)} out of Available`
+              }
+            >
+              {funding.totalCents === 0 ? 'Fund envelopes' : `Fund ${money(funding.totalCents)}`}
+            </button>
+            <button
+              onClick={() => setEditing(!editing)}
+              disabled={pending}
+              aria-pressed={editing}
+              className={editing ? 'active' : ''}
+            >
+              {editing ? 'Done' : 'Edit'}
+            </button>
+          </div>
         </div>
         <p className="muted">
           Balances carry over month to month. Planned and spent are for {monthLabel}; the balance is
           everything that has ever happened to the envelope.
         </p>
+      </div>
+
+      <div className="callouts">
+        {headline.waiting > 0 && (
+          <Link href="/review" className="callout">
+            <strong>{headline.waiting}</strong> awaiting review
+          </Link>
+        )}
+        <div className={`callout${headline.unallocatedCents < 0 ? ' bad' : ''}`}>
+          <strong>
+            <Money cents={headline.unallocatedCents} />
+          </strong>{' '}
+          unallocated
+        </div>
+        {headline.overspentCount > 0 && (
+          <div className="callout warn">
+            <strong>{headline.overspentCount}</strong> envelope
+            {headline.overspentCount === 1 ? '' : 's'} overspent
+          </div>
+        )}
+        {!headline.invariantOk && (
+          <div className="callout bad">
+            Ledger out of balance by <Money cents={headline.unexplainedCents} />
+          </div>
+        )}
       </div>
 
       {error && <p className="signin-error">{error}</p>}
@@ -171,6 +285,7 @@ export default function EnvelopeManager({
               </span>
             </summary>
 
+            {editing && (
             <div className="group-tools">
               <button
                 onClick={() => {
@@ -187,9 +302,10 @@ export default function EnvelopeManager({
                 Archive group
               </button>
             </div>
+            )}
 
             {envelopes.map((envelope, index) => {
-              const month = figures[envelope.id];
+              const figure = figures[envelope.id];
               const overspent = envelope.balanceCents < 0;
               return (
                 <div key={envelope.id} className="envelope-row">
@@ -201,9 +317,15 @@ export default function EnvelopeManager({
                   </span>
 
                   <span className="envelope-figures muted">
-                    {month ? (
+                    {figure ? (
                       <>
-                        planned {money(month.plannedCents)} · spent {money(month.spentCents)}
+                        <span className="figure">
+                          <span className="figure-label">planned</span>{' '}
+                          {money(figure.plannedCents)}
+                        </span>
+                        <span className="figure">
+                          <span className="figure-label">spent</span> {money(figure.spentCents)}
+                        </span>
                       </>
                     ) : (
                       'archived group'
@@ -230,42 +352,65 @@ export default function EnvelopeManager({
                     >
                       Move
                     </button>
-                    <button onClick={() => rename(envelope.id, envelope.name)} disabled={pending}>
-                      Rename
-                    </button>
-                    <button
-                      onClick={() => run(() => nudgeEnvelopeAction(envelope.id, 'up'))}
-                      disabled={pending || index === 0}
-                      title="Move up"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      onClick={() => run(() => nudgeEnvelopeAction(envelope.id, 'down'))}
-                      disabled={pending || index === envelopes.length - 1}
-                      title="Move down"
-                    >
-                      ↓
-                    </button>
-                    {!envelope.isUnallocated && (
-                      <button
-                        onClick={() =>
-                          setArchiving({
-                            id: envelope.id,
-                            name: envelope.name,
-                            balanceCents: envelope.balanceCents,
-                          })
-                        }
-                        disabled={pending}
-                      >
-                        Archive
-                      </button>
+                    {editing && (
+                      <>
+                        {!envelope.isUnallocated && (
+                          <label className="planned-edit">
+                            <span className="figure-label">plan</span>
+                            <input
+                              className="amount"
+                              inputMode="decimal"
+                              aria-label={`Planned each month for ${envelope.name}`}
+                              defaultValue={inputFromCents(figure?.plannedCents ?? 0)}
+                              onBlur={(event) => savePlanned(envelope.id, figure, event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') event.currentTarget.blur();
+                              }}
+                            />
+                          </label>
+                        )}
+                        <button
+                          onClick={() => rename(envelope.id, envelope.name)}
+                          disabled={pending}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          onClick={() => run(() => nudgeEnvelopeAction(envelope.id, 'up'))}
+                          disabled={pending || index === 0}
+                          title="Move up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          onClick={() => run(() => nudgeEnvelopeAction(envelope.id, 'down'))}
+                          disabled={pending || index === envelopes.length - 1}
+                          title="Move down"
+                        >
+                          ↓
+                        </button>
+                        {!envelope.isUnallocated && (
+                          <button
+                            onClick={() =>
+                              setArchiving({
+                                id: envelope.id,
+                                name: envelope.name,
+                                balanceCents: envelope.balanceCents,
+                              })
+                            }
+                            disabled={pending}
+                          >
+                            Archive
+                          </button>
+                        )}
+                      </>
                     )}
                   </span>
                 </div>
               );
             })}
 
+            {editing && (
             <div className="add-device">
               <input
                 value={newEnvelope[group.id] ?? ''}
@@ -293,10 +438,12 @@ export default function EnvelopeManager({
                 Add envelope
               </button>
             </div>
+            )}
           </details>
         );
       })}
 
+      {editing && (
       <section className="panel">
         <h3>New group</h3>
         <div className="add-device">
@@ -317,8 +464,9 @@ export default function EnvelopeManager({
           </button>
         </div>
       </section>
+      )}
 
-      {(archivedEnvelopes.length > 0 || archivedGroups.length > 0) && (
+      {editing && (archivedEnvelopes.length > 0 || archivedGroups.length > 0) && (
         <details className="panel group-panel">
           <summary>
             <span className="group-summary">
@@ -352,6 +500,36 @@ export default function EnvelopeManager({
             </div>
           ))}
         </details>
+      )}
+
+      <p className="muted footnote">
+        {headline.invariantOk ? (
+          <>
+            Envelopes and accounts agree
+            {headline.unassignedCents !== 0 && (
+              <>
+                , with <Money cents={headline.unassignedCents} /> still unassigned in the{' '}
+                <Link href="/review">review queue</Link>
+              </>
+            )}
+            .
+          </>
+        ) : (
+          <>
+            Envelopes and accounts disagree by <Money cents={headline.unexplainedCents} />, which
+            should never happen. Recent imports are the place to look.
+          </>
+        )}
+      </p>
+
+      {funded && (
+        <FundEnvelopes
+          month={month}
+          label={monthLabel}
+          funding={funding}
+          allocatedCents={allocatedCents}
+          onClose={() => setFunded(false)}
+        />
       )}
 
       {transferOpen && (

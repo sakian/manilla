@@ -134,6 +134,8 @@ export type EnvelopeEvent =
   | {
       kind: 'allocation' | 'transfer';
       id: string;
+      /** The move's own id, so an allocation can be sent back from here (FR-30). */
+      moveId: string;
       date: string;
       description: string;
       amountCents: number;
@@ -216,6 +218,7 @@ export async function envelopeHistory(
       return {
         kind: row.kind,
         id: `move-${row.id}`,
+        moveId: row.id,
         date: row.date,
         description: row.note ?? (incoming ? `Moved in from ${other}` : `Moved out to ${other}`),
         amountCents: incoming ? Number(row.amountCents) : -Number(row.amountCents),

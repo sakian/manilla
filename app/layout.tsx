@@ -23,14 +23,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             {session && (
               <>
                 <nav className="nav">
-                  <Link href="/">Dashboard</Link>
+                  <Link href="/">Envelopes</Link>
                   <Link href="/import">Import</Link>
                   <Link href="/review">Review</Link>
                   <Link href="/budget">Budget</Link>
-                  <Link href="/envelopes">Envelopes</Link>
                   <Link href="/accounts">Accounts</Link>
                   <Link href="/reports">Reports</Link>
-                  <Link href="/search">Search</Link>
                   <Link href="/migrate">Migrate</Link>
                 </nav>
                 <form action={signOutAction} className="topbar-end">

@@ -8,14 +8,9 @@ import { transferOptions } from '../../../src/envelopes/transfer.ts';
 import { requireUser } from '../../auth.ts';
 import { Money } from '../../Money.tsx';
 import Actions from './Actions.tsx';
+import History from './History.tsx';
 
 export const dynamic = 'force-dynamic';
-
-function shortDate(date: string): string {
-  const [year, month, day] = date.split('-');
-  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${names[Number(month) - 1]} ${Number(day)} ${year}`;
-}
 
 export default async function EnvelopePage(props: { params: Promise<{ id: string }> }) {
   await requireUser();
@@ -37,7 +32,7 @@ export default async function EnvelopePage(props: { params: Promise<{ id: string
       <div className="page-head">
         <div className="month-head">
           <h2>{envelope.name}</h2>
-          <Link href="/envelopes" className="muted">
+          <Link href="/" className="muted">
             All envelopes
           </Link>
         </div>
@@ -70,23 +65,25 @@ export default async function EnvelopePage(props: { params: Promise<{ id: string
       />
 
       <section className="panel">
-        <h3>History</h3>
-        {history.length === 0 && <p className="muted">Nothing has happened here yet.</p>}
-        {history.map((event) => (
-          <div key={event.id} className="txn">
-            <span className="muted txn-date">{shortDate(event.date)}</span>
-            <span className="txn-payee">
-              {event.description}
-              {event.kind === 'allocation' && <span className="tag">allocation</span>}
-              {event.kind === 'transfer' && <span className="tag">transfer</span>}
-            </span>
-            <span className="muted txn-env">
-              {event.kind === 'transaction' ? event.accountName : ''}
-              {event.pending && ' · pending review'}
-            </span>
-            <Money cents={event.amountCents} />
-          </div>
-        ))}
+        <div className="panel-head">
+          <h3>History</h3>
+          {/* A plain GET form, so searching this envelope needs no JavaScript and
+              lands in the full transaction view with the envelope already
+              filtered. The history below is not only transactions - allocations
+              and transfers are here too - so filtering it in place would quietly
+              drop the very records this page exists to show. */}
+          <form action="/accounts" method="get" className="inline-search">
+            <input type="hidden" name="env" value={id} />
+            <input
+              type="search"
+              name="q"
+              placeholder={`Search ${envelope.name}`}
+              aria-label={`Search transactions in ${envelope.name}`}
+            />
+            <button type="submit">Search</button>
+          </form>
+        </div>
+        <History events={history} month={month} isPool={envelope.isUnallocated} />
       </section>
     </>
   );

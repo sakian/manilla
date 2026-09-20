@@ -748,6 +748,42 @@ describe(
       assert.equal((await transactionDetail(db, id))!.kind, 'spending');
     });
 
+    test('a sent-back transaction really does reappear in the review queue', async () => {
+      const { pendingCount, pendingTransactions } = await import('../queue/queue.ts');
+      const id = await importedAndConfirmed();
+
+      assert.equal(await pendingCount(db), 0, 'confirmed, so nothing is waiting');
+
+      await sendBackToReview(db, id);
+
+      assert.equal(await pendingCount(db), 1);
+      const queue = await pendingTransactions(db);
+      assert.equal(queue.length, 1);
+      assert.equal(queue[0]!.id, id, 'and it is the one that was sent back');
+    });
+
+    test('an unpaired transfer half reappears in the queue as spending', async () => {
+      const { pendingTransactions } = await import('../queue/queue.ts');
+      const id = await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-03-15',
+        amountCents: -50000,
+        payeeRaw: 'TFR-TO C C',
+        status: 'confirmed',
+        source: 'file_import',
+        externalIds: [{ kind: 'fitid', value: 'FIT-TFR' }],
+      });
+      const pairId = await convertToTransfer(db, id, { toAccountId: savings });
+
+      // A transfer is not spending, so the queue does not show it at all (FR-5).
+      assert.equal((await pendingTransactions(db)).length, 0);
+
+      await undoTransferPairing(db, pairId);
+      const queue = await pendingTransactions(db);
+      assert.equal(queue.length, 1);
+      assert.equal(queue[0]!.id, id);
+    });
+
     test('the books still balance after everything has been sent back', async () => {
       const id = await importedAndConfirmed();
       await sendBackToReview(db, id);

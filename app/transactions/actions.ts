@@ -16,6 +16,7 @@ import {
   createTransfer,
   deleteTransaction,
   deleteTransfer,
+  sendBackToReview,
   transactionDetail,
   updateTransaction,
   updateTransfer,
@@ -52,6 +53,7 @@ export async function transactionDetailAction(transactionId: string): Promise<
         payeeRaw: string;
         memo: string | null;
         kind: 'spending' | 'account_transfer';
+        status: 'pending_review' | 'confirmed';
         transferPairId: string | null;
         source: string;
         lines: { envelopeId: string; amountCents: number }[];
@@ -74,6 +76,7 @@ export async function transactionDetailAction(transactionId: string): Promise<
         payeeRaw: detail.payeeRaw,
         memo: detail.memo,
         kind: detail.kind,
+        status: detail.status,
         transferPairId: detail.transferPairId,
         source: detail.source,
         lines: detail.lines.map((line) => ({
@@ -189,6 +192,42 @@ export async function deleteTransactionAction(transactionId: string): Promise<Ac
             ? 'Deleted. The bank id went with it, so importing that statement again will offer it ' +
               'as a new row.'
             : 'Deleted.',
+    };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/**
+ * Put a transaction back in the review queue (#9).
+ *
+ * The opposite of confirming, not a delete: the row and the bank's id stay, and
+ * only the categorizing is undone. For a transfer this unwinds the pairing, which
+ * is why the message has to say what happened to the other half - a fabricated
+ * half disappears, and a half that came from its own statement goes back in the
+ * queue with the first.
+ */
+export async function sendBackToReviewAction(transactionId: string): Promise<ActionResult> {
+  try {
+    await requireUser();
+    const result = await sendBackToReview(db(), transactionId);
+    refreshed();
+
+    if (result.queued === 0) {
+      return { ok: true, message: 'That was already waiting in the review queue.' };
+    }
+
+    const queued =
+      result.queued === 1
+        ? 'Back in the review queue.'
+        : `Both halves are back in the review queue, as ${result.queued} separate transactions.`;
+
+    return {
+      ok: true,
+      message:
+        result.removed > 0
+          ? `${queued} The other side of the transfer was never on a statement, so it is gone.`
+          : queued,
     };
   } catch (error) {
     return failed(error);

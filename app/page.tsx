@@ -1,24 +1,31 @@
-import Link from 'next/link';
 import { db } from '../db/client.ts';
-import { listAccounts } from '../src/accounts/manage.ts';
-import { checkInvariant, envelopeBalances } from '../src/ledger/ledger.ts';
+import { budgetMonth, fundingFromBudget } from '../src/budget/budget.ts';
+import { currentMonth, monthLabel } from '../src/budget/month.ts';
+import { listEnvelopes } from '../src/envelopes/manage.ts';
+import { checkInvariant } from '../src/ledger/ledger.ts';
 import { pendingCount } from '../src/queue/queue.ts';
 import { requireUser } from './auth.ts';
-import { Money } from './Money.tsx';
+import HomeScreen, { type Headline, type MonthFigures } from './HomeScreen.tsx';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Dashboard() {
+export default async function Home() {
   await requireUser();
   const connection = db();
-  const [envelopes, accounts, invariant, waiting] = await Promise.all([
-    envelopeBalances(connection),
-    listAccounts(connection),
+  const month = currentMonth();
+
+  // Three reads with three jobs: the structure with archived envelopes included,
+  // this month's figures for the live ones, and the two checks the headline
+  // needs. `budgetMonth` already carries every balance, plan and spend figure,
+  // so nothing here asks the same question twice.
+  const [groups, budget, invariant, waiting] = await Promise.all([
+    listEnvelopes(connection, { includeArchived: true }),
+    budgetMonth(connection, month),
     checkInvariant(connection),
     pendingCount(connection),
   ]);
 
-  if (envelopes.length === 0 && accounts.length === 0) {
+  if (groups.length === 0) {
     return (
       <div className="empty">
         <p style={{ margin: 0, fontSize: 17 }}>Nothing here yet.</p>
@@ -29,108 +36,37 @@ export default async function Dashboard() {
     );
   }
 
-  const groups = new Map<string, typeof envelopes>();
-  for (const envelope of envelopes) {
-    const list = groups.get(envelope.groupName) ?? [];
-    list.push(envelope);
-    groups.set(envelope.groupName, list);
+  const figures: MonthFigures = {};
+  for (const row of budget.rows) {
+    figures[row.envelopeId] = {
+      plannedCents: row.plannedCents,
+      spentCents: row.spentCents,
+      allocatedCents: row.allocatedCents,
+      lastMonthSpentCents: row.lastMonthSpentCents,
+      averageSpentCents: row.averageSpentCents,
+    };
   }
 
-  const overspent = envelopes.filter((envelope) => envelope.balanceCents < 0);
-  const unallocated = envelopes.find((envelope) => envelope.isUnallocated);
+  const headline: Headline = {
+    waiting,
+    unallocatedCents: budget.unallocated.balanceCents,
+    overspentCount: budget.rows.filter(
+      (row) => !row.isUnallocated && row.balanceCents < 0,
+    ).length,
+    invariantOk: invariant.ok,
+    unexplainedCents: invariant.unexplainedCents,
+    unassignedCents: invariant.unassignedCents,
+  };
 
   return (
-    <>
-      <div className="page-head">
-        <h2>Dashboard</h2>
-      </div>
-
-      <div className="callouts">
-        {waiting > 0 && (
-          <Link href="/review" className="callout">
-            <strong>{waiting}</strong> awaiting review
-          </Link>
-        )}
-        {unallocated && unallocated.balanceCents !== 0 && (
-          <Link href="/budget" className="callout">
-            <strong>
-              <Money cents={unallocated.balanceCents} />
-            </strong>{' '}
-            unallocated
-          </Link>
-        )}
-        {overspent.length > 0 && (
-          <div className="callout warn">
-            <strong>{overspent.length}</strong> envelope{overspent.length === 1 ? '' : 's'}{' '}
-            overspent
-          </div>
-        )}
-        {!invariant.ok && (
-          <div className="callout bad">
-            Ledger out of balance by <Money cents={invariant.unexplainedCents} />
-          </div>
-        )}
-      </div>
-
-      <section className="panel">
-        <h3>Envelopes</h3>
-        {[...groups.entries()].map(([groupName, list]) => {
-          const groupTotal = list.reduce((sum, envelope) => sum + envelope.balanceCents, 0);
-          return (
-            <div key={groupName} className="group">
-              <div className="group-head">
-                <span>{groupName}</span>
-                <Money cents={groupTotal} />
-              </div>
-              {list.map((envelope) => (
-                <div key={envelope.envelopeId} className="row">
-                  <span>
-                    <Link href={`/envelopes/${envelope.envelopeId}`}>{envelope.name}</Link>
-                    {envelope.isUnallocated && <span className="tag">income pool</span>}
-                  </span>
-                  <Money cents={envelope.balanceCents} />
-                </div>
-              ))}
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="panel">
-        <h3>Accounts</h3>
-        {accounts.map((account) => (
-          <div key={account.id} className="row">
-            <span>
-              {account.name} <span className="muted">· {account.kind.replace('_', ' ')}</span>
-            </span>
-            <Money cents={account.balanceCents} />
-          </div>
-        ))}
-        <div className="row total">
-          <span>Total</span>
-          <Money cents={accounts.reduce((sum, account) => sum + account.balanceCents, 0)} />
-        </div>
-      </section>
-
-      <p className="muted footnote">
-        {invariant.ok ? (
-          <>
-            Envelopes and accounts agree
-            {invariant.unassignedCents !== 0 && (
-              <>
-                , with <Money cents={invariant.unassignedCents} /> still unassigned in the review
-                queue
-              </>
-            )}
-            .
-          </>
-        ) : (
-          <>
-            Envelopes and accounts disagree by <Money cents={invariant.unexplainedCents} />, which
-            should never happen. Recent imports are the place to look.
-          </>
-        )}
-      </p>
-    </>
+    <HomeScreen
+      groups={groups}
+      figures={figures}
+      month={month}
+      monthLabel={monthLabel(month)}
+      funding={fundingFromBudget(budget)}
+      allocatedCents={budget.allocatedTotalCents}
+      headline={headline}
+    />
   );
 }

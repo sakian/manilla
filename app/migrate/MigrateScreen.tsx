@@ -213,7 +213,7 @@ export default function MigrateScreen({
   return (
     <>
       <div className="page-head">
-        <h2>Bring in your GoodBudget history</h2>
+        <h2>Bring in your budgeting history</h2>
         <p className="muted">
           Six years of transactions, their envelopes and their splits. Nothing is written until you
           have seen what it will do, and the whole thing can be undone in one step.
@@ -226,8 +226,9 @@ export default function MigrateScreen({
         <section className="panel">
           <h3>Choose your export</h3>
           <p className="muted">
-            The CSV GoodBudget exports. Several files can go in at once if your export was split by
-            date - rows that appear in more than one are recognised and brought in only once.
+            The CSV your old budgeting app exports. Several files can go in at once if the export
+            was split by date - rows that appear in more than one are recognised and brought in only
+            once.
           </p>
           <input
             type="file"
@@ -339,8 +340,8 @@ export default function MigrateScreen({
                 })}
             </div>
             <p className="muted footnote">
-              <code>[Available]</code> is GoodBudget&rsquo;s unallocated pool, so its income goes
-              straight into yours — there is nothing to decide about it.
+              <code>[Available]</code> is the export&rsquo;s own unallocated pool, so its income
+              goes straight into yours — there is nothing to decide about it.
             </p>
           </section>
 
@@ -452,7 +453,8 @@ export default function MigrateScreen({
               <span>{summary.willWrite.transfers}</span>
             </div>
             <p className="muted footnote">
-              All of it arrives confirmed, because you already categorized it in GoodBudget (MG-5).
+              All of it arrives confirmed, because you already categorized it where it came from
+              (MG-5).
             </p>
           </section>
 
@@ -463,7 +465,7 @@ export default function MigrateScreen({
               per-envelope breakdown, so the money that was <em>put into</em> envelopes over the
               years is not in this export at all. Past <em>spending</em> rebuilds exactly; past
               envelope <em>balances</em> do not. The last step of this wizard is where you enter
-              what GoodBudget shows today, and the difference is recorded as a dated adjustment.
+              what your old app shows today, and the difference is recorded as a dated adjustment.
             </p>
 
             {summary.unrepresentable.length > 0 ? (
@@ -530,7 +532,7 @@ export default function MigrateScreen({
             <h3>Reconcile the balances (MG-7)</h3>
             <p className="muted">
               Every envelope is now short by whatever was filled into it over the years, because the
-              export does not record that. Type what GoodBudget shows for each one today and the
+              export does not record that. Type what your old app shows for each one today and the
               difference is written as a dated adjustment out of the income pool — visible in the
               envelope&rsquo;s history, not a number from nowhere. Leave one blank to skip it.
             </p>

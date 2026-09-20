@@ -21,6 +21,7 @@ import {
   createTransferAction,
   deleteTransactionAction,
   deleteTransferAction,
+  sendBackToReviewAction,
   updateTransactionAction,
   updateTransferAction,
   type Direction,
@@ -37,6 +38,7 @@ export type EditingTransaction = {
   payeeRaw: string;
   memo: string | null;
   kind: 'spending' | 'account_transfer';
+  status: 'pending_review' | 'confirmed';
   transferPairId: string | null;
   source: string;
   lines: { envelopeId: string; amountCents: number }[];
@@ -206,6 +208,19 @@ export default function TransactionForm({
         : deleteTransactionAction(editing.id),
     );
   }, [editing, run, transferPairId]);
+
+  const sendBack = useCallback(() => {
+    if (!editing) return;
+    const what =
+      editing.kind === 'account_transfer'
+        ? 'Undo this transfer pairing? The bank row goes back to the review queue, and the other ' +
+          'half goes with it or is removed if it never came from a statement.'
+        : 'Send this back to the review queue? Its envelope is cleared so it can be categorized ' +
+          'again. Nothing is deleted.';
+    if (!window.confirm(what)) return;
+
+    run(() => sendBackToReviewAction(editing.id));
+  }, [editing, run]);
 
   return (
     <div className="picker-backdrop" onClick={onClose}>
@@ -415,6 +430,15 @@ export default function TransactionForm({
           >
             {pending ? 'Saving…' : editing ? 'Save' : 'Record it'}
           </button>
+          {/* Nothing to take back on a row that is already waiting, or on an
+              opening balance nobody categorized (#9). */}
+          {editing &&
+            editing.source !== 'opening_balance' &&
+            !(editing.kind === 'spending' && editing.status === 'pending_review') && (
+              <button onClick={sendBack} disabled={pending}>
+                {editing.kind === 'account_transfer' ? 'Not a transfer' : 'Back to review'}
+              </button>
+            )}
           {editing && (
             <button onClick={remove} disabled={pending}>
               Delete

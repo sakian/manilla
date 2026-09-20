@@ -1,34 +1,10 @@
-import { db } from '../../db/client.ts';
-import { budgetMonth } from '../../src/budget/budget.ts';
-import { currentMonth, monthLabel } from '../../src/budget/month.ts';
-import { listEnvelopes } from '../../src/envelopes/manage.ts';
-import { requireUser } from '../auth.ts';
-import EnvelopeManager, { type MonthFigures } from './EnvelopeManager.tsx';
+import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-
-export default async function EnvelopesPage() {
-  await requireUser();
-  const connection = db();
-  const month = currentMonth();
-
-  // Two reads with two jobs: the structure, archived envelopes included, and this
-  // month's figures for the live ones.
-  const [groups, budget] = await Promise.all([
-    listEnvelopes(connection, { includeArchived: true }),
-    budgetMonth(connection, month),
-  ]);
-
-  const figures: MonthFigures = {};
-  for (const row of budget.rows) {
-    figures[row.envelopeId] = {
-      plannedCents: row.plannedCents,
-      spentCents: row.spentCents,
-      allocatedCents: row.allocatedCents,
-    };
-  }
-
-  return (
-    <EnvelopeManager groups={groups} figures={figures} monthLabel={monthLabel(month)} />
-  );
+/**
+ * The envelope list lives on the home screen now (#3), which is where the
+ * balances were already being shown. This keeps old links and bookmarks working
+ * rather than turning them into a 404.
+ */
+export default function EnvelopesPage() {
+  redirect('/');
 }
