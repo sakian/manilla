@@ -97,8 +97,8 @@ export default function AiPanel({
 
       <p className="muted">
         {enabled
-          ? 'On. The model is asked only about merchants your own history cannot place, after rules and history have had their turn.'
-          : 'Off. Rules and history still categorize everything they can; Phase 0 measured that at 62.8% accepted unchanged on its own.'}
+          ? 'On. The model is asked only about transactions your own rules and history cannot place, and never sees the rest.'
+          : 'Off. Rules and history still categorize everything they can; that measured 62.8% accepted unchanged on its own.'}
       </p>
 
       <details className="disclosure">

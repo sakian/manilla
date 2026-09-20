@@ -4,9 +4,11 @@
  * Everything here exists because the model costs money and sees data. The
  * controls the requirements ask for, and what each is actually for:
  *
- *  - **An off switch.** Off is the default. Nothing calls the model until
- *    somebody turns it on, and everything works with it off - the history layer
- *    was measured at 62.8% accepted unchanged on its own.
+ *  - **An off switch.** On by default, because the measured layer earns its
+ *    place and the guards below are what make that safe rather than the switch
+ *    being off. Nothing happens without an API key, the monthly budget caps the
+ *    spend, and everything still works with it off - the history layer measured
+ *    62.8% accepted unchanged on its own.
  *  - **A cache per merchant.** The answer is about a merchant, not a
  *    transaction, so "SHELL #4471 CALGARY" and "SHELL 2280" cost one call
  *    between them, ever. On the real history this is the difference between
@@ -45,9 +47,11 @@ export async function aiSettings(db: Database): Promise<AiSettings> {
   const budget = Number(values.get(AI_BUDGET_KEY));
 
   return {
-    // Off unless explicitly switched on. An AI feature that arrives already
-    // spending money is not a feature anybody chose.
-    enabled: values.get(AI_ENABLED_KEY) === 'true',
+    // On unless explicitly switched off. The real guards are the API key having
+    // to be present at all and the monthly budget, not the default: without a
+    // key nothing calls anything, and with one the budget is checked before
+    // every call.
+    enabled: values.get(AI_ENABLED_KEY) !== 'false',
     monthlyCallBudget:
       Number.isSafeInteger(budget) && budget >= 0 ? budget : DEFAULT_MONTHLY_CALL_BUDGET,
   };

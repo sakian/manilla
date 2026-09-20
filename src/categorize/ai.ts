@@ -34,6 +34,23 @@ const UNKNOWN = 'UNKNOWN';
 /** Batching keeps the per-transaction cost down; 25 fits comfortably in one response. */
 export const BATCH_SIZE = 25;
 
+/**
+ * How sure the model has to be before its answer is reused for that merchant.
+ *
+ * Section 5 asks for an answer cached per merchant so a repeat never costs a
+ * second call. Measured against three held-out months, doing that for *every*
+ * answer costs about ten points of accuracy, and the reason is in the Phase 0
+ * findings: 68% of transactions happen at merchants used for more than one
+ * envelope, and what separates them is the amount. One answer for "AMAZON"
+ * applied to every Amazon charge throws that signal away.
+ *
+ * So the cache is kept for the merchants it is safe for. A confident answer
+ * means the merchant is unambiguous - a fuel station is a fuel station - and is
+ * reused. An unsure one means the amount is doing the work, and that
+ * transaction is asked about on its own terms.
+ */
+export const CACHEABLE_CONFIDENCE = 0.8;
+
 const ResultSchema = z.object({
   results: z.array(
     z.object({
@@ -163,8 +180,12 @@ export class AiCategorizer {
   fresh = new Map<string, Suggestion>();
 
   /**
-   * Suggest an envelope for each transaction. Results are cached per normalized
-   * payee, so a merchant that repeats within a run costs one call, not many.
+   * Suggest an envelope for each transaction.
+   *
+   * Asked per transaction, not per merchant: the amount is a real signal and
+   * sharing one answer across a merchant's charges discards it. Confident
+   * answers are cached per merchant afterwards, which is where the saving comes
+   * from without costing accuracy (CACHEABLE_CONFIDENCE).
    */
   async suggestBatch(transactions: UnlabeledTransaction[]): Promise<Suggestion[]> {
     const out = new Array<Suggestion>(transactions.length);
@@ -176,28 +197,20 @@ export class AiCategorizer {
       else pending.push({ position, transaction });
     });
 
-    // One question per merchant, not per transaction. The answer is about the
-    // merchant - that is why it is cached by merchant - so four charges at the
-    // same place in one statement are one line of prompt, not four.
-    const byMerchant = new Map<string, typeof pending>();
-    for (const item of pending) {
-      const key = normalizePayee(item.transaction.payeeRaw).key;
-      byMerchant.set(key, [...(byMerchant.get(key) ?? []), item]);
-    }
+    for (let start = 0; start < pending.length; start += BATCH_SIZE) {
+      const slice = pending.slice(start, start + BATCH_SIZE);
+      const suggestions = await this.callModel(slice.map((item) => item.transaction));
 
-    const distinct = [...byMerchant.entries()];
-
-    for (let start = 0; start < distinct.length; start += BATCH_SIZE) {
-      const slice = distinct.slice(start, start + BATCH_SIZE);
-      const suggestions = await this.callModel(slice.map(([, items]) => items[0]!.transaction));
-
-      slice.forEach(([key, items], index) => {
+      slice.forEach((item, index) => {
         const suggestion = suggestions[index] ?? NO_SUGGESTION;
-        for (const item of items) out[item.position] = suggestion;
+        out[item.position] = suggestion;
 
-        // Only a real answer is worth remembering. Caching "we could not reach
-        // the model" would turn one bad minute into a permanent gap.
-        if (suggestion.layer === 'ai') {
+        // Only a real, confident answer is worth remembering. Caching "we could
+        // not reach the model" would turn one bad minute into a permanent gap,
+        // and caching an unsure answer is worse than not caching at all - see
+        // CACHEABLE_CONFIDENCE.
+        if (suggestion.layer === 'ai' && suggestion.confidence >= CACHEABLE_CONFIDENCE) {
+          const key = normalizePayee(item.transaction.payeeRaw).key;
           this.cache.set(key, suggestion);
           this.fresh.set(key, suggestion);
         }

@@ -127,20 +127,66 @@ describe('asking the model', () => {
     assert.match(suggestion!.reason, /not an envelope/);
   });
 
-  test('one merchant is asked about once, however many transactions it has', async () => {
-    const { client, calls } = stubClient(() => ({
-      results: [{ index: 0, envelope: 'Gas', confidence: 0.8, reason: 'fuel' }],
+  test('a confident answer is reused for that merchant, and costs one call', async () => {
+    const { client, calls } = stubClient((_system, user) => ({
+      results: user.split('\n').map((line) => ({
+        index: Number(line.split('.')[0]),
+        envelope: 'Gas',
+        confidence: 0.92,
+        reason: 'a fuel station',
+      })),
+    }));
+
+    const ai = new AiCategorizer(envelopes, {}, { client });
+    await ai.suggestBatch([transaction('SHELL #4471 CALGARY AB')]);
+    const [second] = await ai.suggestBatch([transaction('SHELL 2280')]);
+
+    assert.equal(calls.length, 1, 'the second charge reused the confident answer');
+    assert.equal(second!.envelope, 'env-gas');
+    assert.equal(ai.fresh.size, 1);
+  });
+
+  test('an unsure answer is asked again, because the amount is doing the work', async () => {
+    // The Amazon case from the Phase 0 findings: one merchant, many envelopes,
+    // and only the amount tells them apart. Reusing one answer for all of them
+    // measured about ten points worse than asking.
+    const { client, calls } = stubClient((_system, user) => ({
+      results: user.split('\n').map((line) => ({
+        index: Number(line.split('.')[0]),
+        envelope: 'Groceries',
+        confidence: 0.35,
+        reason: 'could be anything',
+      })),
+    }));
+
+    const ai = new AiCategorizer(envelopes, {}, { client });
+    await ai.suggestBatch([transaction('AMZN Mktp CA', -3146)]);
+    await ai.suggestBatch([transaction('AMZN Mktp CA', -12045)]);
+
+    assert.equal(calls.length, 2, 'each charge got its own question');
+    assert.equal(ai.fresh.size, 0, 'and nothing unsure was remembered');
+  });
+
+  test('several charges at one merchant are each asked about in the same call', async () => {
+    const { client, calls } = stubClient((_system, user) => ({
+      results: user.split('\n').map((line) => ({
+        index: Number(line.split('.')[0]),
+        envelope: 'Gas',
+        confidence: 0.5,
+        reason: 'maybe fuel',
+      })),
     }));
 
     const ai = new AiCategorizer(envelopes, {}, { client });
     const results = await ai.suggestBatch([
-      transaction('SHELL #4471 CALGARY AB'),
-      transaction('SHELL 2280'),
-      transaction('SHELL #1 TORONTO'),
+      transaction('SHELL #4471 CALGARY AB', -4520),
+      transaction('SHELL 2280', -320),
+      transaction('SHELL #1 TORONTO', -8800),
     ]);
 
-    assert.equal(calls.length, 1, 'normalization makes them one merchant');
-    assert.ok(results.every((result) => result.envelope === 'env-gas'));
+    assert.equal(calls.length, 1, 'one call, because they batch');
+    assert.equal(calls[0]!.user.split('\n').length, 3, 'but three questions in it');
+    assert.equal(results.length, 3);
   });
 
   test('a seeded answer costs no call at all', async () => {
@@ -250,10 +296,15 @@ describe(
       await closeDb(db);
     });
 
-    test('it is off until somebody turns it on', async () => {
+    test('it is on by default, and the budget is what keeps it bounded', async () => {
       const settings = await aiSettings(db);
-      assert.equal(settings.enabled, false);
+      assert.equal(settings.enabled, true);
       assert.equal(settings.monthlyCallBudget, DEFAULT_MONTHLY_CALL_BUDGET);
+    });
+
+    test('turning it off is remembered, so the default does not switch it back on', async () => {
+      await setAiSettings(db, { enabled: false });
+      assert.equal((await aiSettings(db)).enabled, false);
     });
 
     test('the switch and the budget are remembered', async () => {

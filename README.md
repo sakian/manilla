@@ -31,10 +31,11 @@ multi-year export comes across with its envelopes, splits, income, envelope
 transfers and account transfers, and the balances it cannot rebuild are
 reconciled rather than fudged.
 
-Phase 3's AI layer is built and switchable from Settings, off by default: it is
-asked only about merchants your own history cannot place, one question per
-merchant, with a monthly call budget, a cost counter and a running accuracy
-measure.
+Phase 3's AI layer is in and on by default, switchable from Settings: it is asked
+only about transactions your own rules and history could not place, with a
+monthly call budget, a cost counter and a running accuracy measure. Re-measured
+on three held-out months of the real history at 71.7% accepted unchanged and
+98.6% precision in the auto-confirm band, for $0.36.
 
 Still outstanding: CSV import with a column-mapping step (FR-8), period
 comparisons and income-against-spending (RP-3, RP-4), global transaction search
@@ -54,6 +55,11 @@ OFX file, holding out the most recent three months (435 transactions):
 | Got any suggestion | 90.6% | 99.5% |
 | Auto-confirm precision at 0.95 | - | 98.6% (covering 15.9%) |
 | Cost per 1,000 transactions | $0 | ~$2 |
+
+Re-measured against the same three months once the layer was wired into the app:
+62.8% and 71.7%, with 98.6% auto-confirm precision and $2.09 per 1,000. The model
+is not deterministic, so the AI figure moves by a few tenths of a point between
+runs.
 
 Recorded in section 12 of the requirements doc:
 
@@ -146,7 +152,7 @@ Save them: they are stored hashed, and they are the only way in if the device
 holding your passkey is lost. More devices can be added from Settings.
 
 ```bash
-npm test                         # 355 tests; no network, no spend
+npm test                         # 358 tests; no network, no spend
 npm run typecheck
 npm run import -- path/to/statement.ofx
 ```
@@ -288,14 +294,17 @@ transactions.
 confidence is bulk-confirmable; low confidence is left uncategorized with
 candidates rather than guessed at.
 
-**The AI layer is last, optional and off by default.** Rules and history handle
-repeat merchants for free, so the model is only consulted for genuinely unknown
-ones. It is asked once per *merchant*, never per transaction, and the answer is
-kept - on the real history that is 827 merchants against 7,957 transactions. A
-monthly call budget is checked before each call rather than after, a failed call
-stops the layer instead of the import, and Settings shows exactly what is sent:
-payee text, amount, date and envelope names. Never an account number, a balance
-or anyone's name.
+**The AI layer is last, and asked per transaction rather than per merchant.**
+Rules and history handle what they can for free, so the model only sees what they
+could not place. Caching one answer per merchant looks like the obvious saving
+and measured ten points *worse*: 68% of transactions happen at merchants used for
+more than one envelope, and the amount is what separates them, so one answer for
+"AMAZON" applied to every Amazon charge throws that signal away. A confident
+answer is cached for that merchant - a fuel station is a fuel station - and an
+unsure one is asked again with its own amount. A monthly call budget is checked
+before each call rather than after, a failed call stops the layer instead of the
+import, and Settings shows exactly what is sent: payee text, amount, date and
+envelope names. Never an account number, a balance or anyone's name.
 
 **A budget is a plan; an allocation is a fact.** The plan says what each envelope
 should receive each month. Funding writes dated allocation records out of the
