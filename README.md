@@ -31,13 +31,17 @@ multi-year export comes across with its envelopes, splits, income, envelope
 transfers and account transfers, and the balances it cannot rebuild are
 reconciled rather than fudged.
 
+Phase 3's AI layer is built and switchable from Settings, off by default: it is
+asked only about merchants your own history cannot place, one question per
+merchant, with a monthly call budget, a cost counter and a running accuracy
+measure.
+
 Still outstanding: CSV import with a column-mapping step (FR-8), period
 comparisons and income-against-spending (RP-3, RP-4), global transaction search
 (VW-6), progress bars and a pace marker on the dashboard (VW-1, VW-2), a
 balance-over-time chart on an envelope (VW-4), reconciliation of an account
 against a statement (FR-6), and per-month budget overrides in the UI (FR-32,
-which the data model and the reads already support). Phase 3 is the AI
-categorization layer, which Phase 0 measured but which is not switched on yet.
+which the data model and the reads already support).
 
 ## What Phase 0 measured
 
@@ -105,6 +109,7 @@ src/
   budget/               months, the plan, funding and reversal
   migrate/goodbudget.ts the GoodBudget export, read as transactions (MG-1 to MG-7)
   reports/reports.ts    spending read from envelope lines, so RP-5 holds by construction
+  ai/ai.ts              the off switch, budget, merchant cache and accuracy measure (NF-5)
   export/export.ts      the whole ledger as JSON or CSV (NF-6)
   transactions/manage.ts manual entry, edits, deletions, account transfers
   envelopes/            envelope and group management, transfers, cover
@@ -141,7 +146,7 @@ Save them: they are stored hashed, and they are the only way in if the device
 holding your passkey is lost. More devices can be added from Settings.
 
 ```bash
-npm test                         # 333 tests; no network, no spend
+npm test                         # 355 tests; no network, no spend
 npm run typecheck
 npm run import -- path/to/statement.ofx
 ```
@@ -283,9 +288,14 @@ transactions.
 confidence is bulk-confirmable; low confidence is left uncategorized with
 candidates rather than guessed at.
 
-**The AI layer is last and optional.** Rules and history handle repeat
-merchants for free, so the model is only consulted for genuinely unknown ones,
-and results are cached per merchant. Everything works with AI switched off.
+**The AI layer is last, optional and off by default.** Rules and history handle
+repeat merchants for free, so the model is only consulted for genuinely unknown
+ones. It is asked once per *merchant*, never per transaction, and the answer is
+kept - on the real history that is 827 merchants against 7,957 transactions. A
+monthly call budget is checked before each call rather than after, a failed call
+stops the layer instead of the import, and Settings shows exactly what is sent:
+payee text, amount, date and envelope names. Never an account number, a balance
+or anyone's name.
 
 **A budget is a plan; an allocation is a fact.** The plan says what each envelope
 should receive each month. Funding writes dated allocation records out of the

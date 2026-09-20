@@ -90,7 +90,7 @@ export async function truncateAll(db: Database): Promise<void> {
       envelope_moves, budget_lines, rules, import_batches,
       envelopes, envelope_groups, accounts,
       sessions, credentials, recovery_codes, webauthn_challenges, users,
-      app_settings
+      app_settings, ai_calls, ai_suggestion_cache
     restart identity cascade
   `);
 }

@@ -25,6 +25,7 @@ import {
 import { destroyAllSessions } from '../../src/auth/session.ts';
 import { deleteRule } from '../../src/rules/rules.ts';
 import { eraseAllData } from '../../src/export/export.ts';
+import { clearAnswerCache, setAiSettings } from '../../src/ai/ai.ts';
 import { currentSession, endSession, requireUser } from '../auth.ts';
 import type { BeginResult, Failure } from '../login/actions.ts';
 
@@ -126,6 +127,32 @@ export async function eraseEverythingAction(
     revalidatePath('/accounts');
     revalidatePath('/envelopes');
     revalidatePath('/budget');
+    return { ok: true, removed };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function setAiSettingsAction(update: {
+  enabled?: boolean;
+  monthlyCallBudget?: number;
+}): Promise<{ ok: true } | Failure> {
+  try {
+    await requireUser();
+    await setAiSettings(db(), update);
+    revalidatePath('/settings');
+    revalidatePath('/import');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function clearAiCacheAction(): Promise<{ ok: true; removed: number } | Failure> {
+  try {
+    await requireUser();
+    const removed = await clearAnswerCache(db());
+    revalidatePath('/settings');
     return { ok: true, removed };
   } catch (error) {
     return failed(error);

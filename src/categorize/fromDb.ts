@@ -6,9 +6,10 @@
  * reinforce itself on the next import.
  */
 
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import { envelopes, rules as rulesTable, transactions, txnLines } from '../../db/schema.ts';
+import { aiSettings, aiUsage, cachedAnswers, recordAiCall } from '../ai/ai.ts';
 import { HistoryIndex } from './history.ts';
 import { Categorizer, type Rule } from './pipeline.ts';
 import { AiCategorizer } from './ai.ts';
@@ -78,11 +79,52 @@ export type BuiltCategorizer = {
   history: HistoryIndex;
   names: EnvelopeNames;
   ai: AiCategorizer | undefined;
+  /** Why the AI layer is not in use, when it is not. */
+  aiOff: string | null;
 };
 
 /**
- * Assemble the pipeline. The AI layer is included only when a key is present
- * and the caller asks for it, so imports still work with AI switched off (NF-10).
+ * The merchants each envelope is actually used for, as examples for the model
+ * (CA-5, MG-8).
+ *
+ * Migrated history seeds this the moment it lands, which is the point: the model
+ * is much better at "which of these envelopes does a new hardware shop belong
+ * in" when it can see that Home Upkeep already contains Home Depot and Rona.
+ * Most-used first, a handful each, because the prompt is cached and paid for
+ * once but read on every call.
+ */
+export async function loadExamples(
+  db: Database,
+  perEnvelope = 8,
+): Promise<Record<string, string[]>> {
+  const rows = await db
+    .select({
+      envelopeId: txnLines.envelopeId,
+      payeeKey: transactions.payeeKey,
+      uses: sql<string>`count(*)`,
+    })
+    .from(txnLines)
+    .innerJoin(transactions, eq(transactions.id, txnLines.transactionId))
+    .where(and(eq(transactions.status, 'confirmed'), eq(transactions.kind, 'spending')))
+    .groupBy(txnLines.envelopeId, transactions.payeeKey)
+    .orderBy(desc(sql`count(*)`))
+    .limit(5000);
+
+  const examples: Record<string, string[]> = {};
+  for (const row of rows) {
+    const list = examples[row.envelopeId] ?? [];
+    if (list.length >= perEnvelope) continue;
+    if (!row.payeeKey || row.payeeKey.length < 2) continue;
+    list.push(row.payeeKey);
+    examples[row.envelopeId] = list;
+  }
+  return examples;
+}
+
+/**
+ * Assemble the pipeline. The AI layer is included only when it is switched on,
+ * a key is present and the monthly budget has room, so imports work unchanged
+ * with it off (NF-10).
  */
 export async function buildCategorizer(
   db: Database,
@@ -95,14 +137,36 @@ export async function buildCategorizer(
   ]);
 
   const keyPresent = Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN);
-  let ai: AiCategorizer | undefined;
+  const settings = await aiSettings(db);
+  const wanted = options.useAi ?? settings.enabled;
 
-  if (options.useAi && keyPresent) {
-    // The model chooses among envelope ids, but sees readable names, so the
-    // prompt maps one to the other.
-    const ids = [...names.keys()];
-    const examples: Record<string, string[]> = {};
-    ai = new AiCategorizer(ids, examples);
+  let ai: AiCategorizer | undefined;
+  let aiOff: string | null = null;
+
+  if (!wanted) {
+    aiOff = 'The AI layer is switched off.';
+  } else if (!keyPresent) {
+    aiOff = 'No ANTHROPIC_API_KEY is set, so the AI layer cannot be used.';
+  } else {
+    const usage = await aiUsage(db);
+    if (usage.remaining <= 0) {
+      aiOff = `The monthly budget of ${usage.budget} calls is used up.`;
+    } else {
+      const [examples, answered] = await Promise.all([loadExamples(db), cachedAnswers(db)]);
+
+      // Live envelopes only: the model should never propose one that has been
+      // retired, and CA-8 says it may only choose from envelopes that exist.
+      const live = await db
+        .select({ id: envelopes.id, name: envelopes.name })
+        .from(envelopes)
+        .where(isNull(envelopes.archivedAt));
+
+      ai = new AiCategorizer(live, examples, {
+        onCall: (record) => recordAiCall(db, record),
+        canCall: async () => (await aiUsage(db)).remaining > 0,
+      });
+      ai.seed(answered);
+    }
   }
 
   return {
@@ -110,5 +174,6 @@ export async function buildCategorizer(
     history,
     names,
     ai,
+    aiOff,
   };
 }

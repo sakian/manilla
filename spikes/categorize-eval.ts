@@ -124,7 +124,12 @@ if (args.ai) {
       ant auth login
   or set ANTHROPIC_API_KEY, then re-run.`);
   }
-  ai = new AiCategorizer(envelopes, examplesByEnvelope(train));
+  // In the eval the label *is* the envelope name, so id and name are the same
+  // thing; in the app they differ and fromDb.ts maps between them.
+  ai = new AiCategorizer(
+    envelopes.map((name) => ({ id: name, name })),
+    examplesByEnvelope(train),
+  );
 }
 
 const categorizer = new Categorizer(rules, history, ai);

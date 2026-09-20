@@ -28,6 +28,8 @@ import { buildCategorizer } from '../categorize/fromDb.ts';
 import { unallocatedEnvelope } from '../ledger/ledger.ts';
 import { unmatchedTransferHalves } from '../transactions/manage.ts';
 import { listTransferRules, matchTransferRule } from '../rules/rules.ts';
+import { rememberAnswers } from '../ai/ai.ts';
+import { AI_MODEL } from '../categorize/ai.ts';
 
 /**
  * How far apart the two sides of one transfer may post. A payment leaving the
@@ -100,6 +102,8 @@ export type ImportPreview = {
   counts: Record<RowVerdict, number>;
   /** FR-14, when the file carries a ledger balance. */
   balanceCheck?: BalanceCheck;
+  /** Why the AI layer did not run, or stopped part way (NF-10). */
+  aiNote?: string;
 };
 
 /** FR-7: map the statement's account to a Manilla account, remembering it next time. */
@@ -288,8 +292,11 @@ export async function previewImport(
     return { index, transaction, verdict: 'new', reason: 'Not seen before' };
   });
 
+  let aiNote: string | undefined;
+
   if (options.categorize !== false) {
-    const { categorizer } = await buildCategorizer(db, { useAi: options.useAi });
+    const built = await buildCategorizer(db, { useAi: options.useAi });
+    const { categorizer } = built;
     const fresh = rows.filter((row) => row.verdict === 'new' && !row.transferTo);
     const suggestions = await categorizer.suggestAll(
       fresh.map((row) => ({
@@ -302,6 +309,13 @@ export async function previewImport(
     fresh.forEach((row, position) => {
       row.suggestion = suggestions[position];
     });
+
+    // Remember what the model said, keyed by merchant, so the same merchant is
+    // never paid for twice (section 5's cost controls).
+    if (built.ai && built.ai.fresh.size > 0) {
+      await rememberAnswers(db, built.ai.fresh, AI_MODEL);
+    }
+    aiNote = built.ai?.stopped ?? built.aiOff ?? undefined;
 
     // FR-28: income lands in the income pool and waits there to be allocated.
     // The categorizer is left alone for this on purpose - it is measured against
@@ -348,7 +362,14 @@ export async function previewImport(
     };
   }
 
-  return { accountId, accountName: account.name, rows, counts, balanceCheck };
+  return {
+    accountId,
+    accountName: account.name,
+    rows,
+    counts,
+    balanceCheck,
+    ...(aiNote ? { aiNote } : {}),
+  };
 }
 
 async function accountTotal(db: Database, accountId: string): Promise<number> {

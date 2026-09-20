@@ -402,9 +402,59 @@ export const webauthnChallenges = pgTable(
 );
 
 /**
+ * What the model answered for a merchant, kept so the same merchant is never
+ * asked about twice (section 5's cost controls).
+ *
+ * Keyed by the normalized payee, because that is the thing the answer is really
+ * about: "SHELL #4471 CALGARY" and "SHELL 2280" are one merchant and deserve one
+ * call between them. Clearing a row simply means the next transaction from that
+ * merchant is asked about again.
+ */
+export const aiSuggestionCache = pgTable(
+  'ai_suggestion_cache',
+  {
+    payeeKey: text('payee_key').primaryKey(),
+    envelopeId: uuid('envelope_id').references(() => envelopes.id, { onDelete: 'cascade' }),
+    confidence: real('confidence').notNull(),
+    reason: text('reason').notNull(),
+    /** The model that answered, so a cache from an older one can be told apart. */
+    model: text('model').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('ai_cache_envelope_idx').on(table.envelopeId)],
+);
+
+/**
+ * One row per call to the model (NF-5, NF-11).
+ *
+ * Kept per call rather than as a monthly counter so the budget, the cost and the
+ * "what did it actually do" question all read from the same record, and a month
+ * that looks expensive can be explained rather than just totalled.
+ */
+export const aiCalls = pgTable(
+  'ai_calls',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** First day of the month, for the monthly budget. */
+    month: date('month').notNull(),
+    model: text('model').notNull(),
+    transactions: integer('transactions').notNull(),
+    inputTokens: integer('input_tokens').notNull(),
+    cachedInputTokens: integer('cached_input_tokens').notNull(),
+    outputTokens: integer('output_tokens').notNull(),
+    /** Tenths of a cent, since one call costs well under a cent. */
+    costMilliCents: integer('cost_milli_cents').notNull(),
+    /** Set when the call failed, so degradation is visible rather than silent. */
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('ai_calls_month_idx').on(table.month)],
+);
+
+/**
  * Single-row-per-key settings, for the handful of values that are the user's
- * choice rather than data: expected monthly income (FR-27), and later the AI
- * off switch and call budget (NF-5).
+ * choice rather than data: expected monthly income (FR-27), and the AI off
+ * switch and call budget (NF-5).
  */
 export const appSettings = pgTable('app_settings', {
   key: text('key').primaryKey(),

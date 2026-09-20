@@ -77,6 +77,8 @@ export type PreviewResult =
       };
       balance?: { statedCents: number; projectedCents: number; matches: boolean };
       warnings: string[];
+      /** Why the AI layer did not run, or stopped part way (NF-10). */
+      aiNote?: string;
     }
   /** FR-7: the file is for an account Manilla does not know yet. */
   | { ok: false; needsAccount: true; statementAccountId: string; error: string }
@@ -144,6 +146,7 @@ export async function previewImportAction(
       accountName: preview.accountName,
       counts: preview.counts,
       warnings: document.warnings,
+      ...(preview.aiNote ? { aiNote: preview.aiNote } : {}),
       ...(preview.balanceCheck
         ? {
             balance: {

@@ -45,6 +45,7 @@ type Preview = {
   };
   balance?: { statedCents: number; projectedCents: number; matches: boolean };
   warnings: string[];
+  aiNote?: string;
 };
 
 function money(cents: number): string {
@@ -124,6 +125,7 @@ export default function ImportScreen({
         rows: result.rows,
         counts: result.counts,
         ...(result.balance ? { balance: result.balance } : {}),
+        ...(result.aiNote ? { aiNote: result.aiNote } : {}),
         warnings: result.warnings,
       });
       setDecisions({});
@@ -315,6 +317,13 @@ export default function ImportScreen({
               {warning}
             </p>
           ))}
+
+          {preview.aiNote && (
+            <p className="muted footnote">
+              {preview.aiNote} Rules and history still ran, so these suggestions are the ones they
+              could make on their own.
+            </p>
+          )}
 
           {preview.balance && (
             <p className={`budget-warning${preview.balance.matches ? ' ok' : ''}`}>
