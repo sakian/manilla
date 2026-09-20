@@ -24,6 +24,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               <>
                 <nav className="nav">
                   <Link href="/">Dashboard</Link>
+                  <Link href="/import">Import</Link>
                   <Link href="/review">Review</Link>
                   <Link href="/budget">Budget</Link>
                   <Link href="/envelopes">Envelopes</Link>

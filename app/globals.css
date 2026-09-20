@@ -1087,3 +1087,81 @@ details[open] > summary > .group-summary::before {
   color: var(--medium);
   font-family: var(--mono);
 }
+
+/* --- Import -------------------------------------------------------------- */
+
+.import-table {
+  margin: 4px 0 8px;
+}
+
+.import-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1.6fr) 110px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  padding-left: 8px;
+}
+
+.import-row:last-child {
+  border-bottom: none;
+}
+
+/* Only the rows that need a decision are marked; "new" is the quiet default. */
+.import-row.possible_duplicate {
+  border-left-color: var(--medium);
+}
+
+.import-row.duplicate {
+  opacity: 0.6;
+}
+
+.import-payee {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.import-row .money {
+  text-align: right;
+}
+
+.import-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.import-actions button {
+  font-size: 12px;
+  padding: 3px 8px;
+  text-transform: lowercase;
+}
+
+.import-actions button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.budget-warning.ok {
+  border-color: var(--high);
+  color: var(--high);
+}
+
+@media (max-width: 720px) {
+  .import-row {
+    grid-template-columns: 52px minmax(0, 1fr) 96px;
+    grid-template-areas:
+      'date payee amount'
+      'env  env   env'
+      'act  act   act';
+    row-gap: 6px;
+  }
+  .import-row > .txn-date { grid-area: date; }
+  .import-payee { grid-area: payee; }
+  .import-row > .money { grid-area: amount; }
+  .import-envelope { grid-area: env; }
+  .import-actions { grid-area: act; justify-content: flex-start; }
+}

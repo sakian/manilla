@@ -12,7 +12,7 @@
  * that merely look alike are surfaced for a decision and never dropped silently.
  */
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import {
   accounts,
@@ -415,4 +415,54 @@ export async function revertImport(db: Database, batchId: string): Promise<numbe
 
     return rows.length;
   });
+}
+
+// ---------------------------------------------------------------------------
+// The import log (FR-13)
+// ---------------------------------------------------------------------------
+
+export type ImportRecord = {
+  id: string;
+  filename: string | null;
+  accountName: string | null;
+  addedCount: number;
+  duplicateCount: number;
+  createdAt: Date;
+  revertedAt: Date | null;
+  /** How many of its transactions are still here, so undo can say what it will do. */
+  remaining: number;
+};
+
+/** What has been imported, newest first, with an honest count of what survives. */
+export async function importHistory(
+  db: Database,
+  options: { limit?: number } = {},
+): Promise<ImportRecord[]> {
+  const rows = await db
+    .select({
+      id: importBatches.id,
+      filename: importBatches.filename,
+      accountName: accounts.name,
+      addedCount: importBatches.addedCount,
+      duplicateCount: importBatches.duplicateCount,
+      createdAt: importBatches.createdAt,
+      revertedAt: importBatches.revertedAt,
+      remaining: sql<string>`count(${transactions.id})`,
+    })
+    .from(importBatches)
+    .leftJoin(accounts, eq(accounts.id, importBatches.accountId))
+    .leftJoin(transactions, eq(transactions.importBatchId, importBatches.id))
+    .groupBy(
+      importBatches.id,
+      importBatches.filename,
+      accounts.name,
+      importBatches.addedCount,
+      importBatches.duplicateCount,
+      importBatches.createdAt,
+      importBatches.revertedAt,
+    )
+    .orderBy(desc(importBatches.createdAt))
+    .limit(options.limit ?? 20);
+
+  return rows.map((row) => ({ ...row, remaining: Number(row.remaining) }));
 }

@@ -12,6 +12,7 @@ import {
 } from '../ledger/ledger.ts';
 import {
   commitImport,
+  importHistory,
   previewImport,
   resolveAccount,
   revertImport,
@@ -275,6 +276,32 @@ describe(
 
       assert.equal(preview.rows[0]!.suggestion?.envelope, env.groceriesId);
       assert.equal(preview.rows[0]!.suggestion?.layer, 'history');
+    });
+
+    test('the import log says what each run did, and what survives of it', async () => {
+      const preview = await previewImport(db, bankStatement(), accountId, { categorize: false });
+      const { batchId } = await commitImport(db, preview, acceptAll, {
+        filename: 'accountactivity.ofx',
+      });
+
+      const [batch] = await importHistory(db);
+      assert.equal(batch!.id, batchId);
+      assert.equal(batch!.filename, 'accountactivity.ofx');
+      assert.equal(batch!.accountName, 'Chequing');
+      assert.equal(batch!.addedCount, 5);
+      assert.equal(batch!.remaining, 5);
+      assert.equal(batch!.revertedAt, null);
+
+      // Deleting one of its transactions by hand leaves the log honest about it.
+      const { deleteTransaction } = await import('../transactions/manage.ts');
+      const rows = await db.select().from(transactions);
+      await deleteTransaction(db, rows[0]!.id);
+      assert.equal((await importHistory(db))[0]!.remaining, 4);
+
+      await revertImport(db, batchId);
+      const [after] = await importHistory(db);
+      assert.equal(after!.remaining, 0);
+      assert.ok(after!.revertedAt, 'and records that it was undone');
     });
 
     test('history from earlier imports drives the suggestions', async () => {
