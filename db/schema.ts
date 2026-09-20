@@ -54,6 +54,14 @@ export const transactionKind = pgEnum('transaction_kind', [
   'account_transfer',
 ]);
 
+/**
+ * Where a transaction came from.
+ *
+ * `goodbudget` is a stored value rather than a label: it is written into rows,
+ * read back by the migration's own dedupe, and renaming it means a data migration
+ * for no user-visible gain. Nothing shows it to anyone - the app names apps only
+ * in `src/migrate/sources.ts`.
+ */
 export const transactionSource = pgEnum('transaction_source', [
   'manual',
   'file_import',
@@ -176,8 +184,9 @@ export const envelopes = pgTable(
     /** FR-23: balances carry over month to month by default. */
     carryOver: boolean('carry_over').notNull().default(true),
     /**
-     * The unallocated pool that income lands in (FR-28), equivalent to
-     * GoodBudget's `[Available]`. Exactly one envelope carries this flag.
+     * The unallocated pool that income lands in (FR-28), equivalent to the
+     * pool a migrated export names in `src/migrate/sources.ts`. Exactly one
+     * envelope carries this flag.
      */
     isUnallocated: boolean('is_unallocated').notNull().default(false),
     archivedAt: timestamp('archived_at', { withTimezone: true }),
@@ -249,7 +258,7 @@ export const transactions = pgTable(
  * Every external identifier a transaction has ever had (FR-10, FR-18, MG-9).
  *
  * Kept as rows rather than a column because one transaction can accumulate
- * several: a GoodBudget id from the migration, then a bank FITID when the same
+ * several: an id carried over by a migration, then a bank FITID when the same
  * transaction arrives in a statement, then an aggregator id if sync is enabled.
  * Matching on any of them is what stops a re-import creating a duplicate.
  */

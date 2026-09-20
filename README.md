@@ -1,8 +1,8 @@
 # Manilla
 
-Envelope budgeting, built to fix the two things that make GoodBudget tedious:
-getting transactions in often enough to be useful mid-month, and categorizing
-them without doing it all by hand.
+Envelope budgeting, built to fix the two things that make shared envelope apps
+tedious: getting transactions in often enough to be useful mid-month, and
+categorizing them without doing it all by hand.
 
 Requirements live in the [requirements doc](https://claude.ai/code/artifact/5da0430a-8b8f-44cd-af2b-277fb6345fb5).
 
@@ -13,10 +13,10 @@ envelopes and groups, OFX/QFX import with deduplication, the review queue, the
 monthly budget with income allocation, envelope transfers, manual entry, and
 passkey sign-in so it is safe to reach from a phone.
 
-Phase 2 is complete bar CSV import: a multi-year GoodBudget export comes across
-with its envelopes, splits, income and transfers; spending reports run over any
-period; the data exports as JSON or CSV; and the database is backed up nightly
-with a restore that has been exercised.
+Phase 2 is complete bar CSV import: a multi-year export from another envelope
+budgeting app comes across with its envelopes, splits, income and transfers;
+spending reports run over any period; the data exports as JSON or CSV; and the
+database is backed up nightly with a restore that has been exercised.
 
 | Decision | Answer |
 | --- | --- |
@@ -26,10 +26,11 @@ with a restore that has been exercised.
 | Users | Single user for now; multi-user deferred |
 | Sign-in | Passkeys (WebAuthn), with single-use recovery codes |
 
-Phase 2 has started: the GoodBudget migration wizard is in (MG-1 to MG-7), so a
-multi-year export comes across with its envelopes, splits, income, envelope
-transfers and account transfers, and the balances it cannot rebuild are
-reconciled rather than fudged.
+Phase 2 has started: the migration wizard is in (MG-1 to MG-7), so a multi-year
+export from another envelope budgeting app comes across with its envelopes,
+splits, income, envelope transfers and account transfers, and the balances it
+cannot rebuild are reconciled rather than fudged. The wizard asks which app the
+file came from, so a second format is a loader rather than a rewrite.
 
 Phase 3's AI layer is in and on by default, switchable from Settings: it is asked
 only about transactions your own rules and history could not place, with a
@@ -63,8 +64,9 @@ support).
 
 ## What Phase 0 measured
 
-Measured against a real 7,957-row GoodBudget export (2021-2026) and a real TD
-OFX file, holding out the most recent three months (435 transactions):
+Measured against a real 7,957-row export from six years of envelope budgeting
+(2021-2026) and a real TD OFX file, holding out the most recent three months
+(435 transactions):
 
 | | History only | History + AI |
 | --- | --- | --- |
@@ -111,7 +113,7 @@ app/                    the web app (Next.js App Router)
   review/               the review queue, keyboard-driven (RQ-1 to RQ-5)
   budget/               the monthly plan against what each envelope costs (FR-27, FR-31, FR-32)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
-  migrate/              the GoodBudget migration wizard (MG-1 to MG-7)
+  migrate/              the migration wizard (MG-1 to MG-7)
   reports/              spending by envelope, month by month, with CSV (RP-1 to RP-6)
   transactions/         entering, correcting and deleting by hand (FR-2, FR-4, FR-5)
   envelopes/[id]/       one envelope: its history, transfers, cover an overspend (VW-4, FR-34, FR-35)
@@ -126,12 +128,13 @@ src/
   money.ts              integer-cents parsing; never floats (NF-1)
   csv.ts                RFC 4180 reader (quoted commas, embedded newlines, BOM)
   ofx/parse.ts          OFX 1.x (SGML) and 2.x (XML), plus QFX
-  goodbudget/load.ts    GoodBudget export loader with column auto-detection
+  migrate/sources.ts    which apps can be migrated from, and the loader for each
+  goodbudget/load.ts    one such loader, with column auto-detection
   ledger/ledger.ts      balances and the writes that keep the two sides equal (FR-37)
   import/ofxImport.ts   preview-then-commit import with dedupe (FR-7 to FR-14)
   queue/queue.ts        the review queue's reads and writes
   budget/               months, the plan, funding and reversal
-  migrate/goodbudget.ts the GoodBudget export, read as transactions (MG-1 to MG-7)
+  migrate/migrate.ts    a loaded export, written as transactions (MG-1 to MG-7)
   reports/reports.ts    spending read from envelope lines, so RP-5 holds by construction
   ai/ai.ts              the off switch, budget, merchant cache and accuracy measure (NF-5)
   export/export.ts      the whole ledger as JSON or CSV (NF-6)
@@ -275,7 +278,7 @@ financial data never reaches version control.
 
 ```bash
 npm run ofx              # profile bank OFX/QFX files
-npm run goodbudget       # profile a GoodBudget export, cache parsed history
+npm run goodbudget       # profile an export, cache parsed history
 npm run categorize       # accuracy of rules + history layers (free)
 ```
 
@@ -302,8 +305,8 @@ date is a calendar date, not an instant. Parsing `20250903000000[-6:MDT]` into a
 `Date` and reading it elsewhere can shift a transaction into the previous day,
 and therefore into the wrong budget month.
 
-**Date *format* is decided per file, never per row.** The real GoodBudget export
-is D/M/Y despite being a North American file. The format is inferred from rows
+**Date *format* is decided per file, never per row.** The real export this was
+built against is D/M/Y despite being a North American file. The format is inferred from rows
 that can only be read one way - a first component above 12 - and 4,450 such rows
 settle it. Guessing per row would have silently misdated thousands of
 transactions.
@@ -346,11 +349,12 @@ sum is written, an envelope-to-envelope move is not a transaction at all, and a
 split is already stored as one line per envelope so each is counted at its own
 share without anything having to divide it.
 
-**A migration reports what it cannot do.** GoodBudget's "Fill Envelopes" rows
-carry no amounts, so the money put *into* envelopes over the years is simply not
-in the export: past spending rebuilds exactly, past envelope balances do not. The
-wizard says so before anything is written, and closes the gap with dated
-adjustments you enter from GoodBudget rather than with a number from nowhere.
+**A migration reports what it cannot do.** The "Fill Envelopes" rows of the
+format this was built against carry no amounts, so the money put *into* envelopes
+over the years is simply not in the export: past spending rebuilds exactly, past
+envelope balances do not. The wizard says so before anything is written, and
+closes the gap with dated adjustments you read off your old app rather than with
+a number from nowhere.
 
 **Sign-in is a passkey, and sessions have two clocks.** WebAuthn is bound to the
 origin, so there is nothing to phish and nothing to reuse. The cookie holds a

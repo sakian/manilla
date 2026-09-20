@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * The GoodBudget migration, from the browser (MG-1 to MG-7).
+ * The migration, from the browser (MG-1 to MG-7).
  *
  * The plan for a six-year export holds seven thousand transactions, so what
  * crosses to the browser is a *summary* of it - counts, the envelopes and
@@ -22,7 +22,8 @@ import {
   revertMigration,
   type MigrationMapping,
   type Unrepresentable,
-} from '../../src/migrate/goodbudget.ts';
+} from '../../src/migrate/migrate.ts';
+import { isMigrationSource, type MigrationSourceId } from '../../src/migrate/sources.ts';
 import { localToday } from '../../src/budget/month.ts';
 import { requireUser } from '../auth.ts';
 
@@ -54,12 +55,24 @@ export type PlanSummary = {
   warnings: string[];
 };
 
+/**
+ * The chosen app, checked here rather than trusted: it arrives from the browser
+ * and decides how the files are read.
+ */
+function sourceFrom(value: string): MigrationSourceId {
+  if (!isMigrationSource(value)) {
+    throw new Error(`Manilla cannot migrate from "${value}".`);
+  }
+  return value;
+}
+
 export async function planMigrationAction(
   files: string[],
+  from: string,
 ): Promise<{ ok: true; summary: PlanSummary } | Failure> {
   try {
     await requireUser();
-    const plan = planMigration(files);
+    const plan = planMigration(files, { from: sourceFrom(from) });
 
     return {
       ok: true,
@@ -91,6 +104,7 @@ export async function planMigrationAction(
 export async function commitMigrationAction(
   files: string[],
   mapping: MigrationMapping,
+  from: string,
   meta: { filename?: string } = {},
 ): Promise<
   | {
@@ -107,7 +121,7 @@ export async function commitMigrationAction(
 > {
   try {
     await requireUser();
-    const plan = planMigration(files);
+    const plan = planMigration(files, { from: sourceFrom(from) });
     const result = await commitMigration(db(), plan, mapping, meta);
     refreshed();
     return { ok: true, ...result };

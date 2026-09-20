@@ -1,5 +1,5 @@
 /**
- * The GoodBudget migration (MG-1 to MG-9).
+ * Bringing a history in from another envelope budgeting app (MG-1 to MG-9).
  *
  * Phase 0's loader reads the same export into training data for the categorizer;
  * this reads it into *transactions*, which is a different shape and a stricter
@@ -41,7 +41,6 @@ import {
 } from '../../db/schema.ts';
 import { parseCsv, detectDelimiter, toRecords } from '../csv.ts';
 import {
-  AVAILABLE,
   detectColumns,
   detectDateFormat,
   parseDetails,
@@ -50,6 +49,7 @@ import {
   type DateFormat,
 } from '../goodbudget/load.ts';
 import { parseAmount } from '../money.ts';
+import { DEFAULT_SOURCE, migrationSource, type MigrationSourceId } from './sources.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 
 export class MigrationError extends Error {}
@@ -129,13 +129,15 @@ export type MigrationPlan = {
   /** True when some rows name no account, so one has to be nominated for them. */
   needsDefaultAccount: boolean;
   warnings: string[];
+  /** Which app the files were read as, so the commit reads them the same way. */
+  from: MigrationSourceId;
 };
 
 /**
  * A row's identity, for recognising it again on a second run or in an
  * overlapping file (MG-1).
  *
- * GoodBudget exports no identifier, so one is derived from the content that
+ * These exports carry no identifier, so one is derived from the content that
  * makes a row what it is. Genuinely identical rows - the same amount at the same
  * payee on the same day, which the real history does contain - are distinguished
  * by their occurrence number, so a file holding four of them keeps all four while
@@ -148,8 +150,20 @@ function identityOf(parts: string[], seen: Map<string, number>): string {
   return occurrence === 1 ? base : `${base}#${occurrence}`;
 }
 
-/** Read one or more export files into a plan. Writes nothing. */
-export function planMigration(sources: string[]): MigrationPlan {
+/**
+ * Read one or more export files into a plan. Writes nothing.
+ *
+ * `from` says which app the files came from, which decides the format-specific
+ * facts in `sources.ts` - today only what that app calls its unallocated pool.
+ * Rows are read in the shape that one format uses; a second app would bring its
+ * own reader feeding this same plan.
+ */
+export function planMigration(
+  sources: string[],
+  options: { from?: MigrationSourceId } = {},
+): MigrationPlan {
+  const from = options.from ?? DEFAULT_SOURCE;
+  const AVAILABLE = migrationSource(from).poolEnvelope;
   const warnings: string[] = [];
   const unrepresentable: Unrepresentable[] = [];
   const transactions: PlannedTransaction[] = [];
@@ -366,13 +380,14 @@ export function planMigration(sources: string[]): MigrationPlan {
     unrepresentable,
     needsDefaultAccount: transactions.some((transaction) => !transaction.account),
     warnings,
+    from,
   };
 }
 
 /**
  * Match the two halves of each envelope-to-envelope move.
  *
- * GoodBudget exports one row per side, same date, equal and opposite. Pairing by
+ * These exports write one row per side, same date, equal and opposite. Pairing by
  * date and magnitude reproduced all 284 in the real export. A row with no partner
  * is listed rather than turned into a one-sided move, which would break the
  * invariant the whole ledger rests on.
@@ -561,6 +576,10 @@ export async function commitMigration(
       'Some rows name no account. Nominate one for them before committing.',
     );
   }
+
+  // Read back off the plan rather than passed in again, so a commit cannot be
+  // run against a different format from the one the files were read as.
+  const AVAILABLE = migrationSource(plan.from).poolEnvelope;
 
   for (const envelope of plan.envelopes) {
     if (envelope.name === AVAILABLE) continue; // Always the income pool.

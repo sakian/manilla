@@ -57,7 +57,7 @@ for (const [groupName, names] of Object.entries(GROUPS)) {
       groupId: group!.id,
       name,
       position: index,
-      // The one income pool, matching GoodBudget's [Available].
+      // The one income pool, which a migrated export's own pool maps onto.
       isUnallocated: groupName === 'Income' && name === 'Available',
     })),
   );

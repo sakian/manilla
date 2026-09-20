@@ -21,7 +21,13 @@ import type {
   AccountChoice,
   EnvelopeChoice,
   MigrationMapping,
-} from '../../src/migrate/goodbudget.ts';
+} from '../../src/migrate/migrate.ts';
+import {
+  DEFAULT_SOURCE,
+  MIGRATION_SOURCES,
+  migrationSource,
+  type MigrationSourceId,
+} from '../../src/migrate/sources.ts';
 import { centsFromInput, inputFromCents } from '../amount.ts';
 import {
   applyReconciliationAction,
@@ -66,6 +72,13 @@ export default function MigrateScreen({
   const [step, setStep] = useState<Step>('files');
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Which app the file came from. The only place in the app an app is named to
+   * the user: everything else - the notes written into envelope history, this
+   * wizard's prose - stays neutral, so a second format is a row in the registry
+   * and a reader, not a pass over every string on screen.
+   */
+  const [from, setFrom] = useState<MigrationSourceId>(DEFAULT_SOURCE);
   const [files, setFiles] = useState<{ name: string; text: string }[]>([]);
   const [summary, setSummary] = useState<PlanSummary | null>(null);
 
@@ -94,7 +107,7 @@ export default function MigrateScreen({
       setError(null);
 
       startTransition(async () => {
-        const planned = await planMigrationAction(read.map((file) => file.text));
+        const planned = await planMigrationAction(read.map((file) => file.text), from);
         if (!planned.ok) {
           setError(planned.error);
           return;
@@ -134,7 +147,7 @@ export default function MigrateScreen({
         setStep('mapping');
       });
     },
-    [accounts, envelopes],
+    [accounts, envelopes, from],
   );
 
   const commit = useCallback(() => {
@@ -151,6 +164,7 @@ export default function MigrateScreen({
       const committed = await commitMigrationAction(
         files.map((file) => file.text),
         mapping,
+        from,
         { filename: files.map((file) => file.name).join(', ') },
       );
       if (!committed.ok) {
@@ -161,7 +175,7 @@ export default function MigrateScreen({
       setStep('done');
       router.refresh();
     });
-  }, [accountChoices, defaultAccountId, envelopeChoices, files, router, summary]);
+  }, [accountChoices, defaultAccountId, envelopeChoices, files, from, router, summary]);
 
   const undo = useCallback(() => {
     if (!result) return;
@@ -225,11 +239,27 @@ export default function MigrateScreen({
       {step === 'files' && (
         <section className="panel">
           <h3>Choose your export</h3>
+
+          <label className="field">
+            <span>Where is it from?</span>
+            <select
+              value={from}
+              disabled={pending}
+              onChange={(event) => setFrom(event.target.value as MigrationSourceId)}
+            >
+              {MIGRATION_SOURCES.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <p className="muted">
-            The CSV your old budgeting app exports. Several files can go in at once if the export
-            was split by date - rows that appear in more than one are recognised and brought in only
-            once.
+            {migrationSource(from).hint} Rows that appear in more than one file are recognised and
+            brought in only once.
           </p>
+
           <input
             type="file"
             accept=".csv,text/csv"
@@ -241,6 +271,13 @@ export default function MigrateScreen({
             }}
           />
           {pending && <p className="muted">Reading…</p>}
+
+          {MIGRATION_SOURCES.length === 1 && (
+            <p className="muted footnote">
+              One app so far. Another would need a reader for its own row shape, not just a name in
+              this list — so it is a real piece of work rather than a setting.
+            </p>
+          )}
         </section>
       )}
 

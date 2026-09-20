@@ -5,7 +5,14 @@ import { checkInvariant, envelopeBalances, openAccount } from '../ledger/ledger.
 import { listAccounts } from '../accounts/manage.ts';
 import { listEnvelopes } from '../envelopes/manage.ts';
 import {
+  DEFAULT_SOURCE,
+  MIGRATION_SOURCES,
+  isMigrationSource,
+  migrationSource,
+} from './sources.ts';
+import {
   CARRIED_OVER_NOTE,
+  MIGRATED_NOTE,
   MigrationError,
   applyReconciliation,
   commitMigration,
@@ -13,7 +20,7 @@ import {
   reconcile,
   revertMigration,
   type MigrationMapping,
-} from './goodbudget.ts';
+} from './migrate.ts';
 import {
   closeDb,
   databaseAvailable,
@@ -48,7 +55,62 @@ const EXPORT = [
   '01/09/2026,,,Fill Envelopes,,,,Cleared,',
 ].join('\n');
 
-describe('reading a GoodBudget export', () => {
+describe('which apps can be migrated from', () => {
+  test('every source is listed with what a user needs to find the file', () => {
+    for (const source of MIGRATION_SOURCES) {
+      assert.ok(source.label.length > 0, `${source.id} needs a label`);
+      assert.ok(source.hint.length > 0, `${source.id} needs a hint`);
+      assert.ok(source.poolEnvelope.length > 0, `${source.id} needs its pool named`);
+    }
+    assert.equal(
+      new Set(MIGRATION_SOURCES.map((source) => source.id)).size,
+      MIGRATION_SOURCES.length,
+      'ids are how a choice is sent from the browser, so they cannot collide',
+    );
+  });
+
+  test('nothing written into the ledger names the app it came from', () => {
+    // These two strings end up in an envelope's history, where the user reads
+    // them. Named apps belong in the registry above and nowhere else, so a
+    // public repo does not editorialise about anyone's product.
+    for (const note of [MIGRATED_NOTE, CARRIED_OVER_NOTE]) {
+      for (const source of MIGRATION_SOURCES) {
+        assert.ok(
+          !note.toLowerCase().includes(source.label.toLowerCase()),
+          `"${note}" names ${source.label}`,
+        );
+      }
+    }
+  });
+
+  test('an unknown source is refused rather than quietly defaulted', () => {
+    assert.ok(isMigrationSource(DEFAULT_SOURCE));
+    assert.ok(!isMigrationSource('ynab'));
+    assert.ok(!isMigrationSource(''));
+    assert.throws(() => migrationSource('ynab'), /Not an app Manilla can migrate from/);
+  });
+
+  test('the plan records which app it read the files as', () => {
+    const plan = planMigration([EXPORT]);
+    assert.equal(plan.from, DEFAULT_SOURCE, 'and defaults rather than requiring it');
+
+    const chosen = planMigration([EXPORT], { from: 'goodbudget' });
+    assert.equal(chosen.from, 'goodbudget');
+  });
+
+  test("the source decides what counts as the export's income pool", () => {
+    // The pool marker is the one format-specific fact the registry carries, so
+    // the income row is only read as income because of it (FR-28).
+    const plan = planMigration([EXPORT]);
+    const pool = migrationSource(plan.from).poolEnvelope;
+
+    const payroll = plan.transactions.find((transaction) => transaction.payeeRaw === 'PAYROLL')!;
+    assert.deepEqual(payroll.lines, [{ envelope: pool, amountCents: 320000 }]);
+    assert.ok(plan.envelopes.some((envelope) => envelope.name === pool));
+  });
+});
+
+describe('reading an export', () => {
   test('the file settles its own date format, and rows are read as D/M/Y', () => {
     const plan = planMigration([EXPORT]);
     assert.equal(plan.dateFormat, 'dmy');
@@ -189,7 +251,7 @@ describe('reading a GoodBudget export', () => {
 const available = await databaseAvailable();
 
 describe(
-  'migrating a GoodBudget export',
+  'migrating an export',
   { skip: available ? false : 'No Postgres reachable; run `docker compose up -d db`' },
   () => {
     let db: Database;
