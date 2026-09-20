@@ -37,7 +37,12 @@ type Preview = {
   accountName: string;
   statementAccountId: string;
   rows: PreviewRow[];
-  counts: { new: number; duplicate: number; possible_duplicate: number };
+  counts: {
+    new: number;
+    duplicate: number;
+    possible_duplicate: number;
+    transfer_half: number;
+  };
   balance?: { statedCents: number; projectedCents: number; matches: boolean };
   warnings: string[];
 };
@@ -54,9 +59,15 @@ function shortDate(date: string): string {
   return `${names[Number(month) - 1]} ${Number(day)}`;
 }
 
-/** What each row does if nobody touches it. */
+/**
+ * What each row does if nobody touches it. A transfer half links, because the
+ * money is already recorded on both accounts and what this statement adds is
+ * the bank's id for it (FR-5).
+ */
 function defaultDecision(row: PreviewRow): Decision {
-  return row.verdict === 'new' ? 'add' : 'skip';
+  if (row.verdict === 'new') return 'add';
+  if (row.verdict === 'transfer_half' && row.existingId) return 'link';
+  return 'skip';
 }
 
 export default function ImportScreen({
@@ -289,6 +300,11 @@ export default function ImportScreen({
             {preview.counts.possible_duplicate > 0 && (
               <div className="callout warn">
                 <strong>{preview.counts.possible_duplicate}</strong> look like duplicates
+              </div>
+            )}
+            {preview.counts.transfer_half > 0 && (
+              <div className="callout">
+                <strong>{preview.counts.transfer_half}</strong> the other half of a transfer
               </div>
             )}
             <div className="callout">into {preview.accountName}</div>

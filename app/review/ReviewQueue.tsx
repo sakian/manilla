@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { EnvelopeOption, QueueRow } from '../../src/queue/queue.ts';
-import { confirmAction, confirmHighConfidenceAction, recategorizeAction } from '../actions.ts';
+import {
+  confirmAction,
+  confirmHighConfidenceAction,
+  markAsTransferAction,
+  recategorizeAction,
+} from '../actions.ts';
 
 function formatMoney(cents: number): string {
   const sign = cents < 0 ? '-' : '';
@@ -21,10 +26,12 @@ export default function ReviewQueue({
   rows,
   envelopes,
   highCount,
+  accounts,
 }: {
   rows: QueueRow[];
   envelopes: EnvelopeOption[];
   highCount: number;
+  accounts: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -35,6 +42,8 @@ export default function ReviewQueue({
   const [note, setNote] = useState<string | null>(null);
   /** CA-2 from a touch screen, where there is no shift key to hold. */
   const [makeRule, setMakeRule] = useState(false);
+  /** The row being marked as a transfer between the user's own accounts (FR-5). */
+  const [transferring, setTransferring] = useState<QueueRow | null>(null);
   /**
    * Touch-first devices get a different gesture: there are no keyboard shortcuts
    * to reach for, so tapping a row opens the envelope picker rather than only
@@ -94,6 +103,22 @@ export default function ReviewQueue({
       });
     },
     [router, closePicker],
+  );
+
+  const markTransfer = useCallback(
+    (row: QueueRow, toAccountId: string) => {
+      startTransition(async () => {
+        const result = await markAsTransferAction(row.id, toAccountId);
+        setTransferring(null);
+        setNote(
+          result.ok
+            ? 'Recorded as a transfer. No envelope moved, and the other account now shows it too.'
+            : result.error,
+        );
+        router.refresh();
+      });
+    },
+    [router],
   );
 
   const confirmHigh = useCallback(() => {
@@ -277,11 +302,61 @@ export default function ReviewQueue({
                 >
                   Change <kbd>e</kbd>
                 </button>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setCursor(index);
+                    setTransferring(row);
+                  }}
+                  title="Money moved between your own accounts, so no envelope should change"
+                >
+                  Transfer
+                </button>
               </div>
             </div>
           );
         })}
       </div>
+
+      {transferring && (
+        <div className="picker-backdrop" onClick={() => setTransferring(null)}>
+          <div className="picker dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="picker-head">
+              <strong>{transferring.payeeDisplay}</strong>
+              <span className={`money ${transferring.amountCents < 0 ? 'neg' : 'pos'}`}>
+                {formatMoney(transferring.amountCents)}
+              </span>
+            </div>
+            <div className="dialog-body">
+              <p className="muted">
+                {transferring.amountCents < 0 ? 'Which account did it go to?' : 'Which account did it come from?'}{' '}
+                Money moving between your own accounts is neither spending nor income, so no
+                envelope changes. The other account gets the matching entry, and when its statement
+                is imported that row is recognised rather than recorded twice.
+              </p>
+              <div className="picker-list">
+                {accounts
+                  .filter((account) => account.name !== transferring.accountName)
+                  .map((account) => (
+                    <button
+                      key={account.id}
+                      className="picker-option"
+                      onClick={() => markTransfer(transferring, account.id)}
+                      disabled={pending}
+                    >
+                      <span>{account.name}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+            <div className="picker-foot dialog-foot">
+              <button onClick={() => setTransferring(null)} disabled={pending}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {picking && current && (
         <div className="picker-backdrop" onClick={closePicker}>

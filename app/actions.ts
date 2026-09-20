@@ -7,6 +7,7 @@ import {
   highConfidenceIds,
   recategorize,
 } from '../src/queue/queue.ts';
+import { convertToTransfer } from '../src/transactions/manage.ts';
 import { requireUser } from './auth.ts';
 
 // A server action is a POST endpoint, reachable without going through the page
@@ -44,4 +45,25 @@ export async function recategorizeAction(
   revalidatePath('/review');
   revalidatePath('/');
   return { ok: true };
+}
+
+/**
+ * FR-5. A row the bank shows as money leaving one of your accounts and arriving
+ * in another of them is not spending, and no envelope should move for it. This
+ * turns the imported row into one half of a transfer and writes the other.
+ */
+export async function markAsTransferAction(transactionId: string, toAccountId: string) {
+  try {
+    await requireUser();
+    await convertToTransfer(db(), transactionId, { toAccountId });
+    revalidatePath('/review');
+    revalidatePath('/accounts');
+    revalidatePath('/');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

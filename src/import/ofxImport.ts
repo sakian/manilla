@@ -26,6 +26,24 @@ import type { OfxStatement, OfxTransaction } from '../ofx/parse.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 import { buildCategorizer } from '../categorize/fromDb.ts';
 import { unallocatedEnvelope } from '../ledger/ledger.ts';
+import { unmatchedTransferHalves } from '../transactions/manage.ts';
+
+/**
+ * How far apart the two sides of one transfer may post. A payment leaving the
+ * chequing account on Friday can reach the card on Monday, and the two
+ * statements will not agree on the date.
+ */
+const TRANSFER_DATE_WINDOW_DAYS = 4;
+
+/** Whole days between two `YYYY-MM-DD` dates, order-independent. */
+function daysApart(left: string, right: string): number {
+  const to = (date: string) => Date.UTC(
+    Number(date.slice(0, 4)),
+    Number(date.slice(5, 7)) - 1,
+    Number(date.slice(8, 10)),
+  );
+  return Math.abs(to(left) - to(right)) / 86_400_000;
+}
 import type { Suggestion } from '../categorize/types.ts';
 
 export class ImportError extends Error {}
@@ -40,7 +58,16 @@ export type RowVerdict =
    * shared id. Could be a genuine repeat purchase, or the same transaction
    * arriving from a second source (MG-9). The user decides.
    */
-  | 'possible_duplicate';
+  | 'possible_duplicate'
+  /**
+   * The other side of a transfer between the user's own accounts (FR-5). The
+   * chequing statement calls it "Tfr-to C C" and the card statement calls it a
+   * payment received; they are the same money, and importing it as a second
+   * transaction would count the money twice. Matched on amount and a near date
+   * rather than on the description, because the two banks never word it the
+   * same way.
+   */
+  | 'transfer_half';
 
 export type ImportRow = {
   index: number;
@@ -155,6 +182,11 @@ export async function previewImport(
     }
   }
 
+  // Transfer halves in this account that have no bank id yet, so they are still
+  // waiting for their own statement to arrive (FR-5).
+  const waitingHalves = await unmatchedTransferHalves(db, accountId);
+  const claimedHalves = new Set<string>();
+
   // Count how many of each look-alike shape this file contains, so that a file
   // legitimately holding four identical charges does not flag the last three.
   const seenInFile = new Map<string, number>();
@@ -171,6 +203,35 @@ export async function previewImport(
         verdict: 'duplicate',
         existingId: existingByFit,
         reason: `Already imported (bank id ${transaction.fitId})`,
+      };
+    }
+
+    // The other side of a transfer already recorded here. Amount and a near date
+    // are the only things the two statements agree on: the descriptions never
+    // match, and the posting dates can differ by a day or two.
+    const [half] = waitingHalves
+      .filter(
+        (candidate) =>
+          !claimedHalves.has(candidate.id) &&
+          candidate.amountCents === transaction.amountCents &&
+          daysApart(candidate.date, transaction.posted) <= TRANSFER_DATE_WINDOW_DAYS,
+      )
+      // Nearest date wins, so a monthly payment of the same amount matches this
+      // month's half rather than whichever was found first.
+      .sort(
+        (left, right) =>
+          daysApart(left.date, transaction.posted) - daysApart(right.date, transaction.posted),
+      );
+    if (half) {
+      claimedHalves.add(half.id);
+      return {
+        index,
+        transaction,
+        verdict: 'transfer_half',
+        existingId: half.id,
+        reason:
+          `The other side of the transfer recorded as "${half.payeeRaw}" on ${half.date}. ` +
+          'Linking attaches this statement\'s id to it rather than recording the money twice.',
       };
     }
 
@@ -235,6 +296,7 @@ export async function previewImport(
     new: rows.filter((row) => row.verdict === 'new').length,
     duplicate: rows.filter((row) => row.verdict === 'duplicate').length,
     possible_duplicate: rows.filter((row) => row.verdict === 'possible_duplicate').length,
+    transfer_half: rows.filter((row) => row.verdict === 'transfer_half').length,
   };
 
   let balanceCheck: BalanceCheck | undefined;
@@ -292,8 +354,15 @@ export async function commitImport(
   decisions: Map<number, RowDecision>,
   meta: { filename?: string } = {},
 ): Promise<CommitResult> {
-  const defaultFor = (row: ImportRow): RowDecision =>
-    row.verdict === 'new' ? { action: 'add' } : { action: 'skip' };
+  const defaultFor = (row: ImportRow): RowDecision => {
+    if (row.verdict === 'new') return { action: 'add' };
+    // A transfer half defaults to linking: the money is already recorded, and
+    // what this statement adds is the bank's id for it.
+    if (row.verdict === 'transfer_half' && row.existingId) {
+      return { action: 'link', transactionId: row.existingId };
+    }
+    return { action: 'skip' };
+  };
 
   return db.transaction(async (tx) => {
     const [batch] = await tx

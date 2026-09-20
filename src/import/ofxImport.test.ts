@@ -304,6 +304,128 @@ describe(
       assert.ok(after!.revertedAt, 'and records that it was undone');
     });
 
+    test('the other half of a transfer is recognised, not imported again (FR-5)', async () => {
+      const visa = await openAccount(db, {
+        name: 'Visa',
+        kind: 'credit_card',
+        externalAccountId: '7654321',
+      });
+
+      // The chequing statement's payment row, marked as a transfer to the card.
+      const { convertToTransfer } = await import('../transactions/manage.ts');
+      const payment = await recordTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -50000,
+        payeeRaw: 'Tfr-to C C',
+        externalIds: [{ kind: 'fitid', value: 'CHQ-1' }],
+      });
+      await convertToTransfer(db, payment, { toAccountId: visa });
+
+      // Now the card's own statement arrives, wording it differently and posting
+      // it two days later.
+      const statement: OfxStatement = {
+        ...bankStatement(),
+        accountId: '7654321',
+        transactions: [
+          {
+            fitId: 'VISA-1',
+            posted: '2026-09-12',
+            amountCents: 50000,
+            name: 'PAYMENT - THANK YOU',
+            type: 'CREDIT',
+            warnings: [],
+          },
+        ],
+      };
+
+      const preview = await previewImport(db, statement, visa, { categorize: false });
+      assert.equal(preview.rows[0]!.verdict, 'transfer_half');
+      assert.match(preview.rows[0]!.reason, /other side of the transfer/);
+      assert.equal(preview.counts.new, 0);
+
+      const before = (await db.select().from(transactions)).length;
+      await commitImport(db, preview, new Map());
+      assert.equal(
+        (await db.select().from(transactions)).length,
+        before,
+        'linked to the half already here rather than recorded twice',
+      );
+
+      // The card's id is now on that half, so re-importing recognises it outright.
+      const again = await previewImport(db, statement, visa, { categorize: false });
+      assert.equal(again.rows[0]!.verdict, 'duplicate');
+      assert.ok((await checkInvariant(db)).ok);
+    });
+
+    test('a transfer half is claimed once, so two payments do not collapse into one', async () => {
+      const visa = await openAccount(db, {
+        name: 'Visa',
+        kind: 'credit_card',
+        externalAccountId: '7654321',
+      });
+      const { convertToTransfer } = await import('../transactions/manage.ts');
+
+      for (const fitId of ['CHQ-1', 'CHQ-2']) {
+        const payment = await recordTransaction(db, {
+          accountId,
+          date: '2026-09-10',
+          amountCents: -50000,
+          payeeRaw: 'Tfr-to C C',
+          externalIds: [{ kind: 'fitid', value: fitId }],
+        });
+        await convertToTransfer(db, payment, { toAccountId: visa });
+      }
+
+      const statement: OfxStatement = {
+        ...bankStatement(),
+        accountId: '7654321',
+        transactions: [
+          { fitId: 'VISA-1', posted: '2026-09-10', amountCents: 50000, name: 'PAYMENT', type: 'CREDIT', warnings: [] },
+          { fitId: 'VISA-2', posted: '2026-09-10', amountCents: 50000, name: 'PAYMENT', type: 'CREDIT', warnings: [] },
+        ],
+      };
+
+      const preview = await previewImport(db, statement, visa, { categorize: false });
+      assert.deepEqual(
+        preview.rows.map((row) => row.verdict),
+        ['transfer_half', 'transfer_half'],
+      );
+      assert.notEqual(
+        preview.rows[0]!.existingId,
+        preview.rows[1]!.existingId,
+        'each payment matched a different half',
+      );
+    });
+
+    test('an ordinary purchase is not mistaken for a transfer half', async () => {
+      const visa = await openAccount(db, {
+        name: 'Visa',
+        kind: 'credit_card',
+        externalAccountId: '7654321',
+      });
+      const { convertToTransfer } = await import('../transactions/manage.ts');
+      const payment = await recordTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -50000,
+        payeeRaw: 'Tfr-to C C',
+      });
+      await convertToTransfer(db, payment, { toAccountId: visa });
+
+      const statement: OfxStatement = {
+        ...bankStatement(),
+        accountId: '7654321',
+        transactions: [
+          // Same amount, but a month later and money out rather than in.
+          { fitId: 'VISA-9', posted: '2026-10-12', amountCents: -50000, name: 'BIG PURCHASE', type: 'DEBIT', warnings: [] },
+        ],
+      };
+
+      const preview = await previewImport(db, statement, visa, { categorize: false });
+      assert.equal(preview.rows[0]!.verdict, 'new');
+    });
+
     test('history from earlier imports drives the suggestions', async () => {
       // Confirmed history for this merchant...
       for (const date of ['2025-06-03', '2025-07-03', '2025-08-03']) {

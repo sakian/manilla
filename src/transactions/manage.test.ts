@@ -10,12 +10,14 @@ import {
 } from '../ledger/ledger.ts';
 import {
   TransactionError,
+  convertToTransfer,
   createManualTransaction,
   createTransfer,
   deleteTransaction,
   deleteTransfer,
   transactionDetail,
   transferDetail,
+  unmatchedTransferHalves,
   updateTransaction,
   updateTransfer,
 } from './manage.ts';
@@ -451,6 +453,101 @@ describe(
       assert.equal((await db.select().from(transactions)).length, 0);
       assert.ok((await checkInvariant(db)).ok);
       await assert.rejects(() => deleteTransfer(db, pairId), TransactionError);
+    });
+
+    // -- an imported row that turns out to be a transfer (FR-5) --------------
+
+    test('an imported payment to a card becomes a transfer, and no envelope moves', async () => {
+      // How the chequing statement words it.
+      const imported = await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-09-10',
+        amountCents: -50000,
+        payeeRaw: 'Tfr-to C C',
+        lines: [{ envelopeId: env.groceriesId, amountCents: -50000 }],
+        externalIds: [{ kind: 'fitid', value: 'CHQ-1' }],
+      });
+
+      const pairId = await convertToTransfer(db, imported, { toAccountId: savings });
+
+      assert.equal(await accountBalance(chequing), -50000);
+      assert.equal(await accountBalance(savings), 50000);
+      assert.equal(
+        await balanceOf(env.groceriesId),
+        0,
+        'the envelope it was guessed into is released: paying a card is not spending',
+      );
+
+      const detail = await transactionDetail(db, imported);
+      assert.equal(detail!.kind, 'account_transfer');
+      assert.equal(detail!.status, 'confirmed');
+      assert.deepEqual(detail!.lines, []);
+      assert.ok((await checkInvariant(db)).ok);
+
+      const transfer = await transferDetail(db, pairId);
+      assert.equal(transfer!.fromAccountId, chequing);
+      assert.equal(transfer!.toAccountId, savings);
+      assert.equal(transfer!.amountCents, 50000);
+    });
+
+    test('the bank id stays on the half it arrived with', async () => {
+      const imported = await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-09-10',
+        amountCents: -50000,
+        payeeRaw: 'Tfr-to C C',
+        externalIds: [{ kind: 'fitid', value: 'CHQ-1' }],
+      });
+      await convertToTransfer(db, imported, { toAccountId: savings });
+
+      const ids = await db.select().from(transactionExternalIds);
+      assert.equal(ids.length, 1);
+      assert.equal(ids[0]!.transactionId, imported, 'on the chequing half, not the other one');
+    });
+
+    test('the half with no statement yet is the one waiting to be matched', async () => {
+      const imported = await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-09-10',
+        amountCents: -50000,
+        payeeRaw: 'Tfr-to C C',
+        externalIds: [{ kind: 'fitid', value: 'CHQ-1' }],
+      });
+      await convertToTransfer(db, imported, { toAccountId: savings });
+
+      assert.deepEqual(
+        (await unmatchedTransferHalves(db, chequing)).map((half) => half.id),
+        [],
+        'the chequing half came from its own statement',
+      );
+
+      const waiting = await unmatchedTransferHalves(db, savings);
+      assert.equal(waiting.length, 1);
+      assert.equal(waiting[0]!.amountCents, 50000);
+    });
+
+    test('a transfer cannot be converted twice, or into its own account', async () => {
+      const imported = await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-09-10',
+        amountCents: -50000,
+        payeeRaw: 'Tfr-to C C',
+      });
+
+      await assert.rejects(
+        () => convertToTransfer(db, imported, { toAccountId: chequing }),
+        TransactionError,
+      );
+
+      await convertToTransfer(db, imported, { toAccountId: savings });
+      await assert.rejects(
+        () => convertToTransfer(db, imported, { toAccountId: savings }),
+        (error: unknown) => {
+          assert.ok(error instanceof TransactionError);
+          assert.match(error.message, /already a transfer/);
+          return true;
+        },
+      );
     });
 
     test('a transfer through an archived account is refused', async () => {

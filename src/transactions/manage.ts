@@ -565,3 +565,120 @@ export async function updateTransfer(
       );
   });
 }
+
+// ---------------------------------------------------------------------------
+// Turning an imported row into a transfer (FR-5)
+// ---------------------------------------------------------------------------
+
+/**
+ * A bank statement shows one side of a transfer between your own accounts: the
+ * chequing statement says "Tfr-to C C", the credit card statement says "payment
+ * received". They are the same money, and neither is spending - the spending
+ * happened when the card was used.
+ *
+ * Imported as they arrive, each is an ordinary transaction wanting an envelope,
+ * which would count the money twice: once when the card was used, and again when
+ * the card was paid. This turns one of them into a proper transfer and writes the
+ * other side, so both accounts are right and no envelope moves.
+ *
+ * The bank's id stays on the half it arrived with, so re-importing that statement
+ * still recognises it. The other half has no id until its own statement is
+ * imported, and `transfer_half` in the importer is what recognises it then.
+ */
+export async function convertToTransfer(
+  db: Database,
+  transactionId: string,
+  options: { toAccountId: string; payeeRaw?: string },
+): Promise<string> {
+  const existing = await transactionDetail(db, transactionId);
+  if (!existing) throw new TransactionError(`No such transaction: ${transactionId}`);
+
+  if (existing.kind === 'account_transfer') {
+    throw new TransactionError('That is already a transfer.');
+  }
+  if (existing.source === 'opening_balance') {
+    throw new TransactionError("An account's opening balance is not a transfer.");
+  }
+  if (existing.accountId === options.toAccountId) {
+    throw new TransactionError('A transfer needs two different accounts.');
+  }
+  if (existing.amountCents === 0) {
+    throw new TransactionError('There is nothing to transfer.');
+  }
+
+  const [other] = await db
+    .select({ id: accounts.id, name: accounts.name, archivedAt: accounts.archivedAt })
+    .from(accounts)
+    .where(eq(accounts.id, options.toAccountId))
+    .limit(1);
+  if (!other) throw new TransactionError(`No such account: ${options.toAccountId}`);
+  if (other.archivedAt !== null) {
+    throw new TransactionError(`${other.name} is archived, so money cannot move through it`);
+  }
+
+  const payeeRaw = assertPayee(options.payeeRaw ?? existing.payeeRaw);
+  const pairId = crypto.randomUUID();
+
+  await db.transaction(async (tx) => {
+    // Whatever envelope it was given is wrong by definition: a transfer has no
+    // envelope lines, and the suggestion that proposed one is no longer about
+    // anything (FR-5).
+    await tx.delete(txnLines).where(eq(txnLines.transactionId, transactionId));
+
+    await tx
+      .update(transactions)
+      .set({
+        kind: 'account_transfer',
+        status: 'confirmed',
+        transferPairId: pairId,
+        payeeRaw,
+        payeeKey: normalizePayee(payeeRaw).key,
+        updatedAt: new Date(),
+      })
+      .where(eq(transactions.id, transactionId));
+
+    await tx.insert(transactions).values({
+      accountId: options.toAccountId,
+      date: existing.date,
+      // The mirror image: what left one account arrived in the other.
+      amountCents: -existing.amountCents,
+      payeeRaw,
+      payeeKey: normalizePayee(payeeRaw).key,
+      kind: 'account_transfer',
+      status: 'confirmed',
+      source: existing.source as 'manual',
+      transferPairId: pairId,
+    });
+  });
+
+  return pairId;
+}
+
+/** Transfer halves still waiting for their other statement to be imported. */
+export async function unmatchedTransferHalves(
+  db: Database,
+  accountId: string,
+): Promise<{ id: string; date: string; amountCents: number; payeeRaw: string }[]> {
+  const rows = await db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      amountCents: transactions.amountCents,
+      payeeRaw: transactions.payeeRaw,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.accountId, accountId),
+        eq(transactions.kind, 'account_transfer'),
+        // A half that already carries a bank id came from its own statement, so
+        // it is not waiting for anything.
+        sql`not exists (
+          select 1 from transaction_external_ids e
+          where e.transaction_id = ${transactions.id} and e.kind = 'fitid'
+        )`,
+      ),
+    );
+
+  return rows.map((row) => ({ ...row, amountCents: Number(row.amountCents) }));
+}
