@@ -93,3 +93,37 @@ export function toRecords(table: CsvTable): Record<string, string>[] {
     return record;
   });
 }
+
+/**
+ * Write RFC 4180 CSV.
+ *
+ * Quoting is not optional guesswork: a field is quoted whenever it contains the
+ * delimiter, a quote, or a line break, and quotes inside are doubled. A payee
+ * like `SOBEYS #123, CALGARY` or a note with a newline in it is ordinary data,
+ * and an export that mangles it is an export nobody can import anywhere else
+ * (NF-6).
+ */
+export function toCsv(
+  rows: Record<string, unknown>[],
+  columns?: string[],
+  delimiter = ',',
+): string {
+  const headers = columns ?? [...new Set(rows.flatMap((row) => Object.keys(row)))];
+
+  const cell = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    const text = value instanceof Date ? value.toISOString() : String(value);
+    return /["\r\n]|^\s|\s$/.test(text) || text.includes(delimiter)
+      ? `"${text.replace(/"/g, '""')}"`
+      : text;
+  };
+
+  const lines = [headers.map(cell).join(delimiter)];
+  for (const row of rows) {
+    lines.push(headers.map((header) => cell(row[header])).join(delimiter));
+  }
+
+  // A trailing newline, so appending or concatenating files does not glue two
+  // rows together.
+  return `${lines.join('\r\n')}\r\n`;
+}

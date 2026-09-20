@@ -1235,3 +1235,49 @@ details[open] > summary > .group-summary::before {
     grid-column: 1;
   }
 }
+
+/* --- Data export --------------------------------------------------------- */
+
+.button-link {
+  display: inline-block;
+  font: inherit;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 6px 11px;
+  text-decoration: none;
+}
+
+.button-link:hover {
+  border-color: var(--accent);
+}
+
+.export-links {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.danger {
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 10px;
+}
+
+.danger > summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.danger p {
+  font-size: 13px;
+  max-width: 68ch;
+}
+
+.danger button {
+  border-color: var(--negative);
+  color: var(--negative);
+}

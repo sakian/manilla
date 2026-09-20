@@ -2,9 +2,11 @@ import { db } from '../../db/client.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
 import { listRules } from '../../src/rules/rules.ts';
+import { exportLedger } from '../../src/export/export.ts';
 import { requireUser } from '../auth.ts';
 import { signOutEverywhereAction } from './actions.ts';
 import Devices from './Devices.tsx';
+import DataPanel from './DataPanel.tsx';
 import Rules from './Rules.tsx';
 
 export const dynamic = 'force-dynamic';
@@ -13,10 +15,11 @@ export default async function SettingsPage() {
   const session = await requireUser();
   const connection = db();
 
-  const [devices, unusedRecoveryCodes, rules] = await Promise.all([
+  const [devices, unusedRecoveryCodes, rules, ledger] = await Promise.all([
     listDevices(connection, session.userId),
     countUnusedRecoveryCodes(connection, session.userId),
     listRules(connection),
+    exportLedger(connection),
   ]);
 
   let boundTo: string | null = null;
@@ -40,6 +43,13 @@ export default async function SettingsPage() {
           .
         </p>
       </div>
+
+      <DataPanel
+        counts={{
+          transactions: ledger.counts.transactions ?? 0,
+          envelopes: ledger.counts.envelopes ?? 0,
+        }}
+      />
 
       <Rules rules={rules} />
 

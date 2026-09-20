@@ -26,12 +26,12 @@ multi-year export comes across with its envelopes, splits, income, envelope
 transfers and account transfers, and the balances it cannot rebuild are
 reconciled rather than fudged.
 
-Still outstanding: reports over a custom period (RP-1 to RP-6), CSV import
-(FR-8), full data export (NF-6), global transaction search (VW-6), progress bars
-and a pace marker on the dashboard (VW-1, VW-2), a balance-over-time chart on an
-envelope (VW-4), reconciliation of an account against a statement (FR-6), and
-per-month budget overrides in the UI (FR-32, which the data model and the reads
-already support).
+Backups (NF-7) and full data export (NF-6) are in. Still outstanding: reports
+over a custom period (RP-1 to RP-6), CSV import (FR-8), global transaction search
+(VW-6), progress bars and a pace marker on the dashboard (VW-1, VW-2), a
+balance-over-time chart on an envelope (VW-4), reconciliation of an account
+against a statement (FR-6), and per-month budget overrides in the UI (FR-32,
+which the data model and the reads already support).
 
 ## What Phase 0 measured
 
@@ -132,7 +132,7 @@ Save them: they are stored hashed, and they are the only way in if the device
 holding your passkey is lost. More devices can be added from Settings.
 
 ```bash
-npm test                         # 278 tests; no network, no spend
+npm test                         # 315 tests; no network, no spend
 npm run typecheck
 npm run import -- path/to/statement.ofx
 ```
@@ -185,6 +185,49 @@ localhost - so in production the boot check rejects the localhost defaults and
 the app serves nothing until they are right, with the reason in
 `docker compose logs app`. Both the app and Postgres bind to loopback only; Nginx
 and Tailscale are the only ways in.
+
+## Backups (NF-7)
+
+```bash
+npm run backup          # a compressed pg_dump, verified and pruned
+npm run restore         # the newest backup into a scratch database, checked
+```
+
+`scripts/backup.sh` writes to `backups/` (gitignored), reads the archive back to
+prove it is not a half-written file, and keeps the last 14. It runs Postgres's
+own `pg_dump` inside the container rather than the host's, because a dump written
+by an older client than the server is a restore that fails on the day it matters.
+
+`scripts/restore.sh` restores into `manilla_restore_check` and leaves the live
+database alone, so the procedure can be exercised on an ordinary Tuesday. After
+restoring it runs the FR-37 check against the restored copy - envelope balances
+against account balances - which is the difference between "the file could be
+read" and "the books came back". Pass `--into manilla` to restore over the live
+database; it asks for the name to be typed first.
+
+Nightly, via `crontab -e`:
+
+```
+30 2 * * * cd /path/to/manilla && /bin/bash scripts/backup.sh >> /path/to/manilla/backups/backup.log 2>&1
+```
+
+A backup nobody has restored is a hope rather than a backup, so run
+`npm run restore` occasionally and read what it prints.
+
+## Taking your data out (NF-6)
+
+Settings has a JSON export of everything - each transaction with its envelope
+shares and the bank ids it has collected - and a CSV per table for a
+spreadsheet, where a split becomes one row per envelope share. Passkeys,
+sessions and recovery codes are never included: they are credentials, not
+records of your money.
+
+The same thing from a terminal:
+
+```bash
+curl -b "manilla_session=..." 'http://localhost:3001/api/export?format=json' -O
+curl -b "manilla_session=..." 'http://localhost:3001/api/export?format=csv&table=transactions' -O
+```
 
 ## Running the spikes
 

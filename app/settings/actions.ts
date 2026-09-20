@@ -24,6 +24,7 @@ import {
 } from '../../src/auth/passkeys.ts';
 import { destroyAllSessions } from '../../src/auth/session.ts';
 import { deleteRule } from '../../src/rules/rules.ts';
+import { eraseAllData } from '../../src/export/export.ts';
 import { currentSession, endSession, requireUser } from '../auth.ts';
 import type { BeginResult, Failure } from '../login/actions.ts';
 
@@ -100,6 +101,32 @@ export async function deleteRuleAction(ruleId: string): Promise<{ ok: true } | F
     revalidatePath('/settings');
     revalidatePath('/review');
     return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/**
+ * NF-6's delete-everything. The phrase has to be typed out: a button that wipes
+ * six years of history should be impossible to press by accident, and a
+ * confirmation dialog is one stray tap.
+ */
+export async function eraseEverythingAction(
+  phrase: string,
+): Promise<{ ok: true; removed: Record<string, number> } | Failure> {
+  try {
+    await requireUser();
+    if (phrase.trim().toLowerCase() !== 'erase everything') {
+      return { ok: false, error: 'Not erased: the phrase did not match.' };
+    }
+
+    const removed = await eraseAllData(db());
+    revalidatePath('/settings');
+    revalidatePath('/');
+    revalidatePath('/accounts');
+    revalidatePath('/envelopes');
+    revalidatePath('/budget');
+    return { ok: true, removed };
   } catch (error) {
     return failed(error);
   }
