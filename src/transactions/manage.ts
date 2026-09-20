@@ -24,6 +24,7 @@ import type { Database } from '../../db/client.ts';
 import {
   accounts,
   envelopes,
+  suggestions,
   transactionExternalIds,
   transactions,
   txnLines,
@@ -681,4 +682,140 @@ export async function unmatchedTransferHalves(
     );
 
   return rows.map((row) => ({ ...row, amountCents: Number(row.amountCents) }));
+}
+
+// ---------------------------------------------------------------------------
+// Taking a decision back
+// ---------------------------------------------------------------------------
+
+export type SentBack = {
+  /** How many transactions are now waiting in the review queue. */
+  queued: number;
+  /** Fabricated transfer halves that were removed rather than queued. */
+  removed: number;
+};
+
+/**
+ * Send a confirmed transaction back to the review queue.
+ *
+ * The honest opposite of confirming: the envelope lines go, the status returns to
+ * `pending_review`, and the suggestion's `accepted_envelope_id` is cleared so the
+ * accuracy measure stops counting a decision that has been taken back (CA-9).
+ * The suggestion itself stays, so the queue offers the same starting point it did
+ * the first time rather than a blank row.
+ *
+ * Deleting and re-importing would achieve something similar, but it throws the
+ * bank's id away and asks the user to find the statement again. This keeps the
+ * row, its identity and its history, and only undoes the part a person chose.
+ */
+export async function sendBackToReview(
+  db: Database,
+  transactionId: string,
+): Promise<SentBack> {
+  const existing = await transactionDetail(db, transactionId);
+  if (!existing) throw new TransactionError(`No such transaction: ${transactionId}`);
+
+  if (existing.kind === 'account_transfer') {
+    if (!existing.transferPairId) {
+      throw new LedgerError('An account transfer with no pair id is corrupt; not touching it');
+    }
+    return undoTransferPairing(db, existing.transferPairId);
+  }
+
+  if (existing.source === 'opening_balance') {
+    throw new TransactionError(
+      "This is the account's opening balance, not something anyone categorized. " +
+        'Change the amount instead.',
+    );
+  }
+
+  if (existing.status === 'pending_review') return { queued: 0, removed: 0 };
+
+  await db.transaction(async (tx) => {
+    await tx.delete(txnLines).where(eq(txnLines.transactionId, transactionId));
+    await tx
+      .update(suggestions)
+      .set({ acceptedEnvelopeId: null })
+      .where(eq(suggestions.transactionId, transactionId));
+    await tx
+      .update(transactions)
+      .set({ status: 'pending_review', updatedAt: new Date() })
+      .where(eq(transactions.id, transactionId));
+  });
+
+  return { queued: 1, removed: 0 };
+}
+
+/**
+ * Undo a transfer pairing, putting the bank's own rows back in the queue (FR-5).
+ *
+ * Pairing two rows is a judgement, and judgements are sometimes wrong: a payment
+ * to a card that turns out to have been a purchase, or an importer match on a
+ * coincidence of date and amount. Undoing it has to leave the real records
+ * behind, because they genuinely happened.
+ *
+ * Which rows are real is decided by whether they carry an external id. A half
+ * that came from a statement has one, and becomes an ordinary spending row
+ * awaiting review. A half that `convertToTransfer` fabricated to balance the
+ * books has none, and is deleted - it was never a record of anything, only the
+ * other side of an assertion that has just been withdrawn.
+ *
+ * A transfer where neither half came from a file was typed deliberately, both
+ * sides of it, so there is nothing to recover and this refuses rather than
+ * inventing two spending rows from one entry.
+ *
+ * What cannot be recovered is the description, if it was changed while pairing:
+ * the original is not kept anywhere. The payee the transfer carries is what
+ * comes back.
+ */
+export async function undoTransferPairing(db: Database, pairId: string): Promise<SentBack> {
+  const halves = await db
+    .select({
+      id: transactions.id,
+      externalIds: sql<string>`(
+        select count(*) from transaction_external_ids e where e.transaction_id = transactions.id
+      )::int`,
+    })
+    .from(transactions)
+    .where(eq(transactions.transferPairId, pairId));
+
+  if (halves.length === 0) throw new TransactionError(`No such transfer: ${pairId}`);
+
+  const fromAFile = halves.filter((half) => Number(half.externalIds) > 0);
+  if (fromAFile.length === 0) {
+    throw new TransactionError(
+      'Neither side of this transfer came from a statement, so there is nothing to put back in ' +
+        'the review queue. Delete it instead, and enter what actually happened.',
+    );
+  }
+
+  const fabricated = halves.filter((half) => Number(half.externalIds) === 0);
+
+  await db.transaction(async (tx) => {
+    if (fabricated.length > 0) {
+      await tx.delete(transactions).where(
+        inArray(
+          transactions.id,
+          fabricated.map((half) => half.id),
+        ),
+      );
+    }
+
+    await tx
+      .update(transactions)
+      .set({
+        kind: 'spending',
+        status: 'pending_review',
+        transferPairId: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        inArray(
+          transactions.id,
+          fromAFile.map((half) => half.id),
+        ),
+      );
+  });
+
+  return { queued: fromAFile.length, removed: fabricated.length };
 }

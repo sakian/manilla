@@ -47,6 +47,12 @@ export class BudgetError extends Error {}
 
 export const EXPECTED_INCOME_KEY = 'expected_monthly_income_cents';
 
+/** The window both the income average and each envelope's average are taken over. */
+export const MONTHS_AVERAGED = 12;
+
+/** How many complete months the income average looks back over (#4). */
+export const INCOME_MONTHS_AVERAGED = 6;
+
 // ---------------------------------------------------------------------------
 // Reading the month
 // ---------------------------------------------------------------------------
@@ -69,11 +75,31 @@ export type BudgetRow = {
   spentCents: number;
   /** Net allocated into this envelope during this month, reversals subtracted. */
   allocatedCents: number;
+  /** Net spending in the month before this one, as a positive number. */
+  lastMonthSpentCents: number;
+  /**
+   * Average monthly spending over the twelve complete months before this one.
+   *
+   * Divided by twelve, not by the months that saw activity: a quarterly bill
+   * genuinely does cost a twelfth of its yearly total every month, and that is
+   * the figure a monthly plan has to cover. An envelope younger than a year
+   * therefore reads low, which is honest - there is not a year of it to average.
+   */
+  averageSpentCents: number;
 };
 
 export type BudgetWarning =
   /** FR-31: the plan asks for more than the income there is to fund it. */
-  | { kind: 'planned_exceeds_income'; plannedCents: number; incomeCents: number; basis: 'expected' | 'received' }
+  | {
+      kind: 'planned_exceeds_income';
+      plannedCents: number;
+      incomeCents: number;
+      /**
+       * Which figure the plan was measured against: what the user stated, the
+       * measured average of recent months, or what has arrived so far.
+       */
+      basis: 'expected' | 'average' | 'received';
+    }
   /** FR-31: income has arrived and is still sitting in the pool. */
   | { kind: 'income_unallocated'; cents: number }
   /** The pool has been funded past what is in it, so the pool itself is negative. */
@@ -90,7 +116,15 @@ export type BudgetMonth = {
   incomeReceivedCents: number;
   /** What the user says to expect each month, or null if they have not said. */
   expectedIncomeCents: number | null;
-  /** Suggestion from the last three complete months, for when nothing is set. */
+  /**
+   * Average income over the last complete months (INCOME_MONTHS_AVERAGED), or
+   * null when there is not a complete month of history to average.
+   *
+   * This is measured, not typed, and it is what the plan is measured against
+   * unless an explicit expectation was stored: six months of real deposits is a
+   * better answer to "what do you earn a month" than a number anyone would sit
+   * down and enter, and it cannot go stale.
+   */
   suggestedIncomeCents: number | null;
   warnings: BudgetWarning[];
 };
@@ -110,6 +144,14 @@ export async function budgetMonth(
   assertMonth(month);
   const from = monthStart(month);
   const to = monthEnd(month);
+
+  // The year before this month, and the single month before it, for the two
+  // history figures every row carries (#7).
+  const previous = addMonths(month, -1);
+  const lastMonthFrom = monthStart(previous);
+  const lastMonthTo = monthEnd(previous);
+  const yearFrom = monthStart(addMonths(month, -12));
+  const yearTo = lastMonthTo;
 
   const rows = await db
     .select({
@@ -154,6 +196,23 @@ export async function budgetMonth(
             and m.date between ${from} and ${to}
         ), 0)
       )::bigint`,
+      // The same spending rule as the month's own figure, over two other windows.
+      lastMonthSpentCents: sql<string>`coalesce((
+        select -sum(l.amount_cents) from txn_lines l
+        join transactions t on t.id = l.transaction_id
+        where l.envelope_id = ${envelopes.id}
+          and t.date between ${lastMonthFrom} and ${lastMonthTo}
+          and t.source <> 'opening_balance'
+          and (l.amount_cents < 0 or not ${envelopes.isUnallocated})
+      ), 0)::bigint`,
+      yearSpentCents: sql<string>`coalesce((
+        select -sum(l.amount_cents) from txn_lines l
+        join transactions t on t.id = l.transaction_id
+        where l.envelope_id = ${envelopes.id}
+          and t.date between ${yearFrom} and ${yearTo}
+          and t.source <> 'opening_balance'
+          and (l.amount_cents < 0 or not ${envelopes.isUnallocated})
+      ), 0)::bigint`,
     })
     .from(envelopes)
     .innerJoin(envelopeGroups, eq(envelopes.groupId, envelopeGroups.id))
@@ -175,6 +234,8 @@ export async function budgetMonth(
       balanceCents: Number(row.balanceCents),
       spentCents: Number(row.spentCents),
       allocatedCents: Number(row.allocatedCents),
+      lastMonthSpentCents: Number(row.lastMonthSpentCents),
+      averageSpentCents: Math.round(Number(row.yearSpentCents) / MONTHS_AVERAGED),
     };
   });
 
@@ -209,6 +270,7 @@ export async function budgetMonth(
       plannedTotalCents,
       incomeReceivedCents,
       expectedIncomeCents,
+      averageIncomeCents: suggestedIncomeCents,
       poolBalanceCents: unallocated.balanceCents,
     }),
   };
@@ -226,11 +288,20 @@ export function budgetWarnings(input: {
   plannedTotalCents: number;
   incomeReceivedCents: number;
   expectedIncomeCents: number | null;
+  /** The measured average, used when nothing was stated. */
+  averageIncomeCents?: number | null;
   poolBalanceCents: number;
 }): BudgetWarning[] {
   const warnings: BudgetWarning[] = [];
-  const basis = input.expectedIncomeCents === null ? 'received' : 'expected';
-  const incomeCents = input.expectedIncomeCents ?? input.incomeReceivedCents;
+
+  // Preference order: what the user stated, then what recent months measured,
+  // then what has actually arrived. The last is the weakest basis - warning that
+  // a plan exceeds income on the 3rd of the month would cry wolf every month -
+  // so it is only reached when there is no history to average.
+  const stated = input.expectedIncomeCents;
+  const average = input.averageIncomeCents ?? null;
+  const basis = stated !== null ? 'expected' : average !== null ? 'average' : 'received';
+  const incomeCents = stated ?? average ?? input.incomeReceivedCents;
 
   if (input.plannedTotalCents > incomeCents) {
     warnings.push({
@@ -306,9 +377,14 @@ export async function setExpectedIncome(db: Database, cents: number | null): Pro
 }
 
 /**
- * A starting figure for expected income, averaged over the three complete months
- * before this one. Complete months only: a partial current month would drag the
- * average down and make the suggestion look like a pay cut.
+ * What income to expect each month, averaged over the six complete months before
+ * this one. Complete months only: a partial current month would drag the average
+ * down and make it look like a pay cut.
+ *
+ * Six rather than three, because two-weekly pay puts three paycheques into some
+ * months and two into others, and a short window turns that rhythm into a
+ * wobble. Months with no income at all are left out of the average rather than
+ * counted as zero, so a gap between jobs does not permanently halve the figure.
  *
  * Returns null when there is no income history to average, which is the honest
  * answer in the first weeks of use.
@@ -318,10 +394,9 @@ export async function suggestExpectedIncome(
   month: MonthKey = currentMonth(),
   today: string = localToday(),
 ): Promise<number | null> {
-  const lastComplete = addMonths(month, -1);
-  const months = [lastComplete, addMonths(month, -2), addMonths(month, -3)].filter(
-    (candidate) => monthEnd(candidate) < today,
-  );
+  const months = Array.from({ length: INCOME_MONTHS_AVERAGED }, (_, back) =>
+    addMonths(month, -(back + 1)),
+  ).filter((candidate) => monthEnd(candidate) < today);
   if (months.length === 0) return null;
 
   const totals = await Promise.all(months.map((candidate) => incomeReceived(db, candidate)));

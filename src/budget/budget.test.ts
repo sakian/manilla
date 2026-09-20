@@ -488,6 +488,109 @@ describe(
       );
     });
 
+test('the income average spans six complete months, not three', async () => {
+      // Two-weekly pay: three cheques land in some months, two in others. A
+      // three-month window would read whichever rhythm it happened to catch.
+      await receiveIncome(600000, '2026-03-01');
+      await receiveIncome(400000, '2026-04-01');
+      await receiveIncome(600000, '2026-05-01');
+      await receiveIncome(400000, '2026-06-01');
+      await receiveIncome(600000, '2026-07-01');
+      await receiveIncome(400000, '2026-08-01');
+
+      assert.equal(await suggestExpectedIncome(db, '2026-09', '2026-09-19'), 500000);
+    });
+
+    test('a month with no income at all is left out rather than counted as zero', async () => {
+      await receiveIncome(600000, '2026-07-01');
+      await receiveIncome(800000, '2026-08-01');
+
+      assert.equal(
+        await suggestExpectedIncome(db, '2026-09', '2026-09-19'),
+        700000,
+        'the four earlier months had no income, so they are not evidence of a pay cut',
+      );
+    });
+
+    test('with nothing stated the plan is measured against the measured average', () => {
+      const warnings = budgetWarnings({
+        plannedTotalCents: 800000,
+        incomeReceivedCents: 100000,
+        expectedIncomeCents: null,
+        averageIncomeCents: 700000,
+        poolBalanceCents: 0,
+      });
+
+      const exceeded = warnings.find((warning) => warning.kind === 'planned_exceeds_income');
+      assert.ok(exceeded, 'the plan asks for more than six months of history says arrives');
+      assert.equal(exceeded.basis, 'average');
+      assert.equal(exceeded.incomeCents, 700000);
+    });
+
+    test('a stated figure still wins over the average', () => {
+      const warnings = budgetWarnings({
+        plannedTotalCents: 800000,
+        incomeReceivedCents: 100000,
+        expectedIncomeCents: 900000,
+        averageIncomeCents: 700000,
+        poolBalanceCents: 0,
+      });
+
+      assert.equal(
+        warnings.filter((warning) => warning.kind === 'planned_exceeds_income').length,
+        0,
+        'they said to expect 9,000, and the plan is inside it',
+      );
+    });
+
+    // -- what an envelope usually costs (#7) --------------------------------
+
+    test('each row carries last month and a twelve-month average', async () => {
+      await spend(env.gasId, 20000, '2026-08-14');
+      await spend(env.gasId, 10000, '2026-08-28');
+      await spend(env.gasId, 30000, '2026-02-03');
+      // This month's own spending belongs to spentCents, not to the history.
+      await spend(env.gasId, 5000, '2026-09-10');
+
+      const budget = await budgetMonth(db, '2026-09', { today: '2026-09-19' });
+      const gas = budget.rows.find((row) => row.envelopeId === env.gasId)!;
+
+      assert.equal(gas.spentCents, 5000, 'this month');
+      assert.equal(gas.lastMonthSpentCents, 30000, 'August');
+      assert.equal(
+        gas.averageSpentCents,
+        5000,
+        '$600 across the twelve complete months before September, divided by twelve',
+      );
+    });
+
+    test('spending older than a year is outside the average', async () => {
+      await spend(env.gasId, 120000, '2025-08-20');
+      const budget = await budgetMonth(db, '2026-09', { today: '2026-09-19' });
+      const gas = budget.rows.find((row) => row.envelopeId === env.gasId)!;
+
+      assert.equal(gas.lastMonthSpentCents, 0);
+      assert.equal(gas.averageSpentCents, 0, 'September 2025 onwards is the window');
+    });
+
+    test('a refund in the window reduces the average rather than raising it', async () => {
+      await spend(env.gasId, 24000, '2026-08-01');
+      await recordTransaction(db, {
+        accountId,
+        date: '2026-08-15',
+        amountCents: 12000,
+        payeeRaw: 'SHELL 4471 REFUND',
+        status: 'confirmed',
+        lines: [{ envelopeId: env.gasId, amountCents: 12000 }],
+      });
+
+      const budget = await budgetMonth(db, '2026-09', { today: '2026-09-19' });
+      const gas = budget.rows.find((row) => row.envelopeId === env.gasId)!;
+
+      assert.equal(gas.lastMonthSpentCents, 12000, 'net of the refund');
+      assert.equal(gas.averageSpentCents, 1000);
+    });
+
     test('income left in the pool is warned about (FR-31)', async () => {
       await receiveIncome(400000);
       const budget = await budgetMonth(db, '2026-09', { today: '2026-09-19' });
