@@ -392,16 +392,18 @@ kbd {
     grid-template-columns: 52px minmax(0, 1fr) 96px;
     grid-template-areas:
       'date payee amount'
-      'env  env   env';
+      'env  env   env'
+      'act  act   act';
     row-gap: 8px;
   }
   .queue-date { grid-area: date; }
   .queue-payee { grid-area: payee; }
   .queue-amount { grid-area: amount; }
   .queue-envelope { grid-area: env; }
-  /* Keyboard shortcuts are meaningless on a phone; tapping the row opens the
-     picker instead, so the per-row button is redundant. */
-  .queue-row-actions { display: none; }
+  /* Keyboard shortcuts are meaningless on a phone, so the row itself opens the
+     picker on a touch screen - and the button stays, because a visible target
+     beats a gesture nobody was told about. */
+  .queue-row-actions { grid-area: act; justify-content: flex-start; }
 }
 
 /* --- Pages -------------------------------------------------------------- */
@@ -1164,4 +1166,19 @@ details[open] > summary > .group-summary::before {
   .import-row > .money { grid-area: amount; }
   .import-envelope { grid-area: env; }
   .import-actions { grid-area: act; justify-content: flex-start; }
+}
+
+.picker-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.picker-rule input {
+  width: 18px;
+  height: 18px;
 }

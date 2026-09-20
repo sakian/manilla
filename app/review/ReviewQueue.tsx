@@ -33,8 +33,20 @@ export default function ReviewQueue({
   const [filter, setFilter] = useState('');
   const [pickCursor, setPickCursor] = useState(0);
   const [note, setNote] = useState<string | null>(null);
+  /** CA-2 from a touch screen, where there is no shift key to hold. */
+  const [makeRule, setMakeRule] = useState(false);
+  /**
+   * Touch-first devices get a different gesture: there are no keyboard shortcuts
+   * to reach for, so tapping a row opens the envelope picker rather than only
+   * moving the cursor to it.
+   */
+  const [touch, setTouch] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    setTouch(window.matchMedia('(pointer: coarse)').matches);
+  }, []);
 
   const current = rows[cursor];
 
@@ -54,6 +66,7 @@ export default function ReviewQueue({
     setPicking(false);
     setFilter('');
     setPickCursor(0);
+    setMakeRule(false);
   }, []);
 
   const confirmOne = useCallback(
@@ -112,7 +125,7 @@ export default function ReviewQueue({
         } else if (event.key === 'Enter') {
           event.preventDefault();
           const option = matches[pickCursor];
-          if (option && current) choose(current, option.id, event.shiftKey);
+          if (option && current) choose(current, option.id, event.shiftKey || makeRule);
         }
         return;
       }
@@ -154,11 +167,24 @@ export default function ReviewQueue({
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [picking, matches, pickCursor, current, rows.length, choose, confirmOne, confirmHigh, closePicker]);
+  }, [
+    picking,
+    matches,
+    pickCursor,
+    current,
+    rows.length,
+    makeRule,
+    choose,
+    confirmOne,
+    confirmHigh,
+    closePicker,
+  ]);
 
   useEffect(() => {
-    if (picking) filterRef.current?.focus();
-  }, [picking]);
+    // Not on a phone: focusing the filter throws up the on-screen keyboard and
+    // hides the list of envelopes the tap was aiming for.
+    if (picking && !touch) filterRef.current?.focus();
+  }, [picking, touch]);
 
   useEffect(() => {
     rowRefs.current[cursor]?.scrollIntoView({ block: 'nearest' });
@@ -209,7 +235,13 @@ export default function ReviewQueue({
                 rowRefs.current[index] = element;
               }}
               className={`queue-row${active ? ' active' : ''}`}
-              onClick={() => setCursor(index)}
+              onClick={() => {
+                setCursor(index);
+                if (touch) {
+                  setPicking(true);
+                  setPickCursor(0);
+                }
+              }}
             >
               <div className="queue-date muted">{formatDate(row.date)}</div>
 
@@ -276,16 +308,34 @@ export default function ReviewQueue({
                   key={option.id}
                   className={`picker-option${index === pickCursor ? ' active' : ''}`}
                   onMouseEnter={() => setPickCursor(index)}
-                  onClick={(event) => choose(current, option.id, event.shiftKey)}
+                  onClick={(event) => choose(current, option.id, event.shiftKey || makeRule)}
                 >
                   <span className="muted">{option.groupName}</span>
                   <span>{option.name}</span>
                 </button>
               ))}
             </div>
+            <label className="picker-rule">
+              <input
+                type="checkbox"
+                checked={makeRule}
+                onChange={(event) => setMakeRule(event.target.checked)}
+              />
+              <span>
+                Always use this envelope for <strong>{current.payeeDisplay}</strong>
+              </span>
+            </label>
+
             <div className="picker-foot muted">
-              <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>↵</kbd> choose · <kbd>shift</kbd>+<kbd>↵</kbd>{' '}
-              choose and always use it for this payee · <kbd>esc</kbd> cancel
+              {touch ? (
+                <>Tap an envelope to assign it.</>
+              ) : (
+                <>
+                  <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>↵</kbd> choose ·{' '}
+                  <kbd>shift</kbd>+<kbd>↵</kbd> choose and always use it for this payee ·{' '}
+                  <kbd>esc</kbd> cancel
+                </>
+              )}
             </div>
           </div>
         </div>
