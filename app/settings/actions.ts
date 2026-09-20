@@ -23,6 +23,7 @@ import {
   renameDevice,
 } from '../../src/auth/passkeys.ts';
 import { destroyAllSessions } from '../../src/auth/session.ts';
+import { deleteRule } from '../../src/rules/rules.ts';
 import { currentSession, endSession, requireUser } from '../auth.ts';
 import type { BeginResult, Failure } from '../login/actions.ts';
 
@@ -86,6 +87,18 @@ export async function removeDeviceAction(
     const session = await requireUser();
     await removeDevice(db(), session.userId, credentialId);
     revalidatePath('/settings');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function deleteRuleAction(ruleId: string): Promise<{ ok: true } | Failure> {
+  try {
+    await requireUser();
+    await deleteRule(db(), ruleId);
+    revalidatePath('/settings');
+    revalidatePath('/review');
     return { ok: true };
   } catch (error) {
     return failed(error);

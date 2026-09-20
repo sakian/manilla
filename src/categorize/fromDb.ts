@@ -42,12 +42,22 @@ export async function loadHistory(db: Database): Promise<LabeledTransaction[]> {
   }));
 }
 
+/**
+ * The rules that name an envelope. A rule can instead say a payee is a transfer
+ * between the user's own accounts, which is not a categorization at all and is
+ * applied by the import pipeline (FR-5).
+ */
 export async function loadRules(db: Database): Promise<Rule[]> {
-  const rows = await db.select().from(rulesTable).orderBy(rulesTable.position);
+  const rows = await db
+    .select()
+    .from(rulesTable)
+    .where(isNotNull(rulesTable.envelopeId))
+    .orderBy(rulesTable.position);
+
   return rows.map((row) => ({
     id: row.id,
     contains: row.contains,
-    envelope: row.envelopeId,
+    envelope: row.envelopeId!,
     ...(row.minCents !== null ? { minCents: Number(row.minCents) } : {}),
     ...(row.maxCents !== null ? { maxCents: Number(row.maxCents) } : {}),
     ...(row.accountId !== null ? { account: row.accountId } : {}),

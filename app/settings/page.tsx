@@ -1,9 +1,11 @@
 import { db } from '../../db/client.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
+import { listRules } from '../../src/rules/rules.ts';
 import { requireUser } from '../auth.ts';
 import { signOutEverywhereAction } from './actions.ts';
 import Devices from './Devices.tsx';
+import Rules from './Rules.tsx';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,9 +13,10 @@ export default async function SettingsPage() {
   const session = await requireUser();
   const connection = db();
 
-  const [devices, unusedRecoveryCodes] = await Promise.all([
+  const [devices, unusedRecoveryCodes, rules] = await Promise.all([
     listDevices(connection, session.userId),
     countUnusedRecoveryCodes(connection, session.userId),
+    listRules(connection),
   ]);
 
   let boundTo: string | null = null;
@@ -37,6 +40,8 @@ export default async function SettingsPage() {
           .
         </p>
       </div>
+
+      <Rules rules={rules} />
 
       <Devices devices={devices} unusedRecoveryCodes={unusedRecoveryCodes} />
 

@@ -27,6 +27,7 @@ import { normalizePayee } from '../categorize/normalize.ts';
 import { buildCategorizer } from '../categorize/fromDb.ts';
 import { unallocatedEnvelope } from '../ledger/ledger.ts';
 import { unmatchedTransferHalves } from '../transactions/manage.ts';
+import { listTransferRules, matchTransferRule } from '../rules/rules.ts';
 
 /**
  * How far apart the two sides of one transfer may post. A payment leaving the
@@ -77,6 +78,12 @@ export type ImportRow = {
   existingId?: string;
   reason: string;
   suggestion?: Suggestion;
+  /**
+   * Set when a standing rule says this payee is a transfer to another of the
+   * user's accounts rather than spending (CA-2, FR-5). Committing it writes both
+   * halves and no envelope line.
+   */
+  transferTo?: { accountId: string; name: string };
 };
 
 export type BalanceCheck = {
@@ -187,6 +194,15 @@ export async function previewImport(
   const waitingHalves = await unmatchedTransferHalves(db, accountId);
   const claimedHalves = new Set<string>();
 
+  // Standing rules that say a payee is a transfer rather than spending (CA-2).
+  const transferRules = await listTransferRules(db);
+  const accountNames = new Map(
+    (await db.select({ id: accounts.id, name: accounts.name }).from(accounts)).map((row) => [
+      row.id,
+      row.name,
+    ]),
+  );
+
   // Count how many of each look-alike shape this file contains, so that a file
   // legitimately holding four identical charges does not flag the last three.
   const seenInFile = new Map<string, number>();
@@ -251,12 +267,30 @@ export async function previewImport(
       };
     }
 
+    const payeeRaw = transaction.name || transaction.memo || '';
+    const rule = matchTransferRule(transferRules, {
+      payeeRaw,
+      amountCents: transaction.amountCents,
+      accountId,
+    });
+
+    if (rule) {
+      const name = accountNames.get(rule.transferAccountId) ?? 'another account';
+      return {
+        index,
+        transaction,
+        verdict: 'new',
+        reason: `Your rule: "${rule.contains}" means a transfer to ${name}, not spending`,
+        transferTo: { accountId: rule.transferAccountId, name },
+      };
+    }
+
     return { index, transaction, verdict: 'new', reason: 'Not seen before' };
   });
 
   if (options.categorize !== false) {
     const { categorizer } = await buildCategorizer(db, { useAi: options.useAi });
-    const fresh = rows.filter((row) => row.verdict === 'new');
+    const fresh = rows.filter((row) => row.verdict === 'new' && !row.transferTo);
     const suggestions = await categorizer.suggestAll(
       fresh.map((row) => ({
         date: row.transaction.posted,
@@ -404,6 +438,56 @@ export async function commitImport(
       }
 
       const payeeRaw = row.transaction.name || row.transaction.memo || '(no description)';
+
+      // A rule said this payee is money moving between the user's own accounts.
+      // Both halves are written, no envelope line is created, and it does not
+      // join the review queue: there is nothing left to decide (FR-5, CA-2).
+      if (row.transferTo) {
+        const pairId = crypto.randomUUID();
+        const [outgoing] = await tx
+          .insert(transactions)
+          .values([
+            {
+              accountId: preview.accountId,
+              date: row.transaction.posted,
+              amountCents: row.transaction.amountCents,
+              payeeRaw,
+              payeeKey: normalizePayee(payeeRaw).key,
+              memo: row.transaction.memo ?? null,
+              kind: 'account_transfer' as const,
+              status: 'confirmed' as const,
+              source: 'file_import' as const,
+              importBatchId: batchId,
+              transferPairId: pairId,
+            },
+            {
+              accountId: row.transferTo.accountId,
+              date: row.transaction.posted,
+              amountCents: -row.transaction.amountCents,
+              payeeRaw,
+              payeeKey: normalizePayee(payeeRaw).key,
+              kind: 'account_transfer' as const,
+              status: 'confirmed' as const,
+              source: 'file_import' as const,
+              importBatchId: batchId,
+              transferPairId: pairId,
+            },
+          ])
+          .returning({ id: transactions.id });
+
+        if (row.transaction.fitId) {
+          await tx.insert(transactionExternalIds).values({
+            transactionId: outgoing!.id,
+            accountId: preview.accountId,
+            kind: 'fitid',
+            value: row.transaction.fitId,
+          });
+        }
+
+        added += 1;
+        continue;
+      }
+
       const [created] = await tx
         .insert(transactions)
         .values({

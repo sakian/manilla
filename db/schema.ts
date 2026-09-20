@@ -30,6 +30,7 @@ import {
   index,
   uniqueIndex,
   primaryKey,
+  check,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 
@@ -411,23 +412,44 @@ export const appSettings = pgTable('app_settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** User rules (CA-2), normally created in one click from a correction. */
+/**
+ * User rules (CA-2), normally created in one click from a correction.
+ *
+ * A rule answers one of two questions about a payee, and never both:
+ *
+ *  - which envelope its spending belongs in (`envelope_id`), or
+ *  - that it is not spending at all, but a transfer to another of your own
+ *    accounts (`transfer_account_id`) - the monthly "Tfr-to C C" that pays the
+ *    credit card off the chequing account (FR-5).
+ *
+ * The check constraint is what keeps that honest: a rule with both would be a
+ * rule with no meaning, and one with neither would silently match and do
+ * nothing.
+ */
 export const rules = pgTable(
   'rules',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     /** Matched against the normalized payee key. */
     contains: text('contains').notNull(),
-    envelopeId: uuid('envelope_id')
-      .notNull()
-      .references(() => envelopes.id, { onDelete: 'cascade' }),
+    envelopeId: uuid('envelope_id').references(() => envelopes.id, { onDelete: 'cascade' }),
+    /** Set instead of an envelope when the payee means a transfer (FR-5). */
+    transferAccountId: uuid('transfer_account_id').references(() => accounts.id, {
+      onDelete: 'cascade',
+    }),
     minCents: cents('min_cents'),
     maxCents: cents('max_cents'),
     accountId: uuid('account_id').references(() => accounts.id),
     position: integer('position').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('rules_position_idx').on(table.position)],
+  (table) => [
+    index('rules_position_idx').on(table.position),
+    check(
+      'rules_one_outcome',
+      sql`(${table.envelopeId} is null) <> (${table.transferAccountId} is null)`,
+    ),
+  ],
 );
 
 // ---------------------------------------------------------------------------

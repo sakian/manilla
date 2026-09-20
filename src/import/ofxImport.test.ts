@@ -426,6 +426,87 @@ describe(
       assert.equal(preview.rows[0]!.verdict, 'new');
     });
 
+    test('a standing rule imports a payee as a transfer, with no envelope (CA-2, FR-5)', async () => {
+      const visa = await openAccount(db, { name: 'Visa', kind: 'credit_card' });
+      const { createTransferRule } = await import('../rules/rules.ts');
+      await createTransferRule(db, {
+        contains: 'TFR-TO C C',
+        transferAccountId: visa,
+        accountId,
+      });
+
+      const statement: OfxStatement = {
+        ...bankStatement(),
+        transactions: [
+          {
+            fitId: 'CHQ-9',
+            posted: '2026-09-10',
+            amountCents: -50000,
+            name: 'Tfr-to C C 0000123456',
+            type: 'DEBIT',
+            warnings: [],
+          },
+        ],
+      };
+
+      const preview = await previewImport(db, statement, accountId);
+      assert.equal(preview.rows[0]!.verdict, 'new');
+      assert.equal(preview.rows[0]!.transferTo?.accountId, visa);
+      assert.match(preview.rows[0]!.reason, /Your rule/);
+      assert.equal(preview.rows[0]!.suggestion, undefined, 'a transfer is not categorized');
+
+      await commitImport(db, preview, acceptAll);
+
+      // Both halves, no envelope, nothing waiting in the queue.
+      const written = await db.select().from(transactions);
+      assert.equal(written.length, 2);
+      assert.ok(written.every((row) => row.kind === 'account_transfer'));
+      assert.ok(written.every((row) => row.status === 'confirmed'));
+      assert.equal(written[0]!.transferPairId, written[1]!.transferPairId);
+
+      const balances = await accountBalances(db);
+      assert.equal(balances.find((row) => row.accountId === accountId)!.balanceCents, -50000);
+      assert.equal(balances.find((row) => row.accountId === visa)!.balanceCents, 50000);
+      assert.ok((await checkInvariant(db)).ok);
+
+      // Re-importing the same statement recognises it by the bank's id.
+      const again = await previewImport(db, statement, accountId, { categorize: false });
+      assert.equal(again.rows[0]!.verdict, 'duplicate');
+    });
+
+    test('a rule for one account does not fire on a statement from another', async () => {
+      const visa = await openAccount(db, { name: 'Visa', kind: 'credit_card' });
+      const savings = await openAccount(db, {
+        name: 'Savings',
+        kind: 'savings',
+        externalAccountId: '9999999',
+      });
+      const { createTransferRule } = await import('../rules/rules.ts');
+      await createTransferRule(db, {
+        contains: 'TFR-TO C C',
+        transferAccountId: visa,
+        accountId,
+      });
+
+      const statement: OfxStatement = {
+        ...bankStatement(),
+        accountId: '9999999',
+        transactions: [
+          {
+            fitId: 'SAV-1',
+            posted: '2026-09-10',
+            amountCents: -50000,
+            name: 'Tfr-to C C',
+            type: 'DEBIT',
+            warnings: [],
+          },
+        ],
+      };
+
+      const preview = await previewImport(db, statement, savings, { categorize: false });
+      assert.equal(preview.rows[0]!.transferTo, undefined, 'the rule is scoped to chequing');
+    });
+
     test('history from earlier imports drives the suggestions', async () => {
       // Confirmed history for this merchant...
       for (const date of ['2025-06-03', '2025-07-03', '2025-08-03']) {

@@ -7,7 +7,8 @@ import {
   highConfidenceIds,
   recategorize,
 } from '../src/queue/queue.ts';
-import { convertToTransfer } from '../src/transactions/manage.ts';
+import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
+import { createTransferRule } from '../src/rules/rules.ts';
 import { requireUser } from './auth.ts';
 
 // A server action is a POST endpoint, reachable without going through the page
@@ -52,14 +53,39 @@ export async function recategorizeAction(
  * in another of them is not spending, and no envelope should move for it. This
  * turns the imported row into one half of a transfer and writes the other.
  */
-export async function markAsTransferAction(transactionId: string, toAccountId: string) {
+export async function markAsTransferAction(
+  transactionId: string,
+  toAccountId: string,
+  options: { createRule?: boolean } = {},
+) {
   try {
     await requireUser();
-    await convertToTransfer(db(), transactionId, { toAccountId });
+    const connection = db();
+
+    // Read the normalized payee before converting, since the rule matches on it.
+    const detail = options.createRule ? await transactionDetail(connection, transactionId) : null;
+
+    await convertToTransfer(connection, transactionId, { toAccountId });
+
+    let ruleMade = false;
+    if (detail) {
+      const { normalizePayee } = await import('../src/categorize/normalize.ts');
+      const contains = normalizePayee(detail.payeeRaw).key;
+      // Scoped to the account it arrived in: "Tfr-to C C" on the chequing
+      // statement means the card payment, and should not fire elsewhere.
+      await createTransferRule(connection, {
+        contains,
+        transferAccountId: toAccountId,
+        accountId: detail.accountId,
+      });
+      ruleMade = true;
+    }
+
     revalidatePath('/review');
     revalidatePath('/accounts');
+    revalidatePath('/settings');
     revalidatePath('/');
-    return { ok: true as const };
+    return { ok: true as const, ruleMade };
   } catch (error) {
     return {
       ok: false as const,

@@ -44,6 +44,8 @@ export default function ReviewQueue({
   const [makeRule, setMakeRule] = useState(false);
   /** The row being marked as a transfer between the user's own accounts (FR-5). */
   const [transferring, setTransferring] = useState<QueueRow | null>(null);
+  /** CA-2 for transfers: remember this payee so the next statement knows too. */
+  const [transferRule, setTransferRule] = useState(true);
   /**
    * Touch-first devices get a different gesture: there are no keyboard shortcuts
    * to reach for, so tapping a row opens the envelope picker rather than only
@@ -106,13 +108,16 @@ export default function ReviewQueue({
   );
 
   const markTransfer = useCallback(
-    (row: QueueRow, toAccountId: string) => {
+    (row: QueueRow, toAccountId: string, createRule: boolean) => {
       startTransition(async () => {
-        const result = await markAsTransferAction(row.id, toAccountId);
+        const result = await markAsTransferAction(row.id, toAccountId, { createRule });
         setTransferring(null);
         setNote(
           result.ok
-            ? 'Recorded as a transfer. No envelope moved, and the other account now shows it too.'
+            ? 'Recorded as a transfer. No envelope moved, and the other account shows it too.' +
+                (result.ruleMade
+                  ? ' Statements with that description will be recognised from now on.'
+                  : '')
             : result.error,
         );
         router.refresh();
@@ -341,7 +346,7 @@ export default function ReviewQueue({
                     <button
                       key={account.id}
                       className="picker-option"
-                      onClick={() => markTransfer(transferring, account.id)}
+                      onClick={() => markTransfer(transferring, account.id, transferRule)}
                       disabled={pending}
                     >
                       <span>{account.name}</span>
@@ -349,6 +354,18 @@ export default function ReviewQueue({
                   ))}
               </div>
             </div>
+            <label className="picker-rule">
+              <input
+                type="checkbox"
+                checked={transferRule}
+                onChange={(event) => setTransferRule(event.target.checked)}
+              />
+              <span>
+                Always treat <strong>{transferring.payeeDisplay}</strong> on{' '}
+                {transferring.accountName} as a transfer
+              </span>
+            </label>
+
             <div className="picker-foot dialog-foot">
               <button onClick={() => setTransferring(null)} disabled={pending}>
                 Cancel

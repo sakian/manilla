@@ -363,7 +363,9 @@ export default function ImportScreen({
                     </span>
 
                     <span className="import-envelope">
-                      {row.envelopeName ? (
+                      {row.transferToName ? (
+                        <span className="chip">transfer to {row.transferToName}</span>
+                      ) : row.envelopeName ? (
                         <span className={`chip band-${row.band ?? 'low'}`}>{row.envelopeName}</span>
                       ) : (
                         <span className="chip none">Uncategorized</span>

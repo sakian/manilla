@@ -57,6 +57,8 @@ export type PreviewRow = {
   confidence?: number;
   band?: Band;
   suggestionReason?: string;
+  /** Set when a standing rule makes this row a transfer rather than spending. */
+  transferToName?: string;
 };
 
 export type PreviewResult =
@@ -162,6 +164,7 @@ export async function previewImportAction(
           verdict: row.verdict,
           reason: row.reason,
           ...(row.existingId ? { existingId: row.existingId } : {}),
+          ...(row.transferTo ? { transferToName: row.transferTo.name } : {}),
           ...(envelopeId && row.suggestion
             ? {
                 envelopeName: names.get(envelopeId) ?? 'an envelope',
