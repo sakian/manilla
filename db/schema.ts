@@ -338,12 +338,27 @@ export const envelopeMoves = pgTable(
     date: date('date').notNull(),
     kind: moveKind('kind').notNull(),
     note: text('note'),
+    /**
+     * Set when the move came from an import rather than a person, so undoing
+     * that import takes its envelope moves with it (FR-13, MG-6). A migration
+     * brings in years of envelope-to-envelope transfers, and an undo that left
+     * them behind would be no undo at all.
+     */
+    importBatchId: uuid('import_batch_id').references(() => importBatches.id),
+    /**
+     * Identity for a move that came from a file, so importing that file twice
+     * does not move the money twice (MG-1). Null for moves a person made, which
+     * are never replayed from anywhere.
+     */
+    externalId: text('external_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('envelope_moves_date_idx').on(table.date),
     index('envelope_moves_from_idx').on(table.fromEnvelopeId),
     index('envelope_moves_to_idx').on(table.toEnvelopeId),
+    index('envelope_moves_batch_idx').on(table.importBatchId),
+    uniqueIndex('envelope_moves_external_idx').on(table.externalId),
   ],
 );
 

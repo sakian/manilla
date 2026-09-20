@@ -21,14 +21,17 @@ sign-in so it is safe to reach from a phone.
 | Users | Single user for now; multi-user deferred |
 | Sign-in | Passkeys (WebAuthn), with single-use recovery codes |
 
-Still to come in Phase 1, all of it UI over ledger code that already exists:
-entering and editing a transaction by hand (FR-2), splitting one across envelopes
-from the queue (FR-4), recording a transfer between accounts (FR-5), progress bars
-and a pace marker on the dashboard (VW-1, VW-2), and global transaction search
-(VW-6). Also outstanding: a balance-over-time chart on an envelope (VW-4),
-reconciliation (FR-6), and per-month budget overrides in the UI (FR-32, which the
-data model and the reads already support). Phase 2 is the GoodBudget migration and
-reports.
+Phase 2 has started: the GoodBudget migration wizard is in (MG-1 to MG-7), so a
+multi-year export comes across with its envelopes, splits, income, envelope
+transfers and account transfers, and the balances it cannot rebuild are
+reconciled rather than fudged.
+
+Still outstanding: reports over a custom period (RP-1 to RP-6), CSV import
+(FR-8), full data export (NF-6), global transaction search (VW-6), progress bars
+and a pace marker on the dashboard (VW-1, VW-2), a balance-over-time chart on an
+envelope (VW-4), reconciliation of an account against a statement (FR-6), and
+per-month budget overrides in the UI (FR-32, which the data model and the reads
+already support).
 
 ## What Phase 0 measured
 
@@ -73,6 +76,9 @@ app/                    the web app (Next.js App Router)
   page.tsx              dashboard: envelope balances, callouts, balance check (VW-1, VW-3)
   review/               the review queue, keyboard-driven (RQ-1 to RQ-5)
   budget/               monthly plan, funding and allocation (FR-27 to FR-31)
+  import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
+  migrate/              the GoodBudget migration wizard (MG-1 to MG-7)
+  transactions/         entering, correcting and deleting by hand (FR-2, FR-4, FR-5)
   envelopes/            envelopes and groups, transfers, cover an overspend (FR-21 to FR-25, FR-34, FR-35)
   accounts/             accounts and their transactions (FR-1, VW-5)
   login/, settings/     passkey sign-in and registered devices (NF-3)
@@ -90,6 +96,8 @@ src/
   import/ofxImport.ts   preview-then-commit import with dedupe (FR-7 to FR-14)
   queue/queue.ts        the review queue's reads and writes
   budget/               months, the plan, funding and reversal
+  migrate/goodbudget.ts the GoodBudget export, read as transactions (MG-1 to MG-7)
+  transactions/manage.ts manual entry, edits, deletions, account transfers
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
   auth/                 passkeys, sessions, recovery codes, RP configuration
@@ -124,7 +132,7 @@ Save them: they are stored hashed, and they are the only way in if the device
 holding your passkey is lost. More devices can be added from Settings.
 
 ```bash
-npm test                         # 227 tests; no network, no spend
+npm test                         # 278 tests; no network, no spend
 npm run typecheck
 npm run import -- path/to/statement.ofx
 ```
@@ -240,6 +248,12 @@ shows what happened.
 **Nothing holding money can be hidden.** Archiving an envelope or an account with
 a balance is refused, and says how much is in the way. An invisible balance still
 counts towards the total the dashboard checks (FR-25, FR-37).
+
+**A migration reports what it cannot do.** GoodBudget's "Fill Envelopes" rows
+carry no amounts, so the money put *into* envelopes over the years is simply not
+in the export: past spending rebuilds exactly, past envelope balances do not. The
+wizard says so before anything is written, and closes the gap with dated
+adjustments you enter from GoodBudget rather than with a number from nowhere.
 
 **Sign-in is a passkey, and sessions have two clocks.** WebAuthn is bound to the
 origin, so there is nothing to phish and nothing to reuse. The cookie holds a

@@ -29,6 +29,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   <Link href="/budget">Budget</Link>
                   <Link href="/envelopes">Envelopes</Link>
                   <Link href="/accounts">Accounts</Link>
+                  <Link href="/migrate">Migrate</Link>
                 </nav>
                 <form action={signOutAction} className="topbar-end">
                   <Link href="/settings" className="muted">

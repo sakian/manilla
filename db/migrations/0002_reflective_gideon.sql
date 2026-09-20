@@ -1,0 +1,3 @@
+ALTER TABLE "envelope_moves" ADD COLUMN "import_batch_id" uuid;--> statement-breakpoint
+ALTER TABLE "envelope_moves" ADD CONSTRAINT "envelope_moves_import_batch_id_import_batches_id_fk" FOREIGN KEY ("import_batch_id") REFERENCES "public"."import_batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "envelope_moves_batch_idx" ON "envelope_moves" USING btree ("import_batch_id");

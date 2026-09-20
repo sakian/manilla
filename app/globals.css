@@ -1182,3 +1182,56 @@ details[open] > summary > .group-summary::before {
   width: 18px;
   height: 18px;
 }
+
+/* --- Migration wizard ---------------------------------------------------- */
+
+.map-table {
+  margin: 6px 0 10px;
+}
+
+.map-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 160px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.map-row:last-child {
+  border-bottom: none;
+}
+
+.map-row.reconcile {
+  grid-template-columns: minmax(0, 1fr) 120px;
+}
+
+.map-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-row select,
+.map-row input {
+  padding: 4px 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .map-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .map-name {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+  .map-row.reconcile {
+    grid-template-columns: minmax(0, 1fr) 110px;
+  }
+  .map-row.reconcile .map-name {
+    grid-column: 1;
+  }
+}
