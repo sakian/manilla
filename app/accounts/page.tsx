@@ -1,36 +1,62 @@
 import Link from 'next/link';
 import { db } from '../../db/client.ts';
-import {
-  accountTransactions,
-  listAccounts,
-  recentTransactions,
-} from '../../src/accounts/manage.ts';
+import { listAccounts } from '../../src/accounts/manage.ts';
 import { transferOptions } from '../../src/envelopes/transfer.ts';
+import {
+  describeQuery,
+  filterChoices,
+  isEmptyQuery,
+  searchTransactions,
+} from '../../src/transactions/search.ts';
 import { requireUser } from '../auth.ts';
+import { Money } from '../Money.tsx';
+import { PAGE_SIZE, readForm, readPage, readQuery, withParams } from '../search/urlQuery.ts';
+import TransactionFilters from '../transactions/TransactionFilters.tsx';
 import TransactionList from '../transactions/TransactionList.tsx';
 import AccountManager from './AccountManager.tsx';
 
+/**
+ * Accounts, and the transactions in them (FR-1, VW-5).
+ *
+ * `?account=` both picks the account and filters the list, because they are the
+ * same thing said twice otherwise. The rest of the filters are the search page's,
+ * running the same query - so a filter learned in one place works in the other.
+ */
+
 export const dynamic = 'force-dynamic';
+
+function one(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export default async function AccountsPage(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireUser();
-  const searchParams = await props.searchParams;
-  const requested = Array.isArray(searchParams.account)
-    ? searchParams.account[0]
-    : searchParams.account;
+  const params = await props.searchParams;
   const connection = db();
 
   const managed = await listAccounts(connection, { includeArchived: true });
+  const requested = one(params.account);
   const selected = managed.find((account) => account.id === requested) ?? null;
 
-  const [rows, envelopes] = await Promise.all([
-    selected
-      ? accountTransactions(connection, selected.id, { limit: 100 })
-      : recentTransactions(connection, { limit: 60 }),
+  // An `?account=` naming something that no longer exists filters on nothing
+  // rather than on a dead id, which would silently show an empty list.
+  const query = readQuery(selected ? params : { ...params, account: undefined }, {
+    pageSize: PAGE_SIZE,
+  });
+  const page = readPage(params);
+
+  const [found, choices, envelopes] = await Promise.all([
+    searchTransactions(connection, query),
+    filterChoices(connection),
     transferOptions(connection),
   ]);
+
+  const accountNames = new Map(choices.accounts.map((account) => [account.id, account.name]));
+  const envelopeNames = new Map(choices.envelopes.map((envelope) => [envelope.id, envelope.name]));
+  const filtered = !isEmptyQuery({ ...query, accountIds: undefined });
+  const lastPage = Math.max(1, Math.ceil(found.total / PAGE_SIZE));
 
   const live = managed
     .filter((account) => account.archivedAt === null)
@@ -48,12 +74,37 @@ export default async function AccountsPage(props: {
       <section className="panel">
         {selected && (
           <p className="muted">
-            Showing {selected.name}.{' '}
-            <Link href="/accounts">Show every account</Link>
+            Showing {selected.name}. <Link href="/accounts">Show every account</Link>
           </p>
         )}
+
+        <TransactionFilters
+          path="/accounts"
+          values={readForm(params)}
+          accounts={choices.accounts}
+          envelopes={choices.envelopes}
+          {...(selected ? { pinnedAccountId: selected.id } : {})}
+          active={filtered}
+        />
+
+        {filtered && (
+          <p className="muted">
+            {describeQuery(query, { accounts: accountNames, envelopes: envelopeNames })} ·{' '}
+            {found.total.toLocaleString()} found, spent <Money cents={found.outCents} plain />
+            {found.inCents > 0 && (
+              <>
+                , received <Money cents={found.inCents} plain />
+              </>
+            )}{' '}
+            ·{' '}
+            <a className="button-link" href={withParams('/api/search', params)} download>
+              CSV
+            </a>
+          </p>
+        )}
+
         <TransactionList
-          rows={rows}
+          rows={found.rows}
           accounts={live}
           envelopes={envelopes.map((envelope) => ({
             id: envelope.id,
@@ -61,8 +112,34 @@ export default async function AccountsPage(props: {
             groupName: envelope.groupName,
           }))}
           {...(selected ? { defaultAccountId: selected.id } : {})}
+          {...(filtered
+            ? {
+                heading:
+                  found.total > found.rows.length
+                    ? `Showing ${found.offset + 1}–${found.offset + found.rows.length} of ${found.total.toLocaleString()}`
+                    : 'Matching transactions',
+              }
+            : {})}
           showAccount={!selected}
         />
+
+        {lastPage > 1 && (
+          <div className="pager">
+            {page > 1 ? (
+              <Link href={withParams('/accounts', params, page - 1)}>← Newer</Link>
+            ) : (
+              <span className="muted">← Newer</span>
+            )}
+            <span className="muted">
+              Page {page} of {lastPage.toLocaleString()}
+            </span>
+            {found.hasMore ? (
+              <Link href={withParams('/accounts', params, page + 1)}>Older →</Link>
+            ) : (
+              <span className="muted">Older →</span>
+            )}
+          </div>
+        )}
       </section>
     </>
   );

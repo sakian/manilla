@@ -25,6 +25,7 @@ export default function TransactionList({
   envelopes,
   defaultAccountId,
   showAccount,
+  heading,
 }: {
   rows: AccountTransaction[];
   accounts: AccountChoice[];
@@ -32,6 +33,8 @@ export default function TransactionList({
   defaultAccountId?: string;
   /** The account column is noise when the list is already one account's. */
   showAccount?: boolean;
+  /** What the list is, when it is not simply the recent ones - search results, say. */
+  heading?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +56,7 @@ export default function TransactionList({
   return (
     <>
       <div className="panel-head">
-        <h3>{showAccount ? 'Recent transactions' : 'Transactions'}</h3>
+        <h3>{heading ?? (showAccount ? 'Recent transactions' : 'Transactions')}</h3>
         <button
           className="primary"
           onClick={() => setCreating(true)}
@@ -67,7 +70,9 @@ export default function TransactionList({
 
       {rows.length === 0 && (
         <p className="muted">
-          Nothing recorded yet. Import a statement, or enter something by hand.
+          {heading
+            ? 'Nothing matches those filters.'
+            : 'Nothing recorded yet. Import a statement, or enter something by hand.'}
         </p>
       )}
 

@@ -15,8 +15,9 @@
 
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
-import { accounts, envelopes, transactions, txnLines } from '../../db/schema.ts';
+import { accounts, transactions } from '../../db/schema.ts';
 import { openAccount, type NewAccount } from '../ledger/ledger.ts';
+import { searchTransactions } from '../transactions/search.ts';
 
 export class AccountError extends Error {}
 
@@ -276,6 +277,11 @@ export async function reorderAccounts(db: Database, orderedIds: string[]): Promi
   });
 }
 
+/**
+ * One transaction as a list shows it. The shape the transaction list renders,
+ * and a subset of what {@link searchTransactions} returns, so the two views
+ * cannot disagree about what a row is.
+ */
 export type AccountTransaction = {
   id: string;
   date: string;
@@ -289,13 +295,25 @@ export type AccountTransaction = {
   envelopeNames: string[];
 };
 
-/** One account's transactions, newest first, with the envelopes they landed in (VW-5). */
+/**
+ * One account's transactions, newest first, with the envelopes they landed in
+ * (VW-5).
+ *
+ * Delegates to the search query rather than running its own, because "this
+ * account's transactions" is exactly that query with the account pinned, and
+ * two implementations of it would eventually disagree about splits, transfers
+ * or ordering.
+ */
 export async function accountTransactions(
   db: Database,
   accountId: string,
   options: { limit?: number } = {},
 ): Promise<AccountTransaction[]> {
-  return readTransactions(db, { accountId, ...options });
+  const found = await searchTransactions(db, {
+    accountIds: [accountId],
+    ...(options.limit ? { limit: options.limit } : {}),
+  });
+  return found.rows;
 }
 
 /** The most recent transactions across every account, for the accounts screen. */
@@ -303,59 +321,6 @@ export async function recentTransactions(
   db: Database,
   options: { limit?: number } = {},
 ): Promise<AccountTransaction[]> {
-  return readTransactions(db, options);
-}
-
-async function readTransactions(
-  db: Database,
-  options: { accountId?: string; limit?: number },
-): Promise<AccountTransaction[]> {
-  const limit = options.limit ?? 200;
-
-  const rows = await db
-    .select({
-      id: transactions.id,
-      date: transactions.date,
-      payeeRaw: transactions.payeeRaw,
-      amountCents: transactions.amountCents,
-      status: transactions.status,
-      kind: transactions.kind,
-      memo: transactions.memo,
-      accountId: transactions.accountId,
-      accountName: accounts.name,
-      envelopeName: envelopes.name,
-    })
-    .from(transactions)
-    .innerJoin(accounts, eq(accounts.id, transactions.accountId))
-    .leftJoin(txnLines, eq(txnLines.transactionId, transactions.id))
-    .leftJoin(envelopes, eq(txnLines.envelopeId, envelopes.id))
-    .where(options.accountId ? eq(transactions.accountId, options.accountId) : sql`true`)
-    .orderBy(desc(transactions.date), desc(transactions.createdAt))
-    // A split comes back once per line, so the row budget has to allow for it.
-    .limit(limit * 4);
-
-  // Fold the lines of a split back into one row, preserving order.
-  const byId = new Map<string, AccountTransaction>();
-  for (const row of rows) {
-    const existing = byId.get(row.id);
-    if (existing) {
-      if (row.envelopeName) existing.envelopeNames.push(row.envelopeName);
-      continue;
-    }
-    if (byId.size >= limit) break;
-    byId.set(row.id, {
-      id: row.id,
-      date: row.date,
-      payeeRaw: row.payeeRaw,
-      amountCents: Number(row.amountCents),
-      status: row.status,
-      kind: row.kind,
-      memo: row.memo,
-      accountId: row.accountId,
-      accountName: row.accountName,
-      envelopeNames: row.envelopeName ? [row.envelopeName] : [],
-    });
-  }
-
-  return [...byId.values()];
+  const found = await searchTransactions(db, options.limit ? { limit: options.limit } : {});
+  return found.rows;
 }

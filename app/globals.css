@@ -1378,3 +1378,66 @@ details[open] > summary > .group-summary::before {
   margin: 0;
   max-width: 68ch;
 }
+
+/* --- Search and filters (VW-5, VW-6) ------------------------------------- */
+
+.filters {
+  margin-bottom: 14px;
+}
+
+.filter-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-text {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.filter-grid {
+  display: grid;
+  /* Two columns on a phone, more as there is room, without a media query per
+     breakpoint: the controls are all about the same width. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.filter-grid .field {
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.filter-apply {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.pager a {
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 11px;
+}
+
+.pager a:hover {
+  border-color: var(--accent);
+}

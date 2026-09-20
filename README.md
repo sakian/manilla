@@ -37,12 +37,17 @@ monthly call budget, a cost counter and a running accuracy measure. Re-measured
 on three held-out months of the real history at 71.7% accepted unchanged and
 98.6% precision in the auto-confirm band, for $0.36.
 
+Search and filtering are in (VW-5, VW-6): one query behind both the search page
+and the account view, filterable by text, date, amount, direction, envelope,
+account, status and kind, with the filters in the URL so a search can be
+bookmarked and downloaded as the CSV of exactly what is on screen.
+
 Still outstanding: CSV import with a column-mapping step (FR-8), period
-comparisons and income-against-spending (RP-3, RP-4), global transaction search
-(VW-6), progress bars and a pace marker on the dashboard (VW-1, VW-2), a
-balance-over-time chart on an envelope (VW-4), reconciliation of an account
-against a statement (FR-6), and per-month budget overrides in the UI (FR-32,
-which the data model and the reads already support).
+comparisons and income-against-spending (RP-3, RP-4), progress bars and a pace
+marker on the dashboard (VW-1, VW-2), a balance-over-time chart on an envelope
+(VW-4), reconciliation of an account against a statement (FR-6), and per-month
+budget overrides in the UI (FR-32, which the data model and the reads already
+support).
 
 ## What Phase 0 measured
 
@@ -97,7 +102,8 @@ app/                    the web app (Next.js App Router)
   reports/              spending by envelope, month by month, with CSV (RP-1 to RP-6)
   transactions/         entering, correcting and deleting by hand (FR-2, FR-4, FR-5)
   envelopes/            envelopes and groups, transfers, cover an overspend (FR-21 to FR-25, FR-34, FR-35)
-  accounts/             accounts and their transactions (FR-1, VW-5)
+  accounts/             accounts and their transactions, filterable (FR-1, VW-5)
+  search/               search across every transaction (VW-6)
   login/, settings/     passkey sign-in and registered devices (NF-3)
   auth.ts               the session check every page and action goes through
 proxy.ts                redirects a signed-out browser before a page renders
@@ -118,6 +124,7 @@ src/
   ai/ai.ts              the off switch, budget, merchant cache and accuracy measure (NF-5)
   export/export.ts      the whole ledger as JSON or CSV (NF-6)
   transactions/manage.ts manual entry, edits, deletions, account transfers
+  transactions/search.ts one filter query behind the search page and the account view (VW-5, VW-6)
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
   auth/                 passkeys, sessions, recovery codes, RP configuration

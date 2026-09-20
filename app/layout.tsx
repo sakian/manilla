@@ -30,6 +30,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   <Link href="/envelopes">Envelopes</Link>
                   <Link href="/accounts">Accounts</Link>
                   <Link href="/reports">Reports</Link>
+                  <Link href="/search">Search</Link>
                   <Link href="/migrate">Migrate</Link>
                 </nav>
                 <form action={signOutAction} className="topbar-end">
