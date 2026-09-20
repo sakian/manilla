@@ -6,12 +6,17 @@ them without doing it all by hand.
 
 Requirements live in the [requirements doc](https://claude.ai/code/artifact/5da0430a-8b8f-44cd-af2b-277fb6345fb5).
 
-## Status: Phase 1, the core ledger
+## Status: Phase 2, history and reports
 
-Phase 0 (de-risking) is complete. Phase 1 gives you a ledger you can run a month
-in: accounts, envelopes and groups, OFX/QFX import with deduplication, the review
-queue, the monthly budget with income allocation, envelope transfers, and passkey
-sign-in so it is safe to reach from a phone.
+Phase 0 (de-risking) and Phase 1 (the core ledger) are complete: accounts,
+envelopes and groups, OFX/QFX import with deduplication, the review queue, the
+monthly budget with income allocation, envelope transfers, manual entry, and
+passkey sign-in so it is safe to reach from a phone.
+
+Phase 2 is complete bar CSV import: a multi-year GoodBudget export comes across
+with its envelopes, splits, income and transfers; spending reports run over any
+period; the data exports as JSON or CSV; and the database is backed up nightly
+with a restore that has been exercised.
 
 | Decision | Answer |
 | --- | --- |
@@ -26,12 +31,13 @@ multi-year export comes across with its envelopes, splits, income, envelope
 transfers and account transfers, and the balances it cannot rebuild are
 reconciled rather than fudged.
 
-Backups (NF-7) and full data export (NF-6) are in. Still outstanding: reports
-over a custom period (RP-1 to RP-6), CSV import (FR-8), global transaction search
+Still outstanding: CSV import with a column-mapping step (FR-8), period
+comparisons and income-against-spending (RP-3, RP-4), global transaction search
 (VW-6), progress bars and a pace marker on the dashboard (VW-1, VW-2), a
 balance-over-time chart on an envelope (VW-4), reconciliation of an account
 against a statement (FR-6), and per-month budget overrides in the UI (FR-32,
-which the data model and the reads already support).
+which the data model and the reads already support). Phase 3 is the AI
+categorization layer, which Phase 0 measured but which is not switched on yet.
 
 ## What Phase 0 measured
 
@@ -78,6 +84,7 @@ app/                    the web app (Next.js App Router)
   budget/               monthly plan, funding and allocation (FR-27 to FR-31)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
   migrate/              the GoodBudget migration wizard (MG-1 to MG-7)
+  reports/              spending by envelope, month by month, with CSV (RP-1 to RP-6)
   transactions/         entering, correcting and deleting by hand (FR-2, FR-4, FR-5)
   envelopes/            envelopes and groups, transfers, cover an overspend (FR-21 to FR-25, FR-34, FR-35)
   accounts/             accounts and their transactions (FR-1, VW-5)
@@ -97,6 +104,8 @@ src/
   queue/queue.ts        the review queue's reads and writes
   budget/               months, the plan, funding and reversal
   migrate/goodbudget.ts the GoodBudget export, read as transactions (MG-1 to MG-7)
+  reports/reports.ts    spending read from envelope lines, so RP-5 holds by construction
+  export/export.ts      the whole ledger as JSON or CSV (NF-6)
   transactions/manage.ts manual entry, edits, deletions, account transfers
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
@@ -132,7 +141,7 @@ Save them: they are stored hashed, and they are the only way in if the device
 holding your passkey is lost. More devices can be added from Settings.
 
 ```bash
-npm test                         # 315 tests; no network, no spend
+npm test                         # 333 tests; no network, no spend
 npm run typecheck
 npm run import -- path/to/statement.ofx
 ```
@@ -291,6 +300,13 @@ shows what happened.
 **Nothing holding money can be hidden.** Archiving an envelope or an account with
 a balance is refused, and says how much is in the way. An invisible balance still
 counts towards the total the dashboard checks (FR-25, FR-37).
+
+**A spending report reads envelope lines, never transactions.** That one choice
+is what makes RP-5 true by construction rather than by remembering: a transfer
+between your own accounts has no envelope lines so it cannot appear however the
+sum is written, an envelope-to-envelope move is not a transaction at all, and a
+split is already stored as one line per envelope so each is counted at its own
+share without anything having to divide it.
 
 **A migration reports what it cannot do.** GoodBudget's "Fill Envelopes" rows
 carry no amounts, so the money put *into* envelopes over the years is simply not

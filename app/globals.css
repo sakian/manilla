@@ -1281,3 +1281,81 @@ details[open] > summary > .group-summary::before {
   border-color: var(--negative);
   color: var(--negative);
 }
+
+/* --- Reports ------------------------------------------------------------- */
+
+.periods {
+  max-width: 640px;
+}
+
+.period-custom {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin: 12px 0 18px;
+}
+
+.period-custom .field {
+  margin-bottom: 0;
+}
+
+.budget-row.report {
+  grid-template-columns: minmax(0, 2fr) 120px 60px minmax(0, 1fr);
+}
+
+.trend-scroll {
+  overflow-x: auto;
+  margin: 4px 0 8px;
+}
+
+.trend {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 100%;
+}
+
+.trend th,
+.trend td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.trend th:first-child,
+.trend td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+}
+
+.trend thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.trend tfoot td {
+  font-weight: 600;
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
+
+.trend .money {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .budget-row.report {
+    grid-template-columns: minmax(0, 1fr) 100px;
+  }
+  .budget-row.report > span:nth-child(3),
+  .budget-row.report > span:nth-child(4) {
+    display: none;
+  }
+}
