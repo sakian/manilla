@@ -2172,3 +2172,22 @@ details[open] > summary > .group-summary::before {
   color: var(--text-dim);
   overflow-wrap: anywhere;
 }
+
+/* Where one account's rows end and the next's begin. */
+.queue-account {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 16px 6px;
+  border-bottom: 2px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.queue-account:first-child {
+  padding-top: 4px;
+}

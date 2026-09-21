@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Database } from '../../db/client.ts';
 import {
+  accountGroups,
   accounts,
   envelopeGroups,
   envelopes,
@@ -30,6 +31,7 @@ export type QueueRow = {
   payeeRaw: string;
   payeeDisplay: string;
   amountCents: number;
+  accountId: string;
   accountName: string;
   memo: string | null;
   envelopeId: string | null;
@@ -151,7 +153,10 @@ export async function pendingTransactions(
       payeeRaw: transactions.payeeRaw,
       amountCents: transactions.amountCents,
       memo: transactions.memo,
+      accountId: accounts.id,
       accountName: accounts.name,
+      accountGroupPosition: accountGroups.position,
+      accountGroupName: accountGroups.name,
       createdAt: transactions.createdAt,
       // Whatever the row is currently proposing: the ledger's own line if it has
       // one, and otherwise the suggestion. Below the medium band a suggestion is
@@ -167,6 +172,7 @@ export async function pendingTransactions(
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .leftJoin(accountGroups, eq(accounts.groupId, accountGroups.id))
     .leftJoin(txnLines, eq(txnLines.transactionId, transactions.id))
     .leftJoin(suggestions, eq(suggestions.transactionId, transactions.id))
     .leftJoin(
@@ -190,12 +196,31 @@ export async function pendingTransactions(
 
   const today = Date.now();
 
+  // Then by account, in the order the accounts screen lists them - ungrouped
+  // last - so one statement's rows read together. After the limit rather than
+  // in it: sorted by account first, a busy chequing account could fill every
+  // place and hide the card's oldest rows entirely. The sort is stable, so each
+  // account's rows stay oldest first.
+  const accountOrder = (row: (typeof rows)[number]) =>
+    [
+      row.accountGroupPosition ?? Number.MAX_SAFE_INTEGER,
+      row.accountGroupName ?? '',
+      row.accountName,
+      row.accountId,
+    ] as const;
+  rows.sort((left, right) => {
+    const a = accountOrder(left);
+    const b = accountOrder(right);
+    return a[0] - b[0] || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]) || a[3].localeCompare(b[3]);
+  });
+
   return rows.map((row) => ({
     id: row.id,
     date: row.date,
     payeeRaw: row.payeeRaw,
     payeeDisplay: normalizePayee(row.payeeRaw).display,
     amountCents: Number(row.amountCents),
+    accountId: row.accountId,
     accountName: row.accountName,
     memo: row.memo,
     envelopeId: row.envelopeId,

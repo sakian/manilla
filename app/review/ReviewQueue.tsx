@@ -30,7 +30,7 @@
  * screen whose whole purpose is looking.
  */
 
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { Fragment, useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
@@ -135,6 +135,13 @@ export default function ReviewQueue({
     () => new Map(transfers.map((candidate) => [candidate.transactionId, candidate])),
     [transfers],
   );
+
+  /** How many are waiting in each account, for its heading. */
+  const perAccount = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(row.accountId, (counts.get(row.accountId) ?? 0) + 1);
+    return counts;
+  }, [rows]);
 
   const envelopeById = useMemo(
     () => new Map(envelopes.map((envelope) => [envelope.id, envelope])),
@@ -285,86 +292,97 @@ export default function ReviewQueue({
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
 
-      {rows.map((row) => {
+      {rows.map((row, at) => {
         const decision = decisionFor(row.id);
         const confidence = confidenceOf(row);
         const chosen = decision.envelopeId;
         /** Filled in by the pipeline rather than chosen here: this is the row a press settles. */
         const prefilled = row.envelopeId !== null;
 
+        // A heading wherever the account changes: the rows arrive grouped by
+        // account, and one statement's charges read best together.
+        const firstOfAccount = at === 0 || rows[at - 1]!.accountId !== row.accountId;
+
         return (
-          <div key={row.id} className={`queue-row${decision.confirmed ? ' decided' : ''}`}>
-            <span className="queue-payee">
-              {row.payeeDisplay}
-              {row.memo && <span className="muted"> · {row.memo}</span>}
-              {/* Beside what the transaction says it is, because that is what the
-                  confidence is *about* - down in the meta line it read as one
-                  more fact about the row rather than a judgement of the guess. */}
-              <span className={`band ${confidence.tone}`} title={row.reason ?? undefined}>
-                {confidence.label}
-                {confidence.detail && ` ${confidence.detail}`}
+          <Fragment key={row.id}>
+            {firstOfAccount && (
+              <div className="queue-account">
+                <span>{row.accountName}</span>
+                <span className="muted">{perAccount.get(row.accountId)}</span>
+              </div>
+            )}
+            <div className={`queue-row${decision.confirmed ? ' decided' : ''}`}>
+              <span className="queue-payee">
+                {row.payeeDisplay}
+                {row.memo && <span className="muted"> · {row.memo}</span>}
+                {/* Beside what the transaction says it is, because that is what the
+                    confidence is *about* - down in the meta line it read as one
+                    more fact about the row rather than a judgement of the guess. */}
+                <span className={`band ${confidence.tone}`} title={row.reason ?? undefined}>
+                  {confidence.label}
+                  {confidence.detail && ` ${confidence.detail}`}
+                </span>
+                {/* The bank's own words, whole. The cleaned name is right for
+                    matching and wrong for deciding: it drops everything after a
+                    "*" as a reference code, so GOOGLE*YOUTUBEPREMIUM and
+                    GOOGLE*CLOUD both read "Google". */}
+                {saysMore(row) && <span className="queue-raw">{row.payeeRaw}</span>}
+                {transferFor.get(row.id) && <span className="band medium">transfer?</span>}
               </span>
-              {/* The bank's own words, whole. The cleaned name is right for
-                  matching and wrong for deciding: it drops everything after a
-                  "*" as a reference code, so GOOGLE*YOUTUBEPREMIUM and
-                  GOOGLE*CLOUD both read "Google". */}
-              {saysMore(row) && <span className="queue-raw">{row.payeeRaw}</span>}
-              {transferFor.get(row.id) && <span className="band medium">transfer?</span>}
-            </span>
 
-            <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
-              {formatMoney(row.amountCents, { sign: 'incoming' })}
-            </span>
+              <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
+                {formatMoney(row.amountCents, { sign: 'incoming' })}
+              </span>
 
-            <span className="muted queue-meta">
-              <span>{longDate(row.date)}</span>
-              <span>{row.accountName}</span>
-              {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
-            </span>
+              <span className="muted queue-meta">
+                <span>{longDate(row.date)}</span>
+                {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
+              </span>
 
-            <span className="queue-choice">
-              {/* Everything this row can become is behind this one control. */}
-              <button
-                className={`envelope-pick${chosen ? ' chosen' : ''}`}
-                onClick={() => openPicker(row)}
-                disabled={pending}
-              >
-                {/* With its category: "Insurance" alone could be the car's or the
-                    house's, and the queue is where that gets settled. */}
-                {chosen ? (
-                  <>
-                    <span className="envelope-pick-group">
-                      {envelopeById.get(chosen)?.groupName}
-                    </span>{' '}
-                    {envelopeById.get(chosen)?.name}
-                  </>
-                ) : (
-                  'Choose an envelope'
-                )}
-              </button>
-
-              {/* Choosing is itself a decision, so it confirms; a row filled in
-                  by the pipeline has not been decided by anyone yet, and that is
-                  the one a press settles. Unconfirming empties it again rather
-                  than leaving a figure nobody has agreed to sitting there. */}
-              {(prefilled || decision.confirmed) && chosen && (
+              <span className="queue-choice">
+                {/* Everything this row can become is behind this one control. */}
                 <button
-                  className={decision.confirmed ? 'link-button' : 'primary confirm'}
-                  onClick={() =>
-                    set(
-                      row.id,
-                      decision.confirmed
-                        ? { confirmed: false, envelopeId: row.envelopeId, createRule: false }
-                        : { confirmed: true },
-                    )
-                  }
+                  className={`envelope-pick${chosen ? ' chosen' : ''}`}
+                  onClick={() => openPicker(row)}
                   disabled={pending}
                 >
-                  {decision.confirmed ? 'Unconfirm' : 'Confirm'}
+                  {/* With its category: "Insurance" alone could be the car's or the
+                      house's, and the queue is where that gets settled. */}
+                  {chosen ? (
+                    <>
+                      <span className="envelope-pick-group">
+                        {envelopeById.get(chosen)?.groupName}
+                      </span>{' '}
+                      {envelopeById.get(chosen)?.name}
+                    </>
+                  ) : (
+                    'Choose an envelope'
+                  )}
                 </button>
-              )}
-            </span>
-          </div>
+
+                {/* Choosing is itself a decision, so it confirms; a row filled in
+                    by the pipeline has not been decided by anyone yet, and that is
+                    the one a press settles. Unconfirming empties it again rather
+                    than leaving a figure nobody has agreed to sitting there. */}
+                {(prefilled || decision.confirmed) && chosen && (
+                  <button
+                    className={decision.confirmed ? 'link-button' : 'primary confirm'}
+                    onClick={() =>
+                      set(
+                        row.id,
+                        decision.confirmed
+                          ? { confirmed: false, envelopeId: row.envelopeId, createRule: false }
+                          : { confirmed: true },
+                      )
+                    }
+                    disabled={pending}
+                  >
+                    {decision.confirmed ? 'Unconfirm' : 'Confirm'}
+                  </button>
+                )}
+              </span>
+            </div>
+          </Fragment>
         );
       })}
 

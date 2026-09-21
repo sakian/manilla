@@ -61,9 +61,10 @@ describe(
       date?: string;
       envelopeId?: string;
       confidence?: number;
+      account?: string;
     }) {
       const id = await recordTransaction(db, {
-        accountId,
+        accountId: options.account ?? accountId,
         date: options.date ?? '2026-02-01',
         amountCents: options.amountCents,
         payeeRaw: options.payee,
@@ -365,6 +366,48 @@ describe(
       assert.equal(rows.length, 2);
       assert.equal(rows[0]!.payeeDisplay, 'Shell', 'oldest first, whatever order they arrived in');
       assert.equal(await pendingCount(db), 2);
+    });
+
+    test('each account’s rows read together, in the accounts screen’s order', async () => {
+      const { createAccountGroup, moveAccountToGroup } = await import('../accounts/groups.ts');
+      const visa = await openAccount(db, { name: 'Visa', kind: 'credit_card' });
+      const savings = await openAccount(db, { name: 'Savings', kind: 'savings' });
+      // Cards before banking on this household's accounts screen; Savings has no
+      // category, so it comes last.
+      const cards = await createAccountGroup(db, 'Cards');
+      const banking = await createAccountGroup(db, 'Banking');
+      await moveAccountToGroup(db, visa, cards);
+      await moveAccountToGroup(db, accountId, banking);
+
+      await pending({ payee: 'SAVINGS FEE', amountCents: -100, date: '2026-01-01', account: savings });
+      await pending({ payee: 'SHELL', amountCents: -4520, date: '2026-01-20' });
+      await pending({ payee: 'NETFLIX', amountCents: -1699, date: '2026-01-15', account: visa });
+      await pending({ payee: 'SAFEWAY', amountCents: -9000, date: '2026-01-05' });
+      await pending({ payee: 'SPOTIFY', amountCents: -1199, date: '2026-01-02', account: visa });
+
+      const rows = await pendingTransactions(db);
+      assert.deepEqual(
+        rows.map((row) => `${row.accountName} ${row.date}`),
+        [
+          'Visa 2026-01-02',
+          'Visa 2026-01-15',
+          'Chequing 2026-01-05',
+          'Chequing 2026-01-20',
+          'Savings 2026-01-01',
+        ],
+      );
+    });
+
+    test('the cap keeps the oldest, whichever account they are in', async () => {
+      const visa = await openAccount(db, { name: 'Visa', kind: 'credit_card' });
+      await pending({ payee: 'SHELL', amountCents: -100, date: '2026-01-10' });
+      await pending({ payee: 'SHELL', amountCents: -200, date: '2026-01-11' });
+      await pending({ payee: 'NETFLIX', amountCents: -300, date: '2026-01-01', account: visa });
+
+      // Grouping by account inside the query would have kept Chequing's two and
+      // left out the card's older one.
+      const rows = await pendingTransactions(db, { limit: 2 });
+      assert.deepEqual(rows.map((row) => row.date).sort(), ['2026-01-01', '2026-01-10']);
     });
 
     test('confirmed transactions leave the queue', async () => {
