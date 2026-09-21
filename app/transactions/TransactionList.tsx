@@ -39,7 +39,6 @@ export default function TransactionList({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
-  const [creating, setCreating] = useState(false);
 
   const open = useCallback((transactionId: string) => {
     setError(null);
@@ -57,13 +56,6 @@ export default function TransactionList({
     <>
       <div className="panel-head">
         <h3>{heading ?? (showAccount ? 'Recent transactions' : 'Transactions')}</h3>
-        <button
-          className="primary"
-          onClick={() => setCreating(true)}
-          disabled={pending || accounts.length === 0}
-        >
-          New transaction
-        </button>
       </div>
 
       {error && <p className="signin-error">{error}</p>}
@@ -83,36 +75,38 @@ export default function TransactionList({
           onClick={() => open(row.id)}
           disabled={pending}
         >
-          <span className="muted txn-date">{row.date}</span>
           <span className="txn-payee">
             {row.payeeRaw}
             {row.kind === 'account_transfer' && <span className="tag">transfer</span>}
           </span>
-          <span className="muted txn-env">
-            {row.kind === 'account_transfer'
-              ? showAccount
-                ? row.accountName
-                : ''
-              : row.envelopeNames.length > 0
-                ? row.envelopeNames.join(', ')
-                : 'uncategorized'}
-            {row.status === 'pending_review' && ' · pending'}
-            {showAccount && row.kind !== 'account_transfer' && ` · ${row.accountName}`}
-          </span>
           <Money cents={row.amountCents} />
+          {/* Date and where it went share one line as flex children, not as two
+              grid cells: a long envelope name squeezed the date's column to
+              nothing and the nowrap date spilled over the top of it. */}
+          <span className="muted txn-meta">
+            <span className="txn-date">{row.date}</span>
+            <span className="txn-env">
+              {row.kind === 'account_transfer'
+                ? showAccount
+                  ? row.accountName
+                  : 'transfer'
+                : row.envelopeNames.length > 0
+                  ? row.envelopeNames.join(', ')
+                  : 'uncategorized'}
+              {row.status === 'pending_review' && ' · pending'}
+              {showAccount && row.kind !== 'account_transfer' && ` · ${row.accountName}`}
+            </span>
+          </span>
         </button>
       ))}
 
-      {(creating || editing) && (
+      {editing && (
         <TransactionForm
           accounts={accounts}
           envelopes={envelopes}
-          {...(editing ? { editing } : {})}
+          editing={editing}
           {...(defaultAccountId ? { defaultAccountId } : {})}
-          onClose={() => {
-            setCreating(false);
-            setEditing(null);
-          }}
+          onClose={() => setEditing(null)}
         />
       )}
     </>

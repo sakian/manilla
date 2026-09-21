@@ -57,7 +57,12 @@ export default function TransactionFilters({
 }) {
   const router = useRouter();
   const [form, setForm] = useState<FormValues>(values);
-  const [open, setOpen] = useState(active);
+  /**
+   * Closed on arrival, even when filters are applied. Landing here from an
+   * envelope card means one filter is set and none of the other ten need to be on
+   * screen; the summary line under the bar already says what is being shown.
+   */
+  const [open, setOpen] = useState(false);
 
   const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
     setForm((current) => ({ ...current, [key]: value }));

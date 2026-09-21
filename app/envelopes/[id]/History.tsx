@@ -68,15 +68,10 @@ export default function History({
 
         return (
           <div key={event.id} className="txn">
-            <span className="muted txn-date">{shortDate(event.date)}</span>
             <span className="txn-payee">
               {event.description}
               {event.kind === 'allocation' && <span className="tag">allocation</span>}
               {event.kind === 'transfer' && <span className="tag">transfer</span>}
-            </span>
-            <span className="muted txn-env">
-              {event.kind === 'transaction' ? event.accountName : ''}
-              {event.pending && ' · pending review'}
             </span>
             <span className="allocation-actions">
               <Money cents={event.amountCents} />
@@ -85,6 +80,13 @@ export default function History({
                   Send back
                 </button>
               )}
+            </span>
+            <span className="muted txn-meta">
+              <span className="txn-date">{shortDate(event.date)}</span>
+              <span className="txn-env">
+                {event.kind === 'transaction' ? event.accountName : ''}
+                {event.pending && ' · pending review'}
+              </span>
             </span>
           </div>
         );

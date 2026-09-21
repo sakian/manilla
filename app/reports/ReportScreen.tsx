@@ -213,14 +213,16 @@ export default function ReportScreen({
 
           {drilldown.map((row) => (
             <div key={`${row.id}-${row.envelope}`} className="txn">
-              <span className="muted txn-date">{row.date}</span>
               <span className="txn-payee">{row.payeeRaw}</span>
-              <span className="muted txn-env">
-                {row.account}
-                {row.shareCents !== row.amountCents && ' · part of a split'}
-                {row.status === 'pending_review' && ' · pending'}
-              </span>
               <Money cents={row.shareCents} />
+              <span className="muted txn-meta">
+                <span className="txn-date">{row.date}</span>
+                <span className="txn-env">
+                  {row.account}
+                  {row.shareCents !== row.amountCents && ' · part of a split'}
+                  {row.status === 'pending_review' && ' · pending'}
+                </span>
+              </span>
             </div>
           ))}
         </section>

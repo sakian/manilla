@@ -1890,8 +1890,8 @@ details[open] > summary > .group-summary::before {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
     'payee amount'
-    'date  env';
-  gap: 2px 10px;
+    'meta  meta';
+  gap: 3px 10px;
   align-items: baseline;
   padding: 9px 4px;
   border-bottom: 1px solid var(--border);
@@ -1918,17 +1918,31 @@ details[open] > summary > .group-summary::before {
   justify-self: end;
 }
 
-.txn-date {
-  grid-area: date;
+/*
+ * One line for when and where. As two grid cells, a long envelope name took the
+ * whole row and squeezed the date's column to nothing, and the nowrap date then
+ * spilled straight over it. As flex children they share the line and the second
+ * one wraps under the first when there is no room.
+ */
+.txn-meta {
+  grid-area: meta;
+  display: flex;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
   font-size: 12px;
+  min-width: 0;
+}
+
+.txn-date {
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .txn-env {
-  grid-area: env;
-  font-size: 12px;
-  text-align: right;
   min-width: 0;
+  text-align: right;
   overflow-wrap: anywhere;
 }
 

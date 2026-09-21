@@ -3,7 +3,6 @@ import { db } from '../../db/client.ts';
 import { budgetMonth } from '../../src/budget/budget.ts';
 import { currentMonth } from '../../src/budget/month.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
-import { accountKindLabel } from '../../src/accounts/manage.ts';
 import { transferOptions } from '../../src/envelopes/transfer.ts';
 import { attention } from '../../src/notices/notices.ts';
 import {
@@ -14,9 +13,10 @@ import {
 } from '../../src/transactions/search.ts';
 import { requireUser } from '../auth.ts';
 import { Hint } from '../Hint.tsx';
-import { Money, Spend } from '../Money.tsx';
+import { Money } from '../Money.tsx';
 import { Notices } from '../Notices.tsx';
 import { PAGE_SIZE, readForm, readPage, readQuery, withParams } from '../search/urlQuery.ts';
+import NewTransaction from './NewTransaction.tsx';
 import TransactionFilters from './TransactionFilters.tsx';
 import TransactionList from './TransactionList.tsx';
 
@@ -34,9 +34,9 @@ import TransactionList from './TransactionList.tsx';
  * page, and it can be widened, narrowed or cleared from where you landed. A
  * bookmark of any of those is a bookmark of a question.
  *
- * When exactly one envelope or one account is being looked at, its own figures are
- * shown above the list, so arriving here from a card does not lose what the card
- * was telling you.
+ * When exactly one envelope or account is being looked at, it names the screen -
+ * but its balances and figures are not repeated here. They are on the card this
+ * screen was reached from, and showing them twice only pushed the list down.
  */
 
 export const dynamic = 'force-dynamic';
@@ -80,6 +80,14 @@ export default async function TransactionsPage(props: {
 
   const empty = isEmptyQuery(query);
   const lastPage = Math.max(1, Math.ceil(found.total / PAGE_SIZE));
+  const liveAccounts = choices.accounts
+    .filter((account) => !account.archived)
+    .map((account) => ({ id: account.id, name: account.name }));
+  const envelopeChoices = envelopes.map((envelope) => ({
+    id: envelope.id,
+    name: envelope.name,
+    groupName: envelope.groupName,
+  }));
 
   return (
     <>
@@ -96,6 +104,9 @@ export default async function TransactionsPage(props: {
               The CSV downloads exactly what the list is showing.
             </Hint>
           </h2>
+          {/* Every screen's actions live in this row, in the same style. The CSV
+              and New used to be a link buried in a sentence and a button inside
+              the list; they are things you do to this screen, so they are here. */}
           <div className="head-actions">
             {!empty && (
               <Link href="/transactions" className="button-link head-button">
@@ -105,49 +116,28 @@ export default async function TransactionsPage(props: {
             <Link href="/import" className="button-link head-button">
               Import
             </Link>
+            <a className="button-link head-button" href={withParams('/api/search', params)} download>
+              CSV
+            </a>
+            <NewTransaction
+              accounts={liveAccounts}
+              envelopes={envelopeChoices}
+              {...(onlyAccount ? { defaultAccountId: onlyAccount.id } : {})}
+            />
           </div>
         </div>
+        {/* Balances, plans and account numbers are on the cards this screen is
+            reached from, so repeating them here only pushed the list down. The
+            one thing not reachable elsewhere is an envelope's allocations and
+            transfers, which are not transactions - so that keeps its link. */}
         {onlyEnvelope && (
           <p className="muted">
-            {onlyEnvelope.groupName} ·{' '}
             <Link href={`/envelopes/${onlyEnvelope.envelopeId}`}>
-              allocations and transfers for this envelope
+              Allocations and transfers for {onlyEnvelope.name}
             </Link>
           </p>
         )}
-        {onlyAccount && (
-          <p className="muted">
-            {onlyAccount.group} · {accountKindLabel(onlyAccount.kind)}
-            {onlyAccount.externalAccountId && ` · no. ${onlyAccount.externalAccountId}`}
-          </p>
-        )}
       </div>
-
-      {/* The figures the card that brought you here was showing. */}
-      {onlyEnvelope && (
-        <div className="callouts">
-          <div className={`callout${onlyEnvelope.balanceCents < 0 ? ' bad' : ''}`}>
-            Balance <strong>{<Money cents={onlyEnvelope.balanceCents} plain />}</strong>
-          </div>
-          <div className="callout">
-            Planned <strong>{<Money cents={onlyEnvelope.plannedCents} plain />}</strong>
-          </div>
-          <div className={`callout${onlyEnvelope.spentCents < 0 ? ' received' : ''}`}>
-            This month <strong>{<Spend cents={onlyEnvelope.spentCents} />}</strong>
-          </div>
-        </div>
-      )}
-      {onlyAccount && (
-        <div className="callouts">
-          <div className={`callout${onlyAccount.balanceCents < 0 ? ' bad' : ''}`}>
-            Balance <strong>{<Money cents={onlyAccount.balanceCents} plain />}</strong>
-          </div>
-          <div className="callout">
-            {onlyAccount.transactionCount.toLocaleString()} in all
-          </div>
-          <div className="callout">Last activity {onlyAccount.lastActivity ?? 'nothing yet'}</div>
-        </div>
-      )}
 
       <section className="panel">
         <TransactionFilters
@@ -165,22 +155,13 @@ export default async function TransactionsPage(props: {
             ? `${found.total.toLocaleString()} transaction${found.total === 1 ? '' : 's'}`
             : `${describeQuery(query, names)} · ${found.total.toLocaleString()} found`}
           , spent <Money cents={found.outCents} plain />, received{' '}
-          <Money cents={found.inCents} plain /> ·{' '}
-          <a className="button-link" href={withParams('/api/search', params)} download>
-            CSV
-          </a>
+          <Money cents={found.inCents} plain />
         </p>
 
         <TransactionList
           rows={found.rows}
-          accounts={choices.accounts
-            .filter((account) => !account.archived)
-            .map((account) => ({ id: account.id, name: account.name }))}
-          envelopes={envelopes.map((envelope) => ({
-            id: envelope.id,
-            name: envelope.name,
-            groupName: envelope.groupName,
-          }))}
+          accounts={liveAccounts}
+          envelopes={envelopeChoices}
           {...(onlyAccount ? { defaultAccountId: onlyAccount.id } : {})}
           showAccount={!onlyAccount}
           heading={

@@ -34,6 +34,7 @@
  */
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useOverlay } from '../useOverlay.ts';
 import { useRouter } from 'next/navigation';
 import type { FundingPlan } from '../../src/budget/budget.ts';
 import { AmountError, centsFromInput, inputFromCents } from '../amount.ts';
@@ -74,6 +75,7 @@ export default function FundEnvelopes({
   onClose: () => void;
 }) {
   const router = useRouter();
+  useOverlay(onClose);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   /** Every row starts on "add", holding its planned monthly amount. */
