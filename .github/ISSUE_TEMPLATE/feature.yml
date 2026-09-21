@@ -1,0 +1,28 @@
+name: Feature or change
+description: Suggest something, or ask why something works the way it does
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth checking first: [docs/requirements.md](../blob/main/docs/requirements.md)
+        lists every requirement and whether it is built, and
+        [docs/design-decisions.md](../blob/main/docs/design-decisions.md) covers the
+        choices that look odd until you know why. CONTRIBUTING.md lists what will be
+        turned down.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you were trying to do, rather than the feature you imagined.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you had in mind
+  - type: input
+    id: requirement
+    attributes:
+      label: Related requirement ID, if you found one
+      placeholder: FR-8

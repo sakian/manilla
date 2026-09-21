@@ -1,217 +1,97 @@
 # Manilla
 
-Envelope budgeting, built to fix the two things that make shared envelope apps
-tedious: getting transactions in often enough to be useful mid-month, and
-categorizing them without doing it all by hand.
+Self-hosted envelope budgeting. Money in your accounts is assigned to virtual
+envelopes — Groceries, Gas, the water bill — and the two sides always agree to the
+cent. Statements go in as OFX/QFX files, a layered classifier proposes an envelope
+for each transaction with how sure it is, and you confirm or correct in one pass.
 
-Requirements live in the [requirements doc](https://claude.ai/code/artifact/5da0430a-8b8f-44cd-af2b-277fb6345fb5).
+Built to fix the two things that make envelope apps tedious: getting transactions
+in often enough to be useful mid-month, and categorizing them without doing it all
+by hand.
 
-## Status: Phase 2, history and reports
-
-Phase 0 (de-risking) and Phase 1 (the core ledger) are complete: accounts,
-envelopes and groups, OFX/QFX import with deduplication, the review queue, the
-monthly budget with income allocation, envelope transfers, manual entry, and
-passkey sign-in so it is safe to reach from a phone.
-
-The review queue stages rather than commits: you work down the list marking rows,
-every suggestion is filled in with how sure it is beside it, and nothing is
-written until you save — so a sitting abandoned halfway leaves the ledger exactly
-as it was. Rules are never written for you: the history layer learns without
-them, and a rule fires *before* history looks at anything, so a wrong one stays
-wrong where history would drift towards the truth. What Manilla does instead is
-notice when one would help — a payee sorted the same way every time, never
-anywhere else — and ask. Declining sticks.
-
-Phase 2 is complete bar CSV import: a multi-year export from another envelope
-budgeting app comes across with its envelopes, splits, income and transfers;
-spending reports run over any period; the data exports as JSON or CSV; and the
-database is backed up nightly with a restore that has been exercised.
-
-| Decision | Answer |
+| | |
 | --- | --- |
-| Stack | TypeScript, Next.js + Postgres, self-hosted in Docker |
-| Banking | Canada (OFX/QFX import; waiting for consumer-driven banking, see below) |
-| AI | Hosted Claude API (`claude-opus-5`), minimal payload, off switch |
-| Users | Single user for now; multi-user deferred |
-| Sign-in | Passkeys (WebAuthn), with single-use recovery codes |
+| Stack | TypeScript, Next.js 16, Postgres, Docker |
+| Sign-in | Passkeys (WebAuthn) with single-use recovery codes |
+| Access | Its own node on your tailnet — no port open to anything |
+| Classifier | Your rules → payee history → optionally the Claude API, with an off switch |
+| Banking | File import. Canada; automatic feeds deliberately deferred |
+| Users | One |
 
-Phase 2 has started: the migration wizard is in (MG-1 to MG-7), so a multi-year
-export from another envelope budgeting app comes across with its envelopes,
-splits, income, envelope transfers and account transfers, and the balances it
-cannot rebuild are reconciled rather than fudged. The wizard asks which app the
-file came from, so a second format is a loader rather than a rewrite.
+## What it does
 
-Phase 3's AI layer is in and on by default, switchable from Settings: it is asked
-only about transactions your own rules and history could not place, with a
-monthly call budget, a cost counter and a running accuracy measure. Re-measured
-on three held-out months of the real history at 71.7% accepted unchanged and
-98.6% precision in the auto-confirm band, for $0.36.
+**The ledger holds.** Every envelope balance and every account balance is derived
+from transactions, allocations and transfers, and their totals are compared after
+every write. A discrepancy is shown, not swallowed.
 
-Search and filtering are in (VW-5, VW-6): one query, filterable by text, date,
-amount, direction, envelope, account, status and kind, with the filters in the
-URL so a search can be bookmarked and downloaded as the CSV of exactly what is
-on screen. It lives on the screens that list transactions rather than on a page
-of its own - the account view with no account picked is every transaction.
+**Import is preview-then-commit.** Duplicates are matched on the bank's own
+transaction ID, look-alikes are flagged rather than dropped, a stated closing
+balance is checked against the result, and a whole import can be undone.
 
-The screens then went through a usability pass. There are three places —
-envelopes, accounts, reports — because seven did not fit across a phone and most
-of them were not destinations: importing is a button where the statements go, the
-review queue is reached from the notice saying there is something to review, and
-migrating lives in Settings because it happens once. The budget screen went
-altogether: it edited the same standing plan the envelopes screen edits, so what
-was worth keeping — what each envelope actually costs, averaged over a year and
-last month — moved next to the box where the plan is set.
+**Categorization proposes; you confirm.** Rules fire first, then recency-weighted
+payee history, then — if you leave it on — a model, only for what the free layers
+could not place. Every suggestion shows its confidence and its reason. Rules are
+never written for you: Manilla notices when one would help and asks.
 
-The dashboard and the envelope list were one column of balances shown twice, so
-they are one screen: two lines per envelope (name with its balance, then plan and
-spend), the whole card a link into it, and renaming, archiving, regrouping and
-planned amounts behind an Edit button. Envelopes are alphabetical inside their
-group and groups keep a manual order — dozens of one are scanned, a handful of the
-other are read as a shape.
+**The review queue stages.** You work down the list marking rows and nothing is
+written until you save, so a sitting abandoned halfway leaves the ledger exactly as
+it was. Suggestions in the medium band and up are already applied to balances so
+mid-month figures are useful, and each envelope card says how much of its balance
+is still unreviewed.
 
-The accounts screen is deliberately the same screen for the other half of the
-ledger: accounts under categories you name, two lines per card, the whole card a
-link, everything structural behind Edit.
+**A budget is a plan; an allocation is a fact.** Funding writes dated records out
+of the income pool, so changing this month's plan cannot rewrite what a past month
+actually received.
 
-Every list of transactions is one screen. There were three — on the accounts
-screen, on an account's page, and a search page — and they were the same list with
-different things pinned, so tapping an envelope, an envelope group, an account or
-an account category now lands on `/transactions` with that filter applied, where it
-can be widened, narrowed or cleared. Filters: payee, memo, free text across both,
-envelope, envelope group, account, account category, status, kind, date range,
-amount range and direction. When exactly one envelope or account is in view its own
-figures stand above the list, so arriving from a card does not lose what the card
-was saying.
+**Everything is one screen where it can be.** Envelopes and the dashboard are one
+list. Accounts are the same screen for the other half of the ledger. Every
+transaction list is `/transactions` with a filter, and pressing an envelope, a
+group, an account or a category lands there with that filter applied. What needs
+attention is one ranked list shown on every main screen — and nothing at all when
+there is nothing to say.
 
-What needs attention is one ranked list, read once on the server and shown on
-every main screen: a ledger that does not add up, an overdrawn pool, overspent
-envelopes, a plan beyond the income to fund it, transactions to review. A quiet
-screen shows nothing at all.
+**Your data leaves as easily as it arrived.** JSON or CSV, any time, from Settings
+or a URL. Passkeys, sessions and recovery codes are never in it: they are
+credentials, not records of your money.
 
-Every dialog's open-ness lives in the URL, as a shallow navigation — so the
-phone's back button closes a dialog instead of leaving the page under it, Escape
-does the same, and an open transaction is a thing you can link to. Nothing is
-fetched to open one.
+## Honest limitations
 
-Moving money is one dialog, beside the envelopes being filled: every envelope is
-listed whether it has a plan or not, amounts can be added or given as a target
-balance, and they can be negative to take money back out. What Available would be
-left with is worked out as you type, and nothing is written until you apply —
-including, if you want, into an overdrawn pool, which the home screen then keeps
-saying out loud. Screen explanations sit behind a `?` beside each heading rather
-than a paragraph you read once and then read past for ever.
-The budget screen shows each envelope's plan next to what it actually cost -
-last month, and averaged over a year - with every figure labelled on every row,
-because a phone has scrolled the table header away by the time you reach
-Groceries. Expected income is measured over six months rather than typed. A
-confirmed transaction can be sent back to the review queue, and a transfer
-pairing undone, without deleting anything.
+- **One user.** The schema is keyed by row so a second login is additive, but
+  nothing is built. The first visitor to a fresh install claims it by registering a
+  passkey, so do that before it is reachable by anyone else.
+- **One currency, and it is dollars.** The symbol is one constant
+  (`src/money.ts`); thousands separators follow the server's locale. Nobody has
+  tried it anywhere else.
+- **Canada-shaped.** OFX/QFX only, and the argument for deferring automatic feeds
+  is specifically about Canadian banking. See [docs/measurements.md](docs/measurements.md).
+- **Automatic categorization tops out around 72%** of transactions accepted
+  unchanged, because 68% of transactions happen at merchants used for more than one
+  envelope. This was measured, not guessed, and it is why the review queue matters
+  more than the classifier.
+- **No rate limiting** on recovery-code sign-in. 60 bits of entropy per code makes
+  brute force impractical, and the app is meant to sit behind a tailnet, but it is
+  worth knowing.
+- **`docker-compose.yml` defaults the Postgres password to `manilla`.** It is bound
+  to loopback and never published, but set `POSTGRES_PASSWORD` anyway.
+- **No audit trail** for edits and deletions yet (NF-2). Undo is a contra entry
+  rather than a delete, so envelope history survives, but a changed transaction does
+  not record what it used to say.
 
-Automatic bank feeds are deliberately not being built yet. Direct OFX is a dead
-end in Canada — there is no Direct Connect with Canadian institutions, and
-Quicken Canada's "Express Web Connect" is aggregator-backed scraping in an OFX
-costume. That leaves the aggregators (Plaid, Flinks, Mastercard Open Banking),
-which mostly work by holding your online banking credentials and signing in as
-you where no real API exists. That breaches the banks' own agreements and moves
-liability for fraud onto the customer, which is a poor trade for saving a monthly
-download.
+## Documentation
 
-The alternative has a date. The Consumer-Driven Banking Act passed in June 2024;
-the Bank of Canada is lead regulator; draft regulations were published on 27 June
-2026 with comments closing 26 August 2026, and the framework comes into force
-within a year of final publication. The large banks must participate from the
-outset, and phase one is read access. So the decision is to wait for it rather
-than integrate an aggregator in the meantime.
-
-One wrinkle worth remembering: phase one phases data in *by account type* —
-deposit and payment accounts first, then lending, and registered and
-non-registered investment accounts last. Chequing and credit cards will arrive
-well before an RRSP does, and RRSPs may stay a manual download for a while after
-the rest is automatic.
-
-The schema is already shaped for it: `bank_sync` is a transaction source and
-`aggregator` an external-id kind, so a feed is additive rather than a rewrite.
-
-### Planned: supplementary imports
-
-A bank line says `AMZN Mktp CA*5O3F50IB2`. Phase 0 measured what that costs:
-68% of transactions happen at merchants used for more than one envelope, and
-Amazon Marketplace alone spans 21 envelopes across 712 transactions. Whether an
-order was clothing or groceries is not in the bank feed, which is why 72% is the
-realistic ceiling and not 90%.
-
-A *supplementary* import is a second file about transactions that are already
-here. It creates nothing; it attaches what the bank left out. The shape is meant
-to take more than one source, because Amazon is the worst case but not the only
-one — a receipt export, a fuel card statement and a utility's own billing history
-are all the same problem.
-
-So a source declares three things: how to read its rows, how to recognise the
-transaction a row belongs to, and what it has to add. Matching starts strict —
-exact amount inside a date window, one-to-one, the same shape as the transfer
-pairing that already exists — and anything ambiguous is left for a person rather
-than guessed at, because a wrong attachment is harder to notice than a missing
-one.
-
-What it adds goes into the memo first. The AI layer already puts the memo in its
-prompt, so item names reach the classifier with no further work, and the review
-queue already shows the memo beside the payee — which turns
-`AMZN Mktp CA*5O3F50IB2` into something a human can categorise at a glance too.
-Splitting an order across envelopes by item is the obvious next step and
-deliberately not the first one.
-
-On getting the data: Amazon removed its order-history CSV in March 2023, and the
-browser extensions that scraped the page went with it. Privacy → Request your
-data → Your orders still works and returns a stable `Retail.OrderHistory` CSV,
-but takes hours to days. An extension that produces the same columns sooner is a
-perfectly good input — which is the argument for defining the format Manilla
-accepts rather than the tool that produced it.
-
-Still outstanding: CSV import with a column-mapping step (FR-8), period
-comparisons and income-against-spending (RP-3, RP-4), progress bars and a pace
-marker on the dashboard (VW-1, VW-2), a balance-over-time chart on an envelope
-(VW-4), reconciliation of an account against a statement (FR-6), and per-month
-budget overrides (FR-32, which the data model and the reads support but which no
-screen now writes — the month navigation that could have gone with them went with
-the budget screen).
-
-## What Phase 0 measured
-
-Measured against a real 7,957-row export from six years of envelope budgeting
-(2021-2026) and a real TD OFX file, holding out the most recent three months
-(435 transactions):
-
-| | History only | History + AI |
-| --- | --- | --- |
-| Accepted unchanged | 62.8% | **72.4%** |
-| Got any suggestion | 90.6% | 99.5% |
-| Auto-confirm precision at 0.95 | - | 98.6% (covering 15.9%) |
-| Cost per 1,000 transactions | $0 | ~$2 |
-
-Re-measured against the same three months once the layer was wired into the app:
-62.8% and 71.7%, with 98.6% auto-confirm precision and $2.09 per 1,000. The model
-is not deterministic, so the AI figure moves by a few tenths of a point between
-runs.
-
-Recorded in section 12 of the requirements doc:
-
-- **90% was never reachable from bank data.** 68% of transactions happen at
-  merchants used for more than one envelope - Amazon Marketplace alone spans 21
-  envelopes across 712 transactions. Whether an order was Clothing or Groceries
-  is not in the bank feed, so no model can read it. 72% is the realistic target.
-- The auto-confirm threshold is **0.95**, not the 0.85 first proposed. At 0.95
-  it confirms 16% of transactions at 98.6% precision; at 0.85 it confirms 30%
-  at 91.7%, which is roughly one wrong entry in twelve.
-- The AI layer earns its place: +9.6 points and near-total coverage for about
-  $1.50 a year at this volume. Its real job is the ~9% of transactions at
-  merchants never seen before, not breaking the ambiguity ceiling.
-- The fast review queue still matters most. Only 16% can be auto-confirmed, so
-  almost everything passes under a human eye either way.
+- [docs/requirements.md](docs/requirements.md) — every FR-/VW-/CA-/RQ-/MG-/NF-/RP-
+  identifier cited in the code, what it asks for, and whether it is built.
+- [docs/design-decisions.md](docs/design-decisions.md) — the choices that would be
+  expensive to reverse, and why.
+- [docs/measurements.md](docs/measurements.md) — what was measured against real
+  data: the accuracy ceiling, the four silent-corruption defects, and the case for
+  waiting on open banking.
 
 ## Getting set up
 
 Node 24 or newer, and Docker for Postgres. Node runs the TypeScript directly, so
-there is no build step in development.
+there is no build step in development, and the test suite is `node --test` with no
+framework.
 
 ```bash
 npm install
@@ -231,18 +111,19 @@ app/                    the web app (Next.js App Router)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
   migrate/              the migration wizard (MG-1 to MG-7)
   reports/              spending by envelope, month by month, with CSV (RP-1 to RP-6)
-  transactions/         entering, correcting and deleting by hand (FR-2, FR-4, FR-5)
+  transactions/         every transaction, filtered however you like, and manual
+                        entry, correction and deletion (VW-5, VW-6, FR-2, FR-4, FR-5)
   envelopes/[id]/       one envelope: its history, transfers, cover an overspend (VW-4, FR-34, FR-35)
   accounts/             accounts under categories (FR-1, FR-3)
-  transactions/         every transaction, filtered however you like (VW-5, VW-6)
+  search/               a redirect, so links saved from the old search page still work
   login/, settings/     passkey sign-in and registered devices (NF-3)
   auth.ts               the session check every page and action goes through
 proxy.ts                redirects a signed-out browser before a page renders
 db/
-  schema.ts             the section 9 data model
+  schema.ts             the data model (docs/requirements.md)
   migrations/           generated by drizzle-kit
 src/
-  money.ts              integer-cents parsing; never floats (NF-1)
+  money.ts              integer-cents parsing and formatting; never floats (NF-1)
   csv.ts                RFC 4180 reader (quoted commas, embedded newlines, BOM)
   ofx/parse.ts          OFX 1.x (SGML) and 2.x (XML), plus QFX
   migrate/sources.ts    which apps can be migrated from, and the loader for each
@@ -259,6 +140,7 @@ src/
   transactions/manage.ts manual entry, edits, deletions, account transfers
   accounts/groups.ts    categories of accounts, shaped like envelope groups (FR-3)
   transactions/search.ts the one filter query behind every transaction list (VW-5, VW-6)
+  transactions/urlQuery.ts the filters as they live in the URL, so a search is a link
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
   auth/                 passkeys, sessions, recovery codes, RP configuration
@@ -267,8 +149,9 @@ src/
     history.ts          recency-weighted history matching (CA-3, CA-4)
     ai.ts               Claude layer for unknown merchants (CA-5, CA-8)
     pipeline.ts         rules -> history -> AI, with confidence bands (CA-7)
-spikes/                 runnable Phase 0 investigations
+spikes/                 runnable investigations; see docs/measurements.md
 deploy/                 the Tailscale serve config, and an Nginx example as a fallback
+docs/                   requirements, design decisions, measurements
 data/samples/           synthetic fixtures, safe to commit
 data/private/           your real exports - gitignored
 ```
@@ -293,7 +176,7 @@ Save them: they are stored hashed, and they are the only way in if the device
 holding your passkey is lost. More devices can be added from Settings.
 
 ```bash
-npm test                         # 358 tests; no network, no spend
+npm test                         # no network, no spend
 npm run typecheck
 npm run import -- path/to/statement.ofx
 ```
@@ -450,6 +333,15 @@ curl -b "manilla_session=..." 'http://localhost:3001/api/export?format=json' -O
 curl -b "manilla_session=..." 'http://localhost:3001/api/export?format=csv&table=transactions' -O
 ```
 
+## The logo
+
+`design/manilla-logo.png` and the icons generated from it by `scripts/icons.mjs`
+are AI-generated, and the accent colours are drawn from the mark. Said plainly
+because it affects what a fork inherits: the copyright status of AI-generated
+images is unsettled in some jurisdictions, so treat the mark as the least certain
+thing in this repository. Everything else here is covered by the MIT licence in
+the usual way. Replacing it is one file plus `npm run icons`.
+
 ## Running the spikes
 
 Put real exports in `data/private/` first. That folder is gitignored, so
@@ -457,7 +349,7 @@ financial data never reaches version control.
 
 ```bash
 npm run ofx              # profile bank OFX/QFX files
-npm run goodbudget       # profile an export, cache parsed history
+npm run goodbudget       # profile an export from another app, cache parsed history
 npm run categorize       # accuracy of rules + history layers (free)
 ```
 
@@ -470,77 +362,5 @@ npm run categorize -- --ai --limit 100   # cap the spend while trying it
 npm run categorize -- --months 3         # widen the held-out window
 ```
 
-Credentials come from `ant auth login` or `ANTHROPIC_API_KEY`.
+The key comes from `ANTHROPIC_API_KEY`, which `.env.example` shows where to put.
 
-## Design decisions worth knowing
-
-**Money is integer cents everywhere.** `parseAmount` works on the digit string
-rather than `parseFloat`, because `1234.56 * 100` is `123455.99999999999` in
-floating point. Ambiguous input (`"1.234"`) is parsed and flagged, never
-silently guessed.
-
-**Dates are plain `YYYY-MM-DD` strings, not `Date` objects.** A bank posting
-date is a calendar date, not an instant. Parsing `20250903000000[-6:MDT]` into a
-`Date` and reading it elsewhere can shift a transaction into the previous day,
-and therefore into the wrong budget month.
-
-**Date *format* is decided per file, never per row.** The real export this was
-built against is D/M/Y despite being a North American file. The format is inferred from rows
-that can only be read one way - a first component above 12 - and 4,450 such rows
-settle it. Guessing per row would have silently misdated thousands of
-transactions.
-
-**Automation proposes, you confirm.** Imported transactions arrive as
-*pending review* with a suggested envelope and a confidence score. High
-confidence is bulk-confirmable; low confidence is left uncategorized with
-candidates rather than guessed at.
-
-**The AI layer is last, and asked per transaction rather than per merchant.**
-Rules and history handle what they can for free, so the model only sees what they
-could not place. Caching one answer per merchant looks like the obvious saving
-and measured ten points *worse*: 68% of transactions happen at merchants used for
-more than one envelope, and the amount is what separates them, so one answer for
-"AMAZON" applied to every Amazon charge throws that signal away. A confident
-answer is cached for that merchant - a fuel station is a fuel station - and an
-unsure one is asked again with its own amount. A monthly call budget is checked
-before each call rather than after, a failed call stops the layer instead of the
-import, and Settings shows exactly what is sent: payee text, amount, date, the
-memo when there is one, and your envelope names. Never a balance, and nothing
-from outside the transaction itself - though the memo is whatever your bank
-wrote there, and banks write names and partial account numbers into memos. It
-goes because on a line like `AMZN Mktp CA*5O3F50IB2` it is often the only thing
-that says what was bought. The switch is there for anyone who would rather it
-did not.
-
-**A budget is a plan; an allocation is a fact.** The plan says what each envelope
-should receive each month. Funding writes dated allocation records out of the
-income pool, so changing December's plan cannot rewrite what August actually
-received (FR-30). Funding proposes the *remainder* of the plan, so funding twice
-never fills twice, and per-paycheque funding needs no arithmetic.
-
-**Undo is a contra entry, never a delete.** Sending an allocation back writes the
-opposite move rather than removing the record, so the envelope's history still
-shows what happened.
-
-**Nothing holding money can be hidden.** Archiving an envelope or an account with
-a balance is refused, and says how much is in the way. An invisible balance still
-counts towards the total the dashboard checks (FR-25, FR-37).
-
-**A spending report reads envelope lines, never transactions.** That one choice
-is what makes RP-5 true by construction rather than by remembering: a transfer
-between your own accounts has no envelope lines so it cannot appear however the
-sum is written, an envelope-to-envelope move is not a transaction at all, and a
-split is already stored as one line per envelope so each is counted at its own
-share without anything having to divide it.
-
-**A migration reports what it cannot do.** The "Fill Envelopes" rows of the
-format this was built against carry no amounts, so the money put *into* envelopes
-over the years is simply not in the export: past spending rebuilds exactly, past
-envelope balances do not. The wizard says so before anything is written, and
-closes the gap with dated adjustments you read off your old app rather than with
-a number from nowhere.
-
-**Sign-in is a passkey, and sessions have two clocks.** WebAuthn is bound to the
-origin, so there is nothing to phish and nothing to reuse. The cookie holds a
-random token whose hash is what the database stores; sessions lapse after 12 idle
-hours and end for good after 30 days, however busy.

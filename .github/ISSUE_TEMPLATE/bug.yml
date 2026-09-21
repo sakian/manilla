@@ -1,0 +1,39 @@
+name: Bug
+description: Something behaved wrongly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not attach a real bank statement or export.** If a file is involved,
+        reduce it to a couple of synthetic transactions that still reproduce the
+        problem. Real account numbers and amounts are not needed to fix anything.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, and what the app did instead of what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: balances
+    attributes:
+      label: Did a balance come out wrong?
+      description: >
+        If so, what did the envelope total and the account total say? The home
+        screen reports any difference between them. This is the one class of bug
+        that matters most.
+  - type: input
+    id: version
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Running where
+      options:
+        - npm run dev
+        - docker compose (Tailscale node)
+        - docker compose (something else)
+        - other
