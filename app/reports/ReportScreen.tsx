@@ -24,6 +24,7 @@ import type {
 } from '../../src/reports/reports.ts';
 import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
+import { formatMoney } from '../../src/money.ts';
 
 const PRESETS: { key: string; label: string }[] = [
   { key: 'this-month', label: 'This month' },
@@ -32,12 +33,6 @@ const PRESETS: { key: string; label: string }[] = [
   { key: 'last-12-months', label: 'Last 12 months' },
   { key: 'all-time', label: 'All time' },
 ];
-
-function money(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
-}
 
 function monthLabel(month: string): string {
   const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -128,7 +123,7 @@ export default function ReportScreen({
 
       <div className="callouts">
         <div className="callout">
-          Spent <strong>{money(spending.totalCents)}</strong>
+          Spent <strong>{formatMoney(spending.totalCents)}</strong>
         </div>
         <div className="callout">
           {period.from} to {period.to}
@@ -155,7 +150,7 @@ export default function ReportScreen({
             <div key={group.groupId}>
               <div className="budget-group">
                 <span>{group.name}</span>
-                <span className="money">{money(group.spentCents)}</span>
+                <span className="money">{formatMoney(group.spentCents)}</span>
               </div>
               {group.envelopes.map((envelope) => {
                 const share =
@@ -172,7 +167,7 @@ export default function ReportScreen({
                         {envelope.name}
                       </button>
                     </span>
-                    <span className="money">{money(envelope.spentCents)}</span>
+                    <span className="money">{formatMoney(envelope.spentCents)}</span>
                     <span className="muted">{share}%</span>
                     <span className="muted">
                       {envelope.transactionCount}{' '}
@@ -187,7 +182,7 @@ export default function ReportScreen({
           {spending.groups.length > 0 && (
             <div className="budget-row report total">
               <span>Total</span>
-              <span className="money">{money(spending.totalCents)}</span>
+              <span className="money">{formatMoney(spending.totalCents)}</span>
               <span />
               <span />
             </div>
@@ -260,10 +255,10 @@ export default function ReportScreen({
                     </td>
                     {row.byMonth.map((cents, at) => (
                       <td key={trend.months[at]} className="money">
-                        {cents === 0 ? <span className="muted">–</span> : money(cents)}
+                        {cents === 0 ? <span className="muted">–</span> : formatMoney(cents)}
                       </td>
                     ))}
-                    <td className="money">{money(row.totalCents)}</td>
+                    <td className="money">{formatMoney(row.totalCents)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -272,10 +267,10 @@ export default function ReportScreen({
                   <td>All envelopes</td>
                   {trend.totalsByMonth.map((cents, at) => (
                     <td key={trend.months[at]} className="money">
-                      {money(cents)}
+                      {formatMoney(cents)}
                     </td>
                   ))}
-                  <td className="money">{money(trend.totalCents)}</td>
+                  <td className="money">{formatMoney(trend.totalCents)}</td>
                 </tr>
               </tfoot>
             </table>

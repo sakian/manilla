@@ -24,6 +24,7 @@ import {
   type PreviewRow,
 } from './actions.ts';
 import type { ImportRecord } from '../../src/import/ofxImport.ts';
+import { formatMoney } from '../../src/money.ts';
 
 type Decision = 'add' | 'skip' | 'link';
 
@@ -47,12 +48,6 @@ type Preview = {
   warnings: string[];
   aiNote?: string;
 };
-
-function money(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
-}
 
 /**
  * What each row does if nobody touches it. A transfer half links, because the
@@ -347,13 +342,13 @@ export default function ImportScreen({
           {preview.balance && !preview.balance.matches && (
             <p className="budget-warning">
               Balance off by{' '}
-              {money(preview.balance.statedCents - preview.balance.projectedCents)}: the statement
-              says {money(preview.balance.statedCents)}, this leaves{' '}
-              {money(preview.balance.projectedCents)}.{' '}
+              {formatMoney(preview.balance.statedCents - preview.balance.projectedCents)}: the statement
+              says {formatMoney(preview.balance.statedCents)}, this leaves{' '}
+              {formatMoney(preview.balance.projectedCents)}.{' '}
               <Hint label="What a balance difference means">
                 Usually history from before this file is missing (FR-14). On a first import,
                 setting the account&rsquo;s opening balance{' '}
-                {money(preview.balance.statedCents - preview.balance.projectedCents)} higher, as of
+                {formatMoney(preview.balance.statedCents - preview.balance.projectedCents)} higher, as of
                 the day before the earliest row here, makes the two agree. The import works either
                 way; the check is only telling you what it sees.
               </Hint>

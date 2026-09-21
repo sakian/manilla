@@ -37,16 +37,11 @@ import {
   revertMigrationAction,
   type PlanSummary,
 } from './actions.ts';
+import { formatMoney } from '../../src/money.ts';
 
 type Step = 'files' | 'mapping' | 'report' | 'done';
 
 const ACCOUNT_KINDS = ['chequing', 'savings', 'credit_card', 'cash', 'line_of_credit'] as const;
-
-function money(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
-}
 
 /** `Vehicle:Gas` becomes group "Vehicle", name "Gas". */
 function splitName(full: string): { group: string; name: string } {
@@ -586,7 +581,7 @@ export default function MigrateScreen({
                       <div key={envelope.id} className="map-row reconcile">
                         <span className="map-name">
                           <span className="muted">{envelope.groupName}</span> {envelope.name}
-                          <span className="muted"> · now {money(envelope.balanceCents)}</span>
+                          <span className="muted"> · now {formatMoney(envelope.balanceCents)}</span>
                         </span>
                         <input
                           className="amount"

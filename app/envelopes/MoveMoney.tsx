@@ -20,6 +20,7 @@ import {
   coverPlanAction,
   transferAction,
 } from './actions.ts';
+import { formatMoney } from '../../src/money.ts';
 
 export type EnvelopeChoice = {
   id: string;
@@ -27,12 +28,6 @@ export type EnvelopeChoice = {
   groupName: string;
   balanceCents: number;
 };
-
-function money(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
-}
 
 function today(): string {
   const now = new Date();
@@ -94,7 +89,7 @@ export function TransferDialog({
             <select value={from} onChange={(event) => setFrom(event.target.value)}>
               {envelopes.map((envelope) => (
                 <option key={envelope.id} value={envelope.id}>
-                  {envelope.groupName} · {envelope.name} ({money(envelope.balanceCents)})
+                  {envelope.groupName} · {envelope.name} ({formatMoney(envelope.balanceCents)})
                 </option>
               ))}
             </select>
@@ -107,7 +102,7 @@ export function TransferDialog({
                 .filter((envelope) => envelope.id !== from)
                 .map((envelope) => (
                   <option key={envelope.id} value={envelope.id}>
-                    {envelope.groupName} · {envelope.name} ({money(envelope.balanceCents)})
+                    {envelope.groupName} · {envelope.name} ({formatMoney(envelope.balanceCents)})
                   </option>
                 ))}
             </select>
@@ -225,7 +220,7 @@ export function CoverDialog({
       <div className="picker dialog" onClick={(event) => event.stopPropagation()}>
         <div className="picker-head">
           <strong>Cover {envelopeName}</strong>
-          {plan && <span className="money neg">{money(-plan.neededCents)}</span>}
+          {plan && <span className="money neg">{formatMoney(-plan.neededCents)}</span>}
         </div>
 
         <div className="dialog-body">
@@ -252,7 +247,7 @@ export function CoverDialog({
                     <span>
                       <span className="muted">{source.groupName}</span> {source.name}
                     </span>
-                    <span className="money">{money(source.spareCents)}</span>
+                    <span className="money">{formatMoney(source.spareCents)}</span>
                     <span>
                       <input
                         className="amount"
@@ -271,7 +266,7 @@ export function CoverDialog({
               </div>
               {plan.proposedCents < plan.neededCents && (
                 <p className="budget-warning">
-                  Even emptying every other envelope leaves {money(plan.neededCents - plan.proposedCents)}{' '}
+                  Even emptying every other envelope leaves {formatMoney(plan.neededCents - plan.proposedCents)}{' '}
                   uncovered. More income is the only thing that fixes that.
                 </p>
               )}
@@ -347,7 +342,7 @@ export function ArchiveDialog({
       <div className="picker dialog" onClick={(event) => event.stopPropagation()}>
         <div className="picker-head">
           <strong>Archive {envelopeName}</strong>
-          {needsDestination && <span className="money">{money(balanceCents)}</span>}
+          {needsDestination && <span className="money">{formatMoney(balanceCents)}</span>}
         </div>
 
         <div className="dialog-body">
@@ -355,7 +350,7 @@ export function ArchiveDialog({
             <>
               <p className="muted">
                 {envelopeName} {balanceCents > 0 ? 'holds' : 'is overspent by'}{' '}
-                {money(Math.abs(balanceCents))}, and money cannot be archived out of sight - it
+                {formatMoney(Math.abs(balanceCents))}, and money cannot be archived out of sight - it
                 would still count towards the total the dashboard checks. Say where it should go and
                 both happen together.
               </p>
@@ -364,7 +359,7 @@ export function ArchiveDialog({
                 <select value={target} onChange={(event) => setTarget(event.target.value)}>
                   {others.map((envelope) => (
                     <option key={envelope.id} value={envelope.id}>
-                      {envelope.groupName} · {envelope.name} ({money(envelope.balanceCents)})
+                      {envelope.groupName} · {envelope.name} ({formatMoney(envelope.balanceCents)})
                     </option>
                   ))}
                 </select>

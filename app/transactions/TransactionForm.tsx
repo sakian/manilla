@@ -26,6 +26,7 @@ import {
   updateTransferAction,
   type Direction,
 } from './actions.ts';
+import { formatMoney } from '../../src/money.ts';
 
 export type AccountChoice = { id: string; name: string };
 export type EnvelopeChoice = { id: string; name: string; groupName: string };
@@ -45,12 +46,6 @@ export type EditingTransaction = {
 };
 
 type LineDraft = { envelopeId: string; amount: string };
-
-function money(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
-}
 
 function today(): string {
   const now = new Date();
@@ -393,7 +388,7 @@ export default function TransactionForm({
                     <span className={leftToAssign === 0 ? 'muted' : 'split-short'}>
                       {leftToAssign === 0
                         ? 'All assigned'
-                        : `${money(leftToAssign)} left to assign`}
+                        : `${formatMoney(leftToAssign)} left to assign`}
                     </span>
                   )}
                 </div>

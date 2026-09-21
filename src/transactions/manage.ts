@@ -32,6 +32,7 @@ import {
 import { normalizePayee } from '../categorize/normalize.ts';
 import { LedgerError, recordAccountTransfer, recordTransaction } from '../ledger/ledger.ts';
 import { localToday } from '../budget/month.ts';
+import { formatMoney } from '../money.ts';
 
 export class TransactionError extends Error {}
 
@@ -198,8 +199,8 @@ async function assertLinesBalance(
   if (total !== amountCents) {
     const short = amountCents - total;
     throw new TransactionError(
-      `The split does not add up: the parts come to ${format(total)} but the transaction is ` +
-        `${format(amountCents)}, leaving ${format(short)} unaccounted for.`,
+      `The split does not add up: the parts come to ${formatMoney(total)} but the transaction is ` +
+        `${formatMoney(amountCents)}, leaving ${formatMoney(short)} unaccounted for.`,
     );
   }
 
@@ -216,12 +217,6 @@ async function assertLinesBalance(
       throw new TransactionError('An archived envelope cannot take a share of a transaction');
     }
   }
-}
-
-function format(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
 }
 
 // ---------------------------------------------------------------------------

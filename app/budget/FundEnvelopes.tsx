@@ -39,14 +39,9 @@ import type { FundingPlan } from '../../src/budget/budget.ts';
 import { AmountError, centsFromInput, inputFromCents } from '../amount.ts';
 import { Hint } from '../Hint.tsx';
 import { fundEnvelopesAction } from './actions.ts';
+import { formatMoney } from '../../src/money.ts';
 
 type Mode = 'add' | 'target';
-
-function money(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
-}
 
 /**
  * What a row's typed value means, in cents moved out of Available.
@@ -177,16 +172,16 @@ export default function FundEnvelopes({
         <div className="fund-summary">
           <span className="figure">
             <span className="figure-label">Available now</span>
-            <span className="money">{money(funding.availableCents)}</span>
+            <span className="money">{formatMoney(funding.availableCents)}</span>
           </span>
           <span className="figure">
             <span className="figure-label">Moving</span>
-            <span className="money">{money(moves.total)}</span>
+            <span className="money">{formatMoney(moves.total)}</span>
           </span>
           <span className="figure strong">
             <span className="figure-label">Available after</span>
             <span className={`money${availableAfter < 0 ? ' neg' : ''}`}>
-              {money(availableAfter)}
+              {formatMoney(availableAfter)}
             </span>
           </span>
         </div>
@@ -194,7 +189,7 @@ export default function FundEnvelopes({
         <div className="dialog-body">
           {availableAfter < 0 && (
             <p className="budget-warning">
-              That leaves Available {money(-availableAfter)} overdrawn — more allocated to envelopes
+              That leaves Available {formatMoney(-availableAfter)} overdrawn — more allocated to envelopes
               than has actually arrived. You can apply it, and the home screen will keep saying so
               until income covers it.
             </p>
@@ -228,13 +223,13 @@ export default function FundEnvelopes({
 
                   <span className="figure">
                     <span className="figure-label">planned</span>
-                    <span className="money">{money(line.plannedCents)}</span>
+                    <span className="money">{formatMoney(line.plannedCents)}</span>
                   </span>
 
                   <span className="figure">
                     <span className="figure-label">balance</span>
                     <span className={`money${line.balanceCents < 0 ? ' neg' : ''}`}>
-                      {money(line.balanceCents)}
+                      {formatMoney(line.balanceCents)}
                     </span>
                   </span>
 
@@ -281,7 +276,7 @@ export default function FundEnvelopes({
                   <span className="figure">
                     <span className="figure-label">moves</span>
                     <span className={`money${moved < 0 ? ' neg' : moved > 0 ? ' pos' : ' muted'}`}>
-                      {moved === 0 ? '–' : money(moved)}
+                      {moved === 0 ? '–' : formatMoney(moved)}
                     </span>
                   </span>
                 </div>

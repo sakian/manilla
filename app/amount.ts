@@ -8,7 +8,7 @@
  * the same cents as a statement that says the same thing (NF-1).
  */
 
-import { parseAmount } from '../src/money.ts';
+import { formatCents, parseAmount } from '../src/money.ts';
 
 export class AmountError extends Error {}
 
@@ -24,9 +24,11 @@ export function centsFromInput(text: string): number {
   }
 }
 
-/** For putting cents back into an editable field: no currency symbol, no commas. */
-export function inputFromCents(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
-}
+/**
+ * For putting cents back into an editable field: no currency symbol, no commas.
+ *
+ * Which is exactly `formatCents`, and has to stay exactly `formatCents` - what
+ * this writes into the box is what `centsFromInput` above reads back out of it,
+ * and that round-trip is asserted in src/money.test.ts.
+ */
+export const inputFromCents = formatCents;

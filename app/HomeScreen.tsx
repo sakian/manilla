@@ -68,6 +68,7 @@ import {
 } from './envelopes/MoveMoney.tsx';
 import { setPlannedAction } from './budget/actions.ts';
 import FundEnvelopes from './budget/FundEnvelopes.tsx';
+import { formatMoney } from '../src/money.ts';
 
 export type MonthFigures = Record<
   string,
@@ -81,12 +82,6 @@ export type MonthFigures = Record<
     pendingCents: number;
   }
 >;
-
-function money(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
-}
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -124,7 +119,6 @@ export default function HomeScreen({
   const openEnvelopeId = searchParams.get('envelope');
   const [newEnvelope, setNewEnvelope] = useState<Record<string, string>>({});
   const [newGroup, setNewGroup] = useState('');
-
 
   const run = useCallback(
     (work: () => Promise<Result>) => {
@@ -416,7 +410,7 @@ export default function HomeScreen({
                     ) : figure ? (
                       <>
                         <span className="figure">
-                          <span className="figure-label">planned</span> {money(figure.plannedCents)}
+                          <span className="figure-label">planned</span> {formatMoney(figure.plannedCents)}
                         </span>
                         <Spend cents={figure.spentCents} />
                       </>

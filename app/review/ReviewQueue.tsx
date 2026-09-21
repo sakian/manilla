@@ -35,18 +35,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
 import { markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
+import { formatMoney } from '../../src/money.ts';
 import { useOverlay } from '../useOverlay.ts';
-
-/**
- * Spending is red, so it does not also need a minus sign - every row in a queue of
- * imported spending would carry one, which makes it punctuation rather than
- * information. Money coming *in* is the exception worth marking, so it gets a +.
- */
-function formatMoney(cents: number): string {
-  const abs = Math.abs(cents);
-  const amount = `$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
-  return cents > 0 ? `+${amount}` : amount;
-}
 
 function longDate(date: string): string {
   const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -312,7 +302,7 @@ export default function ReviewQueue({
             </span>
 
             <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
-              {formatMoney(row.amountCents)}
+              {formatMoney(row.amountCents, { sign: 'incoming' })}
             </span>
 
             <span className="muted queue-meta">
@@ -373,7 +363,7 @@ export default function ReviewQueue({
             <div className="picker-head">
               <strong>{picking.payeeDisplay}</strong>
               <span className={`money ${picking.amountCents < 0 ? 'neg' : 'pos'}`}>
-                {formatMoney(picking.amountCents)}
+                {formatMoney(picking.amountCents, { sign: 'incoming' })}
               </span>
             </div>
 

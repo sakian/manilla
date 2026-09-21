@@ -1,10 +1,16 @@
-/** Renders integer cents. The only place money becomes a string for display. */
+import { formatMoney } from '../src/money.ts';
+
+/**
+ * Integer cents, rendered and coloured.
+ *
+ * The string comes from `formatMoney` in src/money.ts, which is where the
+ * currency symbol lives. This file used to claim to be "the only place money
+ * becomes a string for display" while eight other files held their own copy of
+ * the same four lines - so changing the symbol meant finding all nine.
+ */
 export function Money({ cents, plain = false }: { cents: number; plain?: boolean }) {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  const text = `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
   const tone = plain ? '' : cents < 0 ? ' neg' : cents > 0 ? ' pos' : '';
-  return <span className={`money${tone}`}>{text}</span>;
+  return <span className={`money${tone}`}>{formatMoney(cents)}</span>;
 }
 
 /**

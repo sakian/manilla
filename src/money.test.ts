@@ -1,6 +1,6 @@
-import { test } from 'node:test';
+import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAmount, formatCents } from './money.ts';
+import { CURRENCY_SYMBOL, formatCents, formatMoney, parseAmount } from './money.ts';
 
 test('plain decimals', () => {
   assert.equal(parseAmount('45.20').cents, 4520);
@@ -59,4 +59,30 @@ test('formatCents round-trips', () => {
   for (const text of ['0.00', '-45.20', '3200.00', '0.01', '-0.09']) {
     assert.equal(formatCents(parseAmount(text).cents), text);
   }
+});
+
+describe('money as a person reads it', () => {
+  test('a symbol, grouped thousands, and two decimal places always', () => {
+    assert.equal(formatMoney(123456), '$1,234.56');
+    assert.equal(formatMoney(5), '$0.05');
+    assert.equal(formatMoney(0), '$0.00');
+    assert.equal(formatMoney(100000000), '$1,000,000.00');
+  });
+
+  test('outgoing money carries a minus', () => {
+    assert.equal(formatMoney(-123456), '-$1,234.56');
+    assert.equal(formatMoney(-1), '-$0.01');
+  });
+
+  // In a queue of imported spending a minus on every row is punctuation, so the
+  // exception is marked instead.
+  test("in a spending list it is the money coming in that is marked", () => {
+    assert.equal(formatMoney(-4520, { sign: 'incoming' }), '$45.20');
+    assert.equal(formatMoney(4520, { sign: 'incoming' }), '+$45.20');
+    assert.equal(formatMoney(0, { sign: 'incoming' }), '$0.00');
+  });
+
+  test('the symbol comes from one place', () => {
+    assert.ok(formatMoney(100).startsWith(CURRENCY_SYMBOL));
+  });
 });

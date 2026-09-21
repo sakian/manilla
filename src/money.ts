@@ -89,7 +89,39 @@ export function parseAmount(raw: string): ParsedAmount {
   };
 }
 
-/** Display helper. Formatting for the UI comes later; this is for spike output. */
+/**
+ * The currency Manilla shows money in.
+ *
+ * One constant, because it used to be a `$` typed into nine separate copies of
+ * the same four-line function, and a build for anywhere else was a nine-file
+ * edit. Grouping still follows the server's locale via `toLocaleString`, which
+ * is a separate assumption and a separate day's work.
+ */
+export const CURRENCY_SYMBOL = '$';
+
+/**
+ * Integer cents as a person reads them: `-$1,234.56`.
+ *
+ * `sign: 'incoming'` is for lists that are almost all spending - a queue of
+ * imported charges, where a minus on every row is punctuation rather than
+ * information, and the colour already says which way it went. There, money
+ * coming *in* is the exception worth marking, so it gets a `+`.
+ */
+export function formatMoney(cents: number, options: { sign?: 'incoming' } = {}): string {
+  const abs = Math.abs(cents);
+  const amount = `${CURRENCY_SYMBOL}${Math.floor(abs / 100).toLocaleString()}.${String(
+    abs % 100,
+  ).padStart(2, '0')}`;
+
+  if (options.sign === 'incoming') return cents > 0 ? `+${amount}` : amount;
+  return cents < 0 ? `-${amount}` : amount;
+}
+
+/**
+ * The machine-readable form: no symbol, no grouping, and it round-trips through
+ * `parseAmount`. For terminal output, the CLI scripts and the model's prompt,
+ * where a thousands separator is noise at best and ambiguity at worst.
+ */
 export function formatCents(cents: number): string {
   const sign = cents < 0 ? '-' : '';
   const abs = Math.abs(cents);
