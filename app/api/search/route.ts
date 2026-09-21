@@ -3,7 +3,7 @@ import { toCsv } from '../../../src/csv.ts';
 import { exportFilename } from '../../../src/export/export.ts';
 import { searchTransactions } from '../../../src/transactions/search.ts';
 import { currentSession } from '../../auth.ts';
-import { readQuery } from '../../search/urlQuery.ts';
+import { readQuery } from '../../../src/transactions/urlQuery.ts';
 
 /**
  * The current search, as CSV.

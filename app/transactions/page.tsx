@@ -9,7 +9,7 @@ import { filterChoices, isEmptyQuery, searchTransactions } from '../../src/trans
 import { requireUser } from '../auth.ts';
 import { Hint } from '../Hint.tsx';
 import { Notices } from '../Notices.tsx';
-import { PAGE_SIZE, readForm, readPage, readQuery, withParams } from '../search/urlQuery.ts';
+import { PAGE_SIZE, readForm, readPage, readQuery, withParams } from '../../src/transactions/urlQuery.ts';
 import NewTransaction from './NewTransaction.tsx';
 import TransactionFilters from './TransactionFilters.tsx';
 import TransactionList from './TransactionList.tsx';

@@ -11,13 +11,13 @@
  * become cents at this boundary and stay cents everywhere inside (NF-1).
  */
 
-import { parseAmount } from '../../src/money.ts';
+import { parseAmount } from '../money.ts';
 import {
   MAX_LIMIT,
   SORT_FIELDS,
   type SortField,
   type TransactionQuery,
-} from '../../src/transactions/search.ts';
+} from './search.ts';
 
 export type Params = Record<string, string | string[] | undefined>;
 

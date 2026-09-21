@@ -20,7 +20,7 @@
 import { useCallback, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { UNCATEGORIZED } from '../../src/transactions/search.ts';
-import { writeQuery, type FormValues } from '../search/urlQuery.ts';
+import { writeQuery, type FormValues } from '../../src/transactions/urlQuery.ts';
 
 export type FilterChoice = { id: string; name: string; archived?: boolean };
 export type EnvelopeFilterChoice = { id: string; name: string; groupName: string };
