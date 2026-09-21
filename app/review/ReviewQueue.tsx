@@ -30,11 +30,12 @@
  * screen whose whole purpose is looking.
  */
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
 import { markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
+import { useOverlay } from '../useOverlay.ts';
 
 /**
  * Spending is red, so it does not also need a minus sign - every row in a queue of
@@ -97,6 +98,7 @@ export default function ReviewQueue({
   accounts: { id: string; name: string }[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -119,9 +121,18 @@ export default function ReviewQueue({
     ),
   );
 
-  const [picking, setPicking] = useState<QueueRow | null>(null);
+  /**
+   * Which row's picker is open lives in the URL, so back closes it. The
+   * navigation is shallow, so a sitting's worth of staged decisions is not
+   * disturbed by opening one (see `useOverlay`).
+   */
+  const overlay = useOverlay('pick', ['to']);
+  const picking = useMemo(
+    () => rows.find((row) => row.id === overlay.value) ?? null,
+    [overlay.value, rows],
+  );
   /** The picker shows envelopes first, and the account list once "not spending". */
-  const [pickingTransfer, setPickingTransfer] = useState(false);
+  const pickingTransfer = searchParams.get('to') === 'account';
   const [transferRule, setTransferRule] = useState(true);
 
   const transferFor = useMemo(
@@ -150,15 +161,14 @@ export default function ReviewQueue({
     }));
   }, []);
 
-  const openPicker = useCallback((row: QueueRow) => {
-    setPicking(row);
-    setPickingTransfer(false);
-  }, []);
+  const openPicker = useCallback(
+    (row: QueueRow) => {
+      overlay.open(row.id);
+    },
+    [overlay],
+  );
 
-  const closePicker = useCallback(() => {
-    setPicking(null);
-    setPickingTransfer(false);
-  }, []);
+  const closePicker = overlay.close;
 
   /** Choosing an envelope is a decision, so it confirms the row as well. */
   const choose = useCallback(
@@ -242,17 +252,6 @@ export default function ReviewQueue({
     },
     [closePicker, router],
   );
-
-  // Escape closes whichever overlay is open. These are not routed, so the
-  // history hook the dialogs use would be overkill for a list picker.
-  useEffect(() => {
-    if (!picking) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closePicker();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [closePicker, picking]);
 
   /** The row's own suggestion, shown at the top of its picker. */
   const suggested = useMemo(
@@ -415,7 +414,10 @@ export default function ReviewQueue({
                   </span>
                 </label>
                 <div className="picker-foot dialog-foot">
-                  <button onClick={() => setPickingTransfer(false)} disabled={pending}>
+                  <button
+                    onClick={() => picking && overlay.open(picking.id)}
+                    disabled={pending}
+                  >
                     Back to envelopes
                   </button>
                 </div>
@@ -455,7 +457,7 @@ export default function ReviewQueue({
                   {/* "No envelope at all" is the same question as "which one". */}
                   <button
                     className="picker-option"
-                    onClick={() => setPickingTransfer(true)}
+                    onClick={() => picking && overlay.open(picking.id, { to: 'account' })}
                     disabled={pending}
                   >
                     <span className="picker-name">Not spending</span>

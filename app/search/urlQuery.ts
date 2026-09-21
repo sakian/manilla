@@ -214,6 +214,14 @@ export function writeQuery(values: Partial<FormValues>, extra: Params = {}): str
  * so a filter this file does not know about - one added later, or one typed by
  * hand - survives paging instead of being quietly dropped.
  */
+/**
+ * Params that say which overlay is open, not what is being looked at.
+ *
+ * They travel in the URL so the back button can close a dialog, but they have no
+ * business in a link to the next page or in a CSV download.
+ */
+const OVERLAY_PARAMS = new Set(['txn', 'new', 'on', 'envelope', 'pick', 'to']);
+
 export function withParams(
   path: string,
   params: Params,
@@ -224,7 +232,7 @@ export function withParams(
   const all = { ...params, ...override };
 
   for (const [key, value] of Object.entries(all)) {
-    if (key === 'page') continue;
+    if (key === 'page' || OVERLAY_PARAMS.has(key)) continue;
     const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
     for (const item of values) {
       if (item.trim()) query.append(key, item);

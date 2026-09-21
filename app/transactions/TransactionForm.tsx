@@ -14,7 +14,6 @@
  */
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
-import { useOverlay } from '../useOverlay.ts';
 import { useRouter } from 'next/navigation';
 import { centsFromInput, inputFromCents } from '../amount.ts';
 import {
@@ -75,7 +74,6 @@ export default function TransactionForm({
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 

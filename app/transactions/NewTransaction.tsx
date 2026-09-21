@@ -5,10 +5,11 @@
  * with Import and the CSV rather than inside the list it adds to.
  *
  * It is a button and a dialog and nothing else; the list below re-reads itself
- * when the server action refreshes the route.
+ * when the server action refreshes the route. Open-ness lives in the URL as
+ * `?new=transaction`, so back closes it like anything else.
  */
 
-import { useState } from 'react';
+import { useOverlay } from '../useOverlay.ts';
 import TransactionForm, {
   type AccountChoice,
   type EnvelopeChoice,
@@ -23,19 +24,19 @@ export default function NewTransaction({
   envelopes: EnvelopeChoice[];
   defaultAccountId?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const overlay = useOverlay('new');
 
   return (
     <>
-      <button onClick={() => setOpen(true)} disabled={accounts.length === 0}>
+      <button onClick={() => overlay.open('transaction')} disabled={accounts.length === 0}>
         New
       </button>
-      {open && (
+      {overlay.value && (
         <TransactionForm
           accounts={accounts}
           envelopes={envelopes}
           {...(defaultAccountId ? { defaultAccountId } : {})}
-          onClose={() => setOpen(false)}
+          onClose={overlay.close}
         />
       )}
     </>

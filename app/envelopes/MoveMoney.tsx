@@ -11,7 +11,6 @@
  */
 
 import { useCallback, useEffect, useState, useTransition } from 'react';
-import { useOverlay } from '../useOverlay.ts';
 import { useRouter } from 'next/navigation';
 import type { CoverPlan } from '../../src/envelopes/transfer.ts';
 import { inputFromCents } from '../amount.ts';
@@ -53,7 +52,6 @@ export function TransferDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [from, setFrom] = useState(fromEnvelopeId ?? envelopes[0]?.id ?? '');
@@ -174,7 +172,6 @@ export function CoverDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
   const [pending, startTransition] = useTransition();
   const [plan, setPlan] = useState<CoverPlan | null>(null);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -322,7 +319,6 @@ export function ArchiveDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const others = envelopes.filter((envelope) => envelope.id !== envelopeId);

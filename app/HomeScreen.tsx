@@ -41,11 +41,12 @@
  */
 
 import { useCallback, useMemo, useState, useTransition, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { FundingPlan } from '../src/budget/budget.ts';
 import type { ManagedGroup } from '../src/envelopes/manage.ts';
 import { Hint } from './Hint.tsx';
+import { useOverlay } from './useOverlay.ts';
 import { Money, Spend } from './Money.tsx';
 import { inputFromCents } from './amount.ts';
 import {
@@ -107,21 +108,21 @@ export default function HomeScreen({
   notices?: ReactNode;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [funded, setFunded] = useState(false);
+  /**
+   * Which dialog is open lives in the URL: `?on=fund`, `?on=move&envelope=<id>`,
+   * and so on. Back closes it, the same as everywhere else in the app, and none
+   * of it costs a server round trip (see `useOverlay`).
+   */
+  const overlay = useOverlay('on', ['envelope']);
+  const openEnvelopeId = searchParams.get('envelope');
   const [newEnvelope, setNewEnvelope] = useState<Record<string, string>>({});
   const [newGroup, setNewGroup] = useState('');
-  const [transferFrom, setTransferFrom] = useState<string | null>(null);
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [covering, setCovering] = useState<{ id: string; name: string } | null>(null);
-  const [archiving, setArchiving] = useState<{
-    id: string;
-    name: string;
-    balanceCents: number;
-  } | null>(null);
+
 
   const run = useCallback(
     (work: () => Promise<Result>) => {
@@ -153,6 +154,17 @@ export default function HomeScreen({
    * counts it - so the queue gets an ordinary nudge, while a genuine mismatch is
    * the only thing here that means something is broken.
    */
+  /** The envelope a dialog is about, when the URL names one. */
+  const openEnvelope = useMemo(
+    () =>
+      openEnvelopeId
+        ? (live
+            .flatMap((group) => group.envelopes)
+            .find((envelope) => envelope.id === openEnvelopeId) ?? null)
+        : null,
+    [live, openEnvelopeId],
+  );
+
   /** Where an envelope can be moved to. Archived groups are not a destination. */
   const liveGroups = useMemo(
     () => live.map((group) => ({ id: group.id, name: group.name })),
@@ -226,10 +238,7 @@ export default function HomeScreen({
           </h2>
           <div className="head-actions">
             <button
-              onClick={() => {
-                setTransferFrom(null);
-                setTransferOpen(true);
-              }}
+              onClick={() => overlay.open('move')}
               disabled={pending}
               title="Move money from one envelope to another"
             >
@@ -242,7 +251,7 @@ export default function HomeScreen({
                 every time you glance at the screen. */}
             <button
               className="primary"
-              onClick={() => setFunded(true)}
+              onClick={() => overlay.open('fund')}
               disabled={pending || funding.lines.length === 0}
               title="Put money into envelopes out of Available, or take it back"
             >
@@ -409,7 +418,7 @@ export default function HomeScreen({
                   <span className="envelope-actions">
                     {overspent && !editing && (
                       <button
-                        onClick={() => setCovering({ id: envelope.id, name: envelope.name })}
+                        onClick={() => overlay.open('cover', { envelope: envelope.id })}
                         disabled={pending}
                       >
                         Cover
@@ -439,13 +448,7 @@ export default function HomeScreen({
                           </label>
                         )}
                         <button
-                          onClick={() =>
-                            setArchiving({
-                              id: envelope.id,
-                              name: envelope.name,
-                              balanceCents: envelope.balanceCents,
-                            })
-                          }
+                          onClick={() => overlay.open('archive', { envelope: envelope.id })}
                           disabled={pending}
                         >
                           Archive
@@ -549,38 +552,40 @@ export default function HomeScreen({
         </details>
       )}
 
-      {funded && (
+      {overlay.value === 'fund' && (
         <FundEnvelopes
           month={month}
           label={monthLabel}
           funding={funding}
-          onClose={() => setFunded(false)}
+          onClose={overlay.close}
         />
       )}
 
-      {transferOpen && (
+      {overlay.value === 'move' && (
         <TransferDialog
           envelopes={choices}
-          {...(transferFrom ? { fromEnvelopeId: transferFrom } : {})}
-          onClose={() => setTransferOpen(false)}
+          {...(openEnvelopeId ? { fromEnvelopeId: openEnvelopeId } : {})}
+          onClose={overlay.close}
         />
       )}
 
-      {covering && (
+      {/* An envelope named in the URL that is no longer there - archived in
+          another tab, or a stale link - closes rather than throwing. */}
+      {overlay.value === 'cover' && openEnvelope && (
         <CoverDialog
-          envelopeId={covering.id}
-          envelopeName={covering.name}
-          onClose={() => setCovering(null)}
+          envelopeId={openEnvelope.id}
+          envelopeName={openEnvelope.name}
+          onClose={overlay.close}
         />
       )}
 
-      {archiving && (
+      {overlay.value === 'archive' && openEnvelope && (
         <ArchiveDialog
-          envelopeId={archiving.id}
-          envelopeName={archiving.name}
-          balanceCents={archiving.balanceCents}
+          envelopeId={openEnvelope.id}
+          envelopeName={openEnvelope.name}
+          balanceCents={openEnvelope.balanceCents}
           envelopes={choices}
-          onClose={() => setArchiving(null)}
+          onClose={overlay.close}
         />
       )}
     </>

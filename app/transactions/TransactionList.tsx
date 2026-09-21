@@ -3,15 +3,19 @@
 /**
  * The transaction list, and the way into editing one (FR-2, VW-5).
  *
- * A row opens the form. Its details - the envelope split in particular - are
- * fetched when the row is opened rather than for every row in the list, because
- * the list is the thing that has to stay quick with ten years of history behind
- * it (NF-8).
+ * A row opens the form, and which row is open lives in the URL as `?txn=<id>`
+ * (see `useOverlay`). So the phone's back button closes the detail instead of
+ * leaving the list, and an open transaction is a thing you can link to.
+ *
+ * Its details - the envelope split in particular - are fetched when the row is
+ * opened rather than for every row in the list, because the list is the thing
+ * that has to stay quick with ten years of history behind it (NF-8).
  */
 
-import { useCallback, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import type { AccountTransaction } from '../../src/accounts/manage.ts';
 import { Money } from '../Money.tsx';
+import { useOverlay } from '../useOverlay.ts';
 import { transactionDetailAction } from './actions.ts';
 import TransactionForm, {
   type AccountChoice,
@@ -39,18 +43,35 @@ export default function TransactionList({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
+  const overlay = useOverlay('txn');
+  const openId = overlay.value;
 
-  const open = useCallback((transactionId: string) => {
+  /**
+   * The URL says which row is open; this fetches what it needs to show.
+   *
+   * Reading it here rather than on the server keeps opening a dialog a shallow
+   * navigation - no round trip for the page, only for the one transaction.
+   */
+  useEffect(() => {
+    if (!openId) {
+      setEditing(null);
+      return;
+    }
+    let current = true;
     setError(null);
     startTransition(async () => {
-      const result = await transactionDetailAction(transactionId);
+      const result = await transactionDetailAction(openId);
+      if (!current) return;
       if (!result.ok) {
         setError(result.error);
         return;
       }
       setEditing(result.transaction);
     });
-  }, []);
+    return () => {
+      current = false;
+    };
+  }, [openId]);
 
   return (
     <>
@@ -72,7 +93,7 @@ export default function TransactionList({
         <button
           key={row.id}
           className="txn txn-button"
-          onClick={() => open(row.id)}
+          onClick={() => overlay.open(row.id)}
           disabled={pending}
         >
           <span className="txn-payee">
@@ -100,13 +121,13 @@ export default function TransactionList({
         </button>
       ))}
 
-      {editing && (
+      {openId && editing && editing.id === openId && (
         <TransactionForm
           accounts={accounts}
           envelopes={envelopes}
           editing={editing}
           {...(defaultAccountId ? { defaultAccountId } : {})}
-          onClose={() => setEditing(null)}
+          onClose={overlay.close}
         />
       )}
     </>

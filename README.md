@@ -88,6 +88,11 @@ every main screen: a ledger that does not add up, an overdrawn pool, overspent
 envelopes, a plan beyond the income to fund it, transactions to review. A quiet
 screen shows nothing at all.
 
+Every dialog's open-ness lives in the URL, as a shallow navigation — so the
+phone's back button closes a dialog instead of leaving the page under it, Escape
+does the same, and an open transaction is a thing you can link to. Nothing is
+fetched to open one.
+
 Moving money is one dialog, beside the envelopes being filled: every envelope is
 listed whether it has a plan or not, amounts can be added or given as a target
 balance, and they can be negative to take money back out. What Available would be
@@ -160,6 +165,7 @@ app/                    the web app (Next.js App Router)
   HomeScreen.tsx        the merged dashboard and envelope list, view and edit modes
   Notices.tsx           one ranked list of what is wrong or worth knowing
   Hint.tsx              screen explanations, behind a marker rather than always on
+  useOverlay.ts         a dialog's open-ness in the URL, so back closes it
   review/               the review queue: decide, then save in one go (RQ-1 to RQ-5)
   budget/               funding envelopes out of Available, and the plan's writes (FR-27 to FR-31)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
