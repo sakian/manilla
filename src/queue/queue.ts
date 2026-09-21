@@ -59,7 +59,9 @@ export type QueueRow = {
 export type TransferCandidate = {
   /** The pending row this is about. */
   transactionId: string;
-  /** The account the other half sits in, which is where the money went or came from. */
+  /** The row that looks like its other half, which already exists. */
+  otherId: string;
+  /** The account that row sits in: where the money went, or came from. */
   accountId: string;
   accountName: string;
   otherDate: string;
@@ -82,6 +84,7 @@ export async function transferCandidates(
   const rows = await db
     .select({
       transactionId: transactions.id,
+      otherId: other.id,
       accountId: other.accountId,
       accountName: otherAccount.name,
       otherDate: other.date,
@@ -353,6 +356,60 @@ export async function recategorize(db: Database, input: Recategorization): Promi
       .values({ contains: transaction.payeeKey, envelopeId: input.envelopeId })
       .onConflictDoNothing();
   }
+}
+
+/**
+ * Join two rows that are the two halves of one transfer (FR-5).
+ *
+ * This is not `convertToTransfer`, and the difference matters. That one takes a
+ * single row and *writes* the other side, because there is no other side yet.
+ * Here both sides already exist - the bank sent two statements - so writing a
+ * third would leave the money leaving one account twice.
+ *
+ * Both rows lose their envelope lines, because a transfer is not spending and
+ * never was, and both are confirmed: pairing them is the decision.
+ */
+export async function pairTransferHalves(
+  db: Database,
+  firstId: string,
+  secondId: string,
+): Promise<void> {
+  const rows = await db
+    .select({
+      id: transactions.id,
+      accountId: transactions.accountId,
+      amountCents: transactions.amountCents,
+      transferPairId: transactions.transferPairId,
+    })
+    .from(transactions)
+    .where(inArray(transactions.id, [firstId, secondId]));
+
+  if (rows.length !== 2) throw new Error('Both halves of a transfer have to exist to pair them');
+  const [first, second] = rows as [(typeof rows)[number], (typeof rows)[number]];
+
+  if (first.transferPairId || second.transferPairId) {
+    throw new Error('One of those is already half of a transfer');
+  }
+  if (first.accountId === second.accountId) {
+    throw new Error('A transfer moves money between two different accounts');
+  }
+  if (Number(first.amountCents) + Number(second.amountCents) !== 0) {
+    throw new Error('Two halves of a transfer have to cancel out exactly');
+  }
+
+  const pairId = crypto.randomUUID();
+  await db.transaction(async (tx) => {
+    await tx.delete(txnLines).where(inArray(txnLines.transactionId, [firstId, secondId]));
+    await tx
+      .update(transactions)
+      .set({
+        kind: 'account_transfer',
+        status: 'confirmed',
+        transferPairId: pairId,
+        updatedAt: new Date(),
+      })
+      .where(inArray(transactions.id, [firstId, secondId]));
+  });
 }
 
 /** Split one transaction across several envelopes (FR-4). */

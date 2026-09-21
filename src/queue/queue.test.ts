@@ -9,6 +9,7 @@ import {
   highConfidenceIds,
   pendingCount,
   pendingTransactions,
+  pairTransferHalves,
   recategorize,
   saveReview,
   splitTransaction,
@@ -105,12 +106,83 @@ describe(
         status: 'pending_review',
       });
 
-      const [candidate] = await transferCandidates(db);
+      const found = await transferCandidates(db);
+
+      // Both rows are waiting, so both are told about it - whichever one you are
+      // looking at should say so, not just whichever happens to sort first.
+      assert.equal(found.length, 2);
+
+      const candidate = found.find((row) => row.transactionId === leaving)!;
       assert.ok(candidate, 'the second statement completes the pair');
-      assert.equal(candidate.transactionId, leaving);
       assert.equal(candidate.accountId, visa);
       assert.equal(candidate.accountName, 'Visa');
       assert.equal(candidate.otherDate, '2026-03-17');
+      assert.equal(
+        found.find((row) => row.transactionId === candidate.otherId)!.otherId,
+        leaving,
+        'and each points at the other',
+      );
+    });
+
+    test('pairing two halves joins the rows that exist rather than writing a third', async () => {
+      const { openAccount: open, accountBalances } = await import('../ledger/ledger.ts');
+      const visa = await open(db, { name: 'Visa', kind: 'credit_card' });
+
+      const leaving = await pending({
+        payee: 'TFR-TO C C',
+        amountCents: -50000,
+        date: '2026-03-15',
+        envelopeId: env.gasId,
+      });
+      const arriving = await recordTransaction(db, {
+        accountId: visa,
+        date: '2026-03-17',
+        amountCents: 50000,
+        payeeRaw: 'PAYMENT RECEIVED',
+        source: 'file_import',
+        status: 'pending_review',
+      });
+
+      await pairTransferHalves(db, leaving, arriving);
+
+      const all = await db.select().from(transactions);
+      assert.equal(all.length, 2, 'two statements, two rows - not a fabricated third');
+      assert.ok(all.every((row) => row.kind === 'account_transfer'));
+      assert.ok(all.every((row) => row.status === 'confirmed'));
+      assert.equal(new Set(all.map((row) => row.transferPairId)).size, 1);
+
+      assert.equal(await balanceOf(env.gasId), 0, 'a transfer is not spending and never was');
+      assert.equal(await pendingCount(db), 0);
+      assert.ok((await checkInvariant(db)).ok);
+
+      const balances = await accountBalances(db);
+      assert.equal(balances.find((row) => row.accountId === visa)!.balanceCents, 50000);
+    });
+
+    test('pairing refuses anything that is not two halves of one transfer', async () => {
+      const { openAccount: open } = await import('../ledger/ledger.ts');
+      const visa = await open(db, { name: 'Visa', kind: 'credit_card' });
+
+      const out = await pending({ payee: 'TFR', amountCents: -50000 });
+      const sameAccount = await pending({ payee: 'REFUND', amountCents: 50000 });
+      const wrongAmount = await recordTransaction(db, {
+        accountId: visa,
+        date: '2026-03-16',
+        amountCents: 49900,
+        payeeRaw: 'NEARLY',
+        source: 'file_import',
+        status: 'pending_review',
+      });
+
+      await assert.rejects(
+        () => pairTransferHalves(db, out, sameAccount),
+        /two different accounts/,
+      );
+      await assert.rejects(() => pairTransferHalves(db, out, wrongAmount), /cancel out exactly/);
+      await assert.rejects(
+        () => pairTransferHalves(db, out, '00000000-0000-0000-0000-000000000000'),
+        /have to exist/,
+      );
     });
 
     test('the same account, a different amount, or too long apart is not a pair', async () => {

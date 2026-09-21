@@ -34,7 +34,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation';
 import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
-import { markAsTransferAction, saveReviewAction } from '../actions.ts';
+import { markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
 
 /**
  * Spending is red, so it does not also need a minus sign - every row in a queue of
@@ -207,6 +207,24 @@ export default function ReviewQueue({
       router.refresh();
     });
   }, [decisionFor, ready, router, rows.length]);
+
+  /** Join two rows that already exist, rather than writing a third (FR-5). */
+  const pairTransfer = useCallback(
+    (candidate: TransferCandidate) => {
+      setError(null);
+      startTransition(async () => {
+        const result = await pairTransferAction(candidate.transactionId, candidate.otherId);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        closePicker();
+        setNote(`Paired with the matching row in ${candidate.accountName}.`);
+        router.refresh();
+      });
+    },
+    [closePicker, router],
+  );
 
   const markTransfer = useCallback(
     (row: QueueRow, toAccountId: string, createRule: boolean) => {
@@ -422,9 +440,7 @@ export default function ReviewQueue({
                   {transferFor.get(picking.id) && (
                     <button
                       className="picker-option suggested"
-                      onClick={() =>
-                        markTransfer(picking, transferFor.get(picking.id)!.accountId, false)
-                      }
+                      onClick={() => pairTransfer(transferFor.get(picking.id)!)}
                       disabled={pending}
                     >
                       <span className="picker-name">

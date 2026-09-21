@@ -2,7 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '../db/client.ts';
-import { recategorize, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
+import {
+  pairTransferHalves,
+  recategorize,
+  saveReview,
+  type ReviewDecision,
+} from '../src/queue/queue.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
 import { createTransferRule } from '../src/rules/rules.ts';
 import { requireUser } from './auth.ts';
@@ -80,6 +85,29 @@ export async function markAsTransferAction(
     revalidatePath('/settings');
     revalidatePath('/');
     return { ok: true as const, ruleMade };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * FR-5. Two rows that are the two halves of one transfer, joined.
+ *
+ * Different from marking a single row as a transfer: there both sides do not
+ * exist yet and the other is written, whereas here the bank sent two statements
+ * and writing a third would move the money twice.
+ */
+export async function pairTransferAction(firstId: string, secondId: string) {
+  try {
+    await requireUser();
+    await pairTransferHalves(db(), firstId, secondId);
+    revalidatePath('/review');
+    revalidatePath('/transactions');
+    revalidatePath('/');
+    return { ok: true as const };
   } catch (error) {
     return {
       ok: false as const,
