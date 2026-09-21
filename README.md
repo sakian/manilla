@@ -119,8 +119,10 @@ npm install
 
 ```
 app/                    the web app (Next.js App Router)
-  page.tsx              home: envelope balances, callouts, balance check (VW-1, VW-3)
+  page.tsx              home: envelope balances and what needs attention (VW-1, VW-3)
   HomeScreen.tsx        the merged dashboard and envelope list, view and edit modes
+  Notices.tsx           one ranked list of what is wrong or worth knowing
+  Hint.tsx              screen explanations, behind a marker rather than always on
   review/               the review queue, keyboard-driven (RQ-1 to RQ-5)
   budget/               the monthly plan against what each envelope costs (FR-27, FR-31, FR-32)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)

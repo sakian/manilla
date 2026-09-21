@@ -150,6 +150,26 @@ describe(
       assert.equal(groups.find((group) => group.id === utilities)!.envelopes.length, 0);
     });
 
+    test('the income pool cannot be renamed or refiled', async () => {
+      const other = await createGroup(db, 'Somewhere else');
+
+      await assert.rejects(
+        () => editEnvelope(db, env.unallocatedId, { name: 'Slush fund' }),
+        EnvelopeError,
+      );
+      await assert.rejects(
+        () => editEnvelope(db, env.unallocatedId, { groupId: other }),
+        EnvelopeError,
+      );
+
+      // Unchanged, and still the one thing income is found by.
+      const pool = (await listEnvelopes(db))
+        .flatMap((group) => group.envelopes)
+        .find((envelope) => envelope.isUnallocated)!;
+      assert.equal(pool.name, 'Available');
+      assert.equal(pool.groupName, 'Living');
+    });
+
     test('nudging swaps a group with its neighbour and stops at the ends', async () => {
       // Groups keep a manual order: there are few of them, and "Income first,
       // Archive last" is a real preference rather than a lookup.

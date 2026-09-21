@@ -367,6 +367,20 @@ export async function editEnvelope(
     .limit(1);
   if (!envelope) throw new EnvelopeError(`No such envelope: ${envelopeId}`);
 
+  /**
+   * The income pool is the app's, not the user's (FR-28). There is exactly one, a
+   * partial unique index enforces that, and everything from the importer to the
+   * budget screen finds it by its flag rather than its name - so letting it be
+   * renamed or filed somewhere else only makes the one envelope everything
+   * depends on harder to recognise. Its balance still moves like any other.
+   */
+  if (envelope.isUnallocated && (edit.name !== undefined || edit.groupId !== undefined)) {
+    throw new EnvelopeError(
+      'The income pool is named and grouped by Manilla; income has to land somewhere ' +
+        'recognisable. Its balance can still be moved like any other envelope.',
+    );
+  }
+
   const changes: Record<string, unknown> = {};
   if (edit.name !== undefined) changes.name = cleanName(edit.name, 'An envelope');
   if (edit.carryOver !== undefined) changes.carryOver = edit.carryOver;

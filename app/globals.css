@@ -1747,3 +1747,49 @@ details[open] > summary > .group-summary::before {
     justify-content: space-between;
   }
 }
+
+/* --- Notices -------------------------------------------------------------- */
+
+.notices {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notice {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  background: var(--surface);
+}
+
+.notice a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.notice a:hover {
+  text-decoration: underline;
+}
+
+.notice.info {
+  border-left-color: var(--border);
+}
+
+.notice.warn {
+  border-left-color: var(--medium);
+}
+
+.notice.bad {
+  border-left-color: var(--negative);
+  color: var(--negative);
+}
+
+.notice.bad .money {
+  color: inherit;
+}

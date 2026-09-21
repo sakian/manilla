@@ -47,6 +47,7 @@ import type { FundingPlan } from '../src/budget/budget.ts';
 import type { ManagedGroup } from '../src/envelopes/manage.ts';
 import { Hint } from './Hint.tsx';
 import { Money } from './Money.tsx';
+import { Notices, type Notice } from './Notices.tsx';
 import { inputFromCents } from './amount.ts';
 import {
   archiveGroupAction,
@@ -153,6 +154,83 @@ export default function HomeScreen({
     [groups],
   );
 
+  /**
+   * Everything the screen has to say, in one list (see `Notices`).
+   *
+   * The books disagreeing and money sitting unreviewed are two different things
+   * and only look alike: uncategorized money *is* accounted for - the invariant
+   * counts it - so the queue gets an ordinary nudge, while a genuine mismatch is
+   * the only thing here that means something is broken.
+   */
+  const notices = useMemo<Notice[]>(() => {
+    const list: Notice[] = [];
+
+    if (!headline.invariantOk) {
+      list.push({
+        kind: 'bad',
+        text: (
+          <>
+            Envelopes and accounts disagree by{' '}
+            <Money cents={headline.unexplainedCents} plain />, which should never happen. The most
+            recent import is the place to look.
+          </>
+        ),
+      });
+    }
+
+    if (headline.unallocatedCents < 0) {
+      list.push({
+        kind: 'bad',
+        text: (
+          <>
+            Available is <Money cents={-headline.unallocatedCents} plain /> overdrawn: the envelopes
+            hold more than has actually arrived, so some balance below is money you do not have yet.
+            Take some back with Fund envelopes, or leave it until income covers it.
+          </>
+        ),
+      });
+    }
+
+    if (headline.overspentCount > 0) {
+      list.push({
+        kind: 'warn',
+        text: (
+          <>
+            {headline.overspentCount} envelope{headline.overspentCount === 1 ? ' is' : 's are'}{' '}
+            overspent. Cover puts it right from another envelope.
+          </>
+        ),
+      });
+    }
+
+    if (headline.waiting > 0) {
+      list.push({
+        kind: 'info',
+        href: '/review',
+        text: (
+          <>
+            {headline.waiting} transaction{headline.waiting === 1 ? '' : 's'} waiting to be
+            categorized.
+          </>
+        ),
+      });
+    }
+
+    if (headline.unallocatedCents > 0) {
+      list.push({
+        kind: 'info',
+        text: (
+          <>
+            <Money cents={headline.unallocatedCents} plain /> in Available, not yet given to an
+            envelope.
+          </>
+        ),
+      });
+    }
+
+    return list;
+  }, [headline]);
+
   /** Where an envelope can be moved to. Archived groups are not a destination. */
   const liveGroups = useMemo(
     () => live.map((group) => ({ id: group.id, name: group.name })),
@@ -223,23 +301,26 @@ export default function HomeScreen({
           </h2>
           <div className="head-actions">
             <button
-              className="primary"
               onClick={() => {
                 setTransferFrom(null);
                 setTransferOpen(true);
               }}
               disabled={pending}
             >
-              Move money
+              Move between envelopes
             </button>
             {/* Every envelope is fundable, so this is only unreachable when
                 there are none at all. */}
+            {/* No amount in the label: it was the plan's remainder, which is
+                one of several things this dialog does and not the one anyone
+                came for. */}
             <button
+              className="primary"
               onClick={() => setFunded(true)}
               disabled={pending || funding.lines.length === 0}
-              title="Move money between Available and the envelopes"
+              title="Put money into envelopes out of Available, or take it back"
             >
-              {funding.totalCents === 0 ? 'Move money in' : `Fund ${money(funding.totalCents)}`}
+              Fund envelopes
             </button>
             <button
               onClick={() => setEditing(!editing)}
@@ -254,48 +335,20 @@ export default function HomeScreen({
 
       </div>
 
-      <div className="callouts">
-        {headline.waiting > 0 && (
-          <Link href="/review" className="callout">
-            <strong>{headline.waiting}</strong> awaiting review
-          </Link>
-        )}
-        <div className={`callout${headline.unallocatedCents < 0 ? ' bad' : ''}`}>
-          <strong>
-            <Money cents={headline.unallocatedCents} />
-          </strong>{' '}
-          {headline.unallocatedCents < 0 ? 'overdrawn' : 'unallocated'}
-        </div>
-        {headline.overspentCount > 0 && (
-          <div className="callout warn">
-            <strong>{headline.overspentCount}</strong> envelope
-            {headline.overspentCount === 1 ? '' : 's'} overspent
-          </div>
-        )}
-        {!headline.invariantOk && (
-          <div className="callout bad">
-            Ledger out of balance by <Money cents={headline.unexplainedCents} />
-          </div>
-        )}
-      </div>
-
-      {/* Overdrawing Available is allowed but is not a neutral state: more has
-          been given to envelopes than has arrived, so some envelope's balance is
-          money that is not there yet. It is said here every visit, not only in
-          the dialog that caused it. */}
-      {headline.unallocatedCents < 0 && (
-        <p className="budget-warning bad">
-          Available is <Money cents={-headline.unallocatedCents} plain /> overdrawn: the envelopes
-          hold more than has actually arrived. Take some back with Move money, or leave it until
-          income covers it — but until then the balances below are promising money you do not have.
-        </p>
-      )}
+      <Notices notices={notices} />
 
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
 
       {live.map((group, groupIndex) => {
         const envelopes = group.envelopes.filter((envelope) => envelope.archivedAt === null);
+        /**
+         * The group holding the income pool is the app's, not the user's. There
+         * is exactly one pool (a partial unique index says so), it is where
+         * income lands by definition, and renaming, archiving or filling its
+         * group with ordinary envelopes would all make that harder to see.
+         */
+        const systemGroup = envelopes.some((envelope) => envelope.isUnallocated);
 
         return (
           <details key={group.id} className="panel group-panel" open>
@@ -308,7 +361,7 @@ export default function HomeScreen({
               </span>
             </summary>
 
-            {editing && (
+            {editing && !systemGroup && (
             <div className="group-tools">
               <button
                 onClick={() => run(() => nudgeGroupAction(group.id, 'up'))}
@@ -362,7 +415,7 @@ export default function HomeScreen({
                     {envelope.isUnallocated && <span className="tag">income pool</span>}
                     {overspent && <span className="tag warn">overspent</span>}
                     {!envelope.carryOver && <span className="tag">resets monthly</span>}
-                    {editing && (
+                    {editing && !envelope.isUnallocated && (
                       <button
                         className="rename-inline"
                         onClick={() => rename(envelope.id, envelope.name)}
@@ -456,7 +509,7 @@ export default function HomeScreen({
               );
             })}
 
-            {editing && (
+            {editing && !systemGroup && (
             <div className="add-device">
               <input
                 value={newEnvelope[group.id] ?? ''}
@@ -547,26 +600,6 @@ export default function HomeScreen({
           ))}
         </details>
       )}
-
-      <p className="muted footnote">
-        {headline.invariantOk ? (
-          <>
-            Envelopes and accounts agree
-            {headline.unassignedCents !== 0 && (
-              <>
-                , with <Money cents={headline.unassignedCents} /> still unassigned in the{' '}
-                <Link href="/review">review queue</Link>
-              </>
-            )}
-            .
-          </>
-        ) : (
-          <>
-            Envelopes and accounts disagree by <Money cents={headline.unexplainedCents} />, which
-            should never happen. Recent imports are the place to look.
-          </>
-        )}
-      </p>
 
       {funded && (
         <FundEnvelopes
