@@ -60,6 +60,11 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
           </>
         ),
       };
+    case 'rules_to_suggest':
+      return {
+        text: `${count} rule${count === 1 ? '' : 's'} Manilla could write for you`,
+        href: '/settings#rules',
+      };
     case 'nothing_recorded':
       return { text: 'Nothing recorded yet — bring your history in', href: '/migrate' };
   }

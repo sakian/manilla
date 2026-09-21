@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { db } from '../../db/client.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
-import { listRules } from '../../src/rules/rules.ts';
+import { listRules, suggestedRules } from '../../src/rules/rules.ts';
 import { exportLedger } from '../../src/export/export.ts';
 import { accuracy, aiSettings, aiUsage, unknownMerchantEstimate } from '../../src/ai/ai.ts';
 import { requireUser } from '../auth.ts';
@@ -10,6 +10,7 @@ import { signOutEverywhereAction } from './actions.ts';
 import Devices from './Devices.tsx';
 import AiPanel from './AiPanel.tsx';
 import DataPanel from './DataPanel.tsx';
+import RuleSuggestions from './RuleSuggestions.tsx';
 import Rules from './Rules.tsx';
 
 export const dynamic = 'force-dynamic';
@@ -18,17 +19,27 @@ export default async function SettingsPage() {
   const session = await requireUser();
   const connection = db();
 
-  const [devices, unusedRecoveryCodes, rules, ledger, ai, usage, quality, unknown] =
-    await Promise.all([
-      listDevices(connection, session.userId),
-      countUnusedRecoveryCodes(connection, session.userId),
-      listRules(connection),
-      exportLedger(connection),
-      aiSettings(connection),
-      aiUsage(connection),
-      accuracy(connection),
-      unknownMerchantEstimate(connection),
-    ]);
+  const [
+    devices,
+    unusedRecoveryCodes,
+    rules,
+    suggestions,
+    ledger,
+    ai,
+    usage,
+    quality,
+    unknown,
+  ] = await Promise.all([
+    listDevices(connection, session.userId),
+    countUnusedRecoveryCodes(connection, session.userId),
+    listRules(connection),
+    suggestedRules(connection),
+    exportLedger(connection),
+    aiSettings(connection),
+    aiUsage(connection),
+    accuracy(connection),
+    unknownMerchantEstimate(connection),
+  ]);
 
   let boundTo: string | null = null;
   try {
@@ -51,6 +62,8 @@ export default async function SettingsPage() {
           .
         </p>
       </div>
+
+      <RuleSuggestions suggestions={suggestions} />
 
       {/* Migration happens once, so it does not need a place in the navigation -
           but it does need to be findable a second time, which is what a settings

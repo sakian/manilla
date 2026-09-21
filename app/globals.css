@@ -2041,3 +2041,24 @@ details[open] > summary > .group-summary::before {
   padding: 14px;
   font-size: 13px;
 }
+
+/* A rule Manilla noticed and is asking about (CA-2). */
+.rule-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.rule-suggestion:last-of-type {
+  border-bottom: none;
+}
+
+.rule-says {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

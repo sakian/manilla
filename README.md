@@ -14,9 +14,13 @@ monthly budget with income allocation, envelope transfers, manual entry, and
 passkey sign-in so it is safe to reach from a phone.
 
 The review queue stages rather than commits: you work down the list marking rows,
-a suggestion is filled in only where the pipeline would bet on it, and nothing is
+every suggestion is filled in with how sure it is beside it, and nothing is
 written until you save — so a sitting abandoned halfway leaves the ledger exactly
-as it was.
+as it was. Rules are never written for you: the history layer learns without
+them, and a rule fires *before* history looks at anything, so a wrong one stays
+wrong where history would drift towards the truth. What Manilla does instead is
+notice when one would help — a payee sorted the same way every time, never
+anywhere else — and ask. Declining sticks.
 
 Phase 2 is complete bar CSV import: a multi-year export from another envelope
 budgeting app comes across with its envelopes, splits, income and transfers;

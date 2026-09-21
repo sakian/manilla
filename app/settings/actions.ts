@@ -23,7 +23,11 @@ import {
   renameDevice,
 } from '../../src/auth/passkeys.ts';
 import { destroyAllSessions } from '../../src/auth/session.ts';
-import { deleteRule } from '../../src/rules/rules.ts';
+import {
+  createEnvelopeRule,
+  deleteRule,
+  dismissRuleSuggestion,
+} from '../../src/rules/rules.ts';
 import { eraseAllData } from '../../src/export/export.ts';
 import { clearAnswerCache, setAiSettings } from '../../src/ai/ai.ts';
 import { currentSession, endSession, requireUser } from '../auth.ts';
@@ -182,4 +186,30 @@ export async function signOutEverywhereAction(): Promise<void> {
     await endSession();
   }
   redirect('/login');
+}
+
+/** CA-2: accept one suggestion, which is the only way an envelope rule is written. */
+export async function acceptRuleAction(contains: string, envelopeId: string) {
+  try {
+    await requireUser();
+    await createEnvelopeRule(db(), { contains, envelopeId });
+    revalidatePath('/settings');
+    revalidatePath('/');
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** Say no, and stop being asked about that payee. */
+export async function dismissRuleAction(contains: string) {
+  try {
+    await requireUser();
+    await dismissRuleSuggestion(db(), contains);
+    revalidatePath('/settings');
+    revalidatePath('/');
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+  }
 }

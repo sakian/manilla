@@ -20,7 +20,7 @@
 
 import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
-import { accounts, envelopes, rules } from '../../db/schema.ts';
+import { accounts, appSettings, envelopes, rules } from '../../db/schema.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 
 export class RuleError extends Error {}
@@ -216,4 +216,143 @@ export async function countRules(db: Database): Promise<{ envelope: number; tran
     .from(rules);
 
   return { envelope: Number(row?.envelope ?? 0), transfer: Number(row?.transfer ?? 0) };
+}
+
+// ---------------------------------------------------------------------------
+// Rules the history could write for you (CA-2)
+// ---------------------------------------------------------------------------
+
+/**
+ * A rule is never written on your behalf.
+ *
+ * The app does learn - the history layer reads what you confirmed last time and
+ * suggests from it, which is why a merchant you have sorted twenty times arrives
+ * pre-filled. That learning needs no rules, and writing them silently would be
+ * worse than useless: a rule fires before history looks at anything, so a wrong
+ * one keeps being wrong where history would have drifted towards the truth.
+ *
+ * What is worth doing is noticing when one would help and asking. A payee sorted
+ * the same way often enough, never sorted anywhere else, with no rule already -
+ * that is a standing instruction you have been giving by hand.
+ */
+export type SuggestedRule = {
+  /** The normalized payee the rule would match. */
+  contains: string;
+  /** How it reads on a statement, for saying it out loud. */
+  display: string;
+  envelopeId: string;
+  envelopeName: string;
+  /** How many confirmed transactions back it up. */
+  uses: number;
+};
+
+/** Below this a habit is a coincidence; a rule wants more than a couple of goes. */
+export const RULE_SUGGESTION_MINIMUM = 5;
+
+const DISMISSED_KEY = 'dismissed_rule_suggestions';
+
+/**
+ * Payees you have said no about.
+ *
+ * Kept so a declined suggestion stays declined. A merchant you deliberately sort
+ * two ways - a shop you buy both groceries and birthday presents at - will go on
+ * looking like a rule for ever, and being asked about it every month is worse
+ * than not being asked at all.
+ */
+export async function dismissedRuleSuggestions(db: Database): Promise<string[]> {
+  const [row] = await db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, DISMISSED_KEY))
+    .limit(1);
+
+  if (!row) return [];
+  try {
+    const parsed: unknown = JSON.parse(row.value);
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+  } catch {
+    // A setting nobody can read is a setting that has nothing to say.
+    return [];
+  }
+}
+
+export async function dismissRuleSuggestion(db: Database, contains: string): Promise<void> {
+  const already = await dismissedRuleSuggestions(db);
+  if (already.includes(contains)) return;
+
+  const value = JSON.stringify([...already, contains]);
+  await db
+    .insert(appSettings)
+    .values({ key: DISMISSED_KEY, value })
+    .onConflictDoUpdate({
+      target: appSettings.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+export async function suggestedRules(
+  db: Database,
+  options: { minimum?: number; limit?: number } = {},
+): Promise<SuggestedRule[]> {
+  const minimum = options.minimum ?? RULE_SUGGESTION_MINIMUM;
+  const dismissed = new Set(await dismissedRuleSuggestions(db));
+
+  // Raw rather than built up in Drizzle: this groups by a normalized key, counts
+  // distinct envelopes per payee and only keeps the payees with exactly one, and
+  // spelling that out is clearer than assembling it from fragments.
+  const rows = await db.execute<{
+    payee_key: string;
+    display: string;
+    envelope_id: string;
+    envelope_name: string;
+    uses: string;
+  }>(sql`
+    select
+      t.payee_key,
+      min(t.payee_raw) as display,
+      min(l.envelope_id::text) as envelope_id,
+      min(e.name) as envelope_name,
+      count(*) as uses
+    from transactions t
+    join txn_lines l on l.transaction_id = t.id
+    join envelopes e on e.id = l.envelope_id
+    where t.status = 'confirmed'
+      and t.kind = 'spending'
+      and t.source <> 'opening_balance'
+      and e.archived_at is null
+      and t.payee_key <> ''
+      -- A payee an existing rule already covers has nothing to suggest.
+      and not exists (
+        select 1 from rules r
+        where r.envelope_id is not null and t.payee_key like '%' || r.contains || '%'
+      )
+    group by t.payee_key
+    having count(distinct l.envelope_id) = 1 and count(*) >= ${minimum}
+    order by count(*) desc
+    limit ${options.limit ?? 20}
+  `);
+
+  return rows
+    .filter((row) => !dismissed.has(row.payee_key))
+    .map((row) => ({
+      contains: row.payee_key,
+      display: normalizePayee(row.display).display,
+      envelopeId: row.envelope_id,
+      envelopeName: row.envelope_name,
+      uses: Number(row.uses),
+    }));
+}
+
+/** Accept one suggestion, which is the only way a rule gets written (CA-2). */
+export async function createEnvelopeRule(
+  db: Database,
+  input: { contains: string; envelopeId: string },
+): Promise<void> {
+  const contains = input.contains.trim().toUpperCase();
+  if (contains.length === 0) throw new RuleError('A rule needs something to match on');
+
+  await db
+    .insert(rules)
+    .values({ contains, envelopeId: input.envelopeId })
+    .onConflictDoNothing();
 }

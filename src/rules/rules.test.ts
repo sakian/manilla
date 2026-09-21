@@ -6,11 +6,15 @@ import { archiveAccount } from '../accounts/manage.ts';
 import {
   RuleError,
   countRules,
+  createEnvelopeRule,
   createTransferRule,
   deleteRule,
+  dismissRuleSuggestion,
+  dismissedRuleSuggestions,
   listRules,
   listTransferRules,
   matchTransferRule,
+  suggestedRules,
   type TransferRule,
 } from './rules.ts';
 import {
@@ -23,6 +27,7 @@ import {
   type Fixture,
 } from '../ledger/testdb.ts';
 import { rules } from '../../db/schema.ts';
+import { normalizePayee } from '../categorize/normalize.ts';
 
 /**
  * `contains` is matched against the normalized payee key, and normalization
@@ -141,6 +146,106 @@ describe(
 
     after(async () => {
       await closeDb(db);
+    });
+
+    /** `count` confirmed transactions from one payee, all in one envelope. */
+    async function history(payee: string, envelopeId: string, count: number) {
+      const { recordTransaction } = await import('../ledger/ledger.ts');
+      for (let at = 0; at < count; at += 1) {
+        await recordTransaction(db, {
+          accountId: chequing,
+          date: `2026-0${(at % 9) + 1}-0${(at % 9) + 1}`,
+          amountCents: -1000 - at,
+          payeeRaw: payee,
+          status: 'confirmed',
+          source: 'file_import',
+          lines: [{ envelopeId, amountCents: -1000 - at }],
+        });
+      }
+    }
+
+    test('a payee sorted the same way often enough is worth a rule', async () => {
+      await history('NETFLIX.COM 866-579-7172', env.gasId, 6);
+
+      const [suggestion] = await suggestedRules(db);
+      assert.ok(suggestion);
+      // The rule matches the normalized key, not the text the bank wrote, so a
+      // reference number appended next month still hits it.
+      assert.equal(suggestion.contains, normalizePayee('NETFLIX.COM 866-579-7172').key);
+      assert.equal(suggestion.envelopeId, env.gasId);
+      assert.equal(suggestion.uses, 6);
+    });
+
+    test('a habit needs more than a couple of goes', async () => {
+      await history('SOMEWHERE NEW', env.gasId, 2);
+      assert.deepEqual(await suggestedRules(db), []);
+    });
+
+    test('a payee you deliberately sort two ways is not a rule', async () => {
+      await history('COSTCO WHOLESALE', env.gasId, 6);
+      await history('COSTCO WHOLESALE', env.groceriesId, 3);
+
+      assert.deepEqual(
+        await suggestedRules(db),
+        [],
+        'one payee, two envelopes: no single answer to write down',
+      );
+    });
+
+    test('a payee an existing rule already covers has nothing to suggest', async () => {
+      await history('SHELL 4471 CALGARY', env.gasId, 8);
+      assert.equal((await suggestedRules(db)).length, 1);
+
+      await createEnvelopeRule(db, { contains: 'SHELL', envelopeId: env.gasId });
+      assert.deepEqual(await suggestedRules(db), []);
+    });
+
+    test('nothing is written on your behalf: accepting is what writes it', async () => {
+      await history('FREEDOM MOBILE', env.gasId, 7);
+
+      assert.equal(await countRules(db).then((counts) => counts.envelope), 0);
+
+      const [suggestion] = await suggestedRules(db);
+      await createEnvelopeRule(db, {
+        contains: suggestion!.contains,
+        envelopeId: suggestion!.envelopeId,
+      });
+
+      const listed = await listRules(db);
+      assert.equal(listed.length, 1);
+      assert.equal(listed[0]!.contains, normalizePayee('FREEDOM MOBILE').key);
+      assert.deepEqual(listed[0]!.outcome, { kind: 'envelope', name: 'Gas' });
+    });
+
+    test('a declined suggestion stays declined', async () => {
+      await history('THE CORNER SHOP', env.gasId, 6);
+      assert.equal((await suggestedRules(db)).length, 1);
+
+      await dismissRuleSuggestion(db, normalizePayee('THE CORNER SHOP').key);
+      assert.deepEqual(await suggestedRules(db), [], 'being asked every month is worse than not');
+
+      // Declining one says nothing about the others.
+      await history('SOMEWHERE ELSE', env.groceriesId, 6);
+      assert.equal((await suggestedRules(db)).length, 1);
+      assert.deepEqual(await dismissedRuleSuggestions(db), [
+        normalizePayee('THE CORNER SHOP').key,
+      ]);
+    });
+
+    test('unconfirmed history is not evidence of a habit', async () => {
+      const { recordTransaction } = await import('../ledger/ledger.ts');
+      for (let at = 0; at < 8; at += 1) {
+        await recordTransaction(db, {
+          accountId: chequing,
+          date: '2026-02-01',
+          amountCents: -1000 - at,
+          payeeRaw: 'NOT REVIEWED YET',
+          source: 'file_import',
+          lines: [{ envelopeId: env.gasId, amountCents: -1000 - at }],
+        });
+      }
+
+      assert.deepEqual(await suggestedRules(db), [], 'a suggestion nobody accepted proves nothing');
     });
 
     test('a transfer rule round-trips, upper-cased and scoped', async () => {

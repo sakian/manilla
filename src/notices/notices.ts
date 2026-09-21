@@ -15,6 +15,7 @@ import { budgetMonth } from '../budget/budget.ts';
 import { currentMonth, type MonthKey } from '../budget/month.ts';
 import { checkInvariant } from '../ledger/ledger.ts';
 import { pendingCount } from '../queue/queue.ts';
+import { suggestedRules } from '../rules/rules.ts';
 
 export type AttentionKind =
   /** The two sides of the ledger disagree, which should be impossible (FR-37). */
@@ -30,7 +31,9 @@ export type AttentionKind =
   /** Nothing has been recorded yet, so the first thing to do is bring history in. */
   | 'nothing_recorded'
   /** FR-31: the monthly plan asks for more than the income there is to fund it. */
-  | 'plan_exceeds_income';
+  | 'plan_exceeds_income'
+  /** CA-2: payees sorted the same way often enough that a rule would save the work. */
+  | 'rules_to_suggest';
 
 export type Attention = {
   kind: AttentionKind;
@@ -94,6 +97,13 @@ export async function attention(
 
   if (waiting > 0) {
     notices.push({ kind: 'awaiting_review', severity: 'info', count: waiting });
+  }
+
+  // Rules are never written for you (see `suggestedRules`); noticing that one
+  // would help and asking is the whole of the offer.
+  const rules = await suggestedRules(db, { limit: 25 });
+  if (rules.length > 0) {
+    notices.push({ kind: 'rules_to_suggest', severity: 'info', count: rules.length });
   }
 
   if (pool > 0) {
