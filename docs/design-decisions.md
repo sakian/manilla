@@ -66,10 +66,12 @@ share without anything having to divide it.
 
 **A migration reports what it cannot do.** The "Fill Envelopes" rows of the
 format this was built against carry no amounts, so the money put *into* envelopes
-over the years is simply not in the export: past spending rebuilds exactly, past
-envelope balances do not (MG-7). The wizard says so before anything is written, and
-closes the gap with dated adjustments you read off your old app rather than with
-a number from nowhere.
+over the years is simply not in the full export: past spending rebuilds exactly,
+past envelope balances do not (MG-7). Exporting each envelope or category on its own
+does carry the fills, and given alongside, they rebuild balances to the cent. The
+wizard names every envelope that got no fills before anything is written, and
+closes whatever gap is left with dated adjustments you read off your old app rather
+than with a number from nowhere.
 
 **Sign-in is a passkey, and sessions have two clocks.** WebAuthn is bound to the
 origin, so there is nothing to phish and nothing to reuse. The cookie holds a

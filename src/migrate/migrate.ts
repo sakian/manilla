@@ -21,9 +21,15 @@
  *    do not pair are zero-amount rows, and they are reported rather than guessed
  *    at (MG-4).
  *  - "Fill Envelopes" rows carry no amount and no per-envelope breakdown, so
- *    historical allocations cannot be recovered at all. Past *spending* rebuilds
- *    exactly; past envelope *balances* do not, and the reconciliation step
- *    exists to close that gap honestly rather than to hide it (MG-7).
+ *    the full export alone rebuilds past *spending* exactly but not past
+ *    envelope *balances*.
+ *  - Exporting one envelope or category instead writes each fill with its
+ *    envelope and amount. Given alongside the full export, those fills become
+ *    dated allocations and balances rebuild to the cent - checked against a real
+ *    category export, transfers and a same-day double fill included. Only the
+ *    fills are taken from such a file: its other rows are in the full export,
+ *    whole, where it shows one side of a transfer and one share of a split.
+ *    Envelopes with no such export are what the reconciliation step is for (MG-7).
  */
 
 import { createHash } from 'node:crypto';
@@ -56,6 +62,9 @@ export class MigrationError extends Error {}
 
 /** What a migrated envelope move says in the envelope's own history. */
 export const MIGRATED_NOTE = 'Migrated from your previous budgeting app';
+
+/** What a fill recovered from an envelope export says in the envelope's history. */
+export const FILLED_NOTE = 'Filled in your previous budgeting app';
 
 /** What the reconciliation adjustment says, for the same reason. */
 export const CARRIED_OVER_NOTE = 'Opening balance carried over from your previous budgeting app';
@@ -103,6 +112,19 @@ export type PlannedTransfer = {
   externalId: string;
 };
 
+/**
+ * Money put into an envelope, read from an envelope or category export - the
+ * one place the old app records a fill's amount. Negative when it was taken
+ * back out.
+ */
+export type PlannedFill = {
+  row: number;
+  date: string;
+  envelope: string;
+  amountCents: number;
+  externalId: string;
+};
+
 export type Unrepresentable = { row: number; reason: string };
 
 export type MigrationPlan = {
@@ -116,13 +138,28 @@ export type MigrationPlan = {
   transactions: PlannedTransaction[];
   moves: PlannedMove[];
   transfers: PlannedTransfer[];
+  /** Fills with their amounts, from any envelope or category exports given. */
+  fills: PlannedFill[];
+  /** How many of the files were envelope or category exports. */
+  envelopeExports: number;
+  /** Rows skipped because an earlier file already had them (MG-1). */
+  overlapped: number;
+  /**
+   * Rows in envelope exports other than fills. The full export has every one of
+   * them - and in its complete form, where an envelope export shows one side of
+   * a transfer and one envelope's share of a split.
+   */
+  coveredElsewhere: number;
   counts: {
     spending: number;
     income: number;
     split: number;
     envelopeTransfer: number;
     accountTransfer: number;
+    /** Fill markers in the full export, which carry no amount. */
     fill: number;
+    /** Fills with an envelope and an amount, from envelope exports. */
+    envelopeFill: number;
   };
   /** MG-4: what the export cannot represent, listed rather than guessed. */
   unrepresentable: Unrepresentable[];
@@ -176,6 +213,7 @@ export function planMigration(
     envelopeTransfer: 0,
     accountTransfer: 0,
     fill: 0,
+    envelopeFill: 0,
   };
 
   const envelopeUses = new Map<string, number>();
@@ -203,7 +241,10 @@ export function planMigration(
   let dateEvidence = 'not determined';
   let rowOffset = 0;
 
-  for (const [fileIndex, source] of sources.entries()) {
+  // Every file is read before any row is, because two things about a file
+  // depend on the others: its date format, when it cannot settle its own, and
+  // whether it is the full export or one envelope's.
+  const files = sources.map((source, fileIndex) => {
     const table = parseCsv(source, detectDelimiter(source));
     const fileMapping = detectColumns(table.headers);
     const records = toRecords(table);
@@ -216,32 +257,64 @@ export function planMigration(
       );
     }
 
+    const field = (record: Record<string, string>, name: keyof ColumnMapping): string =>
+      (fileMapping[name] ? (record[fileMapping[name]!] ?? '') : '').trim();
+
+    // The full export writes every fill as a marker with no envelope and a zero
+    // amount. An envelope or category export writes each envelope's share, with
+    // the envelope named - which the full export never does.
+    const envelopeExport = records.some(
+      (record) =>
+        field(record, 'payee').toLowerCase() === FILL_PAYEE &&
+        field(record, 'envelope') !== '' &&
+        /[1-9]/.test(field(record, 'amount')),
+    );
+
     const detected = detectDateFormat(records.map((record) => record[fileMapping.date!] ?? ''));
-    if (detected.format === 'ambiguous') {
+    return { fileIndex, fileMapping, records, field, envelopeExport, detected };
+  });
+
+  // A short export - one envelope's fills, say - may have no day above the 12th
+  // to settle its format, and it was written by the same app as the others.
+  const settled = files.find((file) => file.detected.format !== 'ambiguous')?.detected;
+  if (files.length > 0) {
+    mapping = files[0]!.fileMapping;
+    dateFormat = settled?.format ?? 'ambiguous';
+    dateEvidence = settled?.evidence ?? files[0]!.detected.evidence;
+  }
+
+  const fills: PlannedFill[] = [];
+  let overlapped = 0;
+  let coveredElsewhere = 0;
+
+  /**
+   * Rows already taken from an earlier file. A row is numbered by its occurrence
+   * *within its own file*, so four identical rows in one file are four rows, and
+   * the same four in a second, overlapping file are the same four again. With one
+   * count across every file, as there used to be, the second file's copies came
+   * out as occurrences five to eight and were brought in twice.
+   */
+  const takenRows = new Set<string>();
+
+  for (const { fileIndex, records, field, envelopeExport, detected } of files) {
+    if (detected.format === 'ambiguous' && !settled) {
       warnings.push(
         `File ${fileIndex + 1}: the date format could not be settled (${detected.evidence}). ` +
           'Every row could be read either way, so nothing here should be committed until a file ' +
           'with an unambiguous date arrives.',
       );
-    }
-
-    if (fileIndex === 0) {
-      mapping = fileMapping;
-      dateFormat = detected.format;
-      dateEvidence = detected.evidence;
-    } else if (detected.format !== dateFormat && detected.format !== 'ambiguous') {
+    } else if (detected.format !== 'ambiguous' && detected.format !== dateFormat) {
       warnings.push(
-        `File ${fileIndex + 1} reads as ${detected.format} while the first reads as ${dateFormat}. ` +
+        `File ${fileIndex + 1} reads as ${detected.format} while the others read as ${dateFormat}. ` +
           'Each file is parsed with its own format.',
       );
     }
-
-    const field = (record: Record<string, string>, name: keyof ColumnMapping): string =>
-      (fileMapping[name] ? (record[fileMapping[name]!] ?? '') : '').trim();
+    const format = detected.format === 'ambiguous' && settled ? settled.format : detected.format;
+    const rowsInFile = new Map<string, number>();
 
     records.forEach((record, index) => {
       const row = rowOffset + index + 2; // 1-based, plus the header
-      const date = parseExportDate(field(record, 'date'), detected.format);
+      const date = parseExportDate(field(record, 'date'), format);
       if (!date) {
         unrepresentable.push({
           row,
@@ -249,7 +322,6 @@ export function planMigration(
         });
         return;
       }
-      dates.push(date);
 
       const payeeRaw = field(record, 'payee');
       const envelope = field(record, 'envelope');
@@ -271,11 +343,47 @@ export function planMigration(
         }
       }
 
+      const isFill = payeeRaw.toLowerCase() === FILL_PAYEE;
+
+      // From an envelope export, only the fills: everything else is in the full
+      // export already, and whole there.
+      if (envelopeExport && !(isFill && envelope !== '')) {
+        coveredElsewhere += 1;
+        return;
+      }
+
+      const rowIdentity = identityOf(
+        [date, String(amountCents), payeeRaw, rawAccount, envelope, memo, details],
+        rowsInFile,
+      );
+      if (takenRows.has(rowIdentity)) {
+        overlapped += 1;
+        return;
+      }
+      takenRows.add(rowIdentity);
+      dates.push(date);
+
       if (account) accountUses.set(account, (accountUses.get(account) ?? 0) + 1);
 
-      // A monthly fill marker. No amount, no breakdown, nothing to reproduce.
-      if (payeeRaw.toLowerCase() === FILL_PAYEE) {
-        counts.fill += 1;
+      if (isFill) {
+        // The full export's marker: no amount, no breakdown, nothing to reproduce.
+        if (envelope === '' || amountCents === 0) {
+          counts.fill += 1;
+          return;
+        }
+        if (envelope === AVAILABLE) {
+          unrepresentable.push({ row, reason: 'A fill into the income pool itself' });
+          return;
+        }
+        counts.envelopeFill += 1;
+        envelopeUses.set(envelope, (envelopeUses.get(envelope) ?? 0) + 1);
+        fills.push({
+          row,
+          date,
+          envelope,
+          amountCents,
+          externalId: identityOf(['fill', date, String(amountCents), envelope], seen),
+        });
         return;
       }
 
@@ -354,6 +462,13 @@ export function planMigration(
     rowOffset += records.length;
   }
 
+  if (files.length > 0 && files.every((file) => file.envelopeExport)) {
+    warnings.push(
+      'Every file here is an envelope or category export, which brings in fills only. ' +
+        'Add the full export for the spending, income and transfers.',
+    );
+  }
+
   const moves = pairEnvelopeTransfers(envelopeTransferRows, unrepresentable, seen);
   const transfers = pairAccountTransfers(accountTransferRows, unrepresentable, seen);
 
@@ -380,6 +495,10 @@ export function planMigration(
     transfers,
     counts,
     unrepresentable,
+    fills,
+    envelopeExports: files.filter((file) => file.envelopeExport).length,
+    overlapped,
+    coveredElsewhere,
     needsDefaultAccount: transactions.some((transaction) => !transaction.account),
     rowsWithoutAccount: transactions.filter((transaction) => !transaction.account).length,
     warnings,
@@ -558,6 +677,8 @@ export type MigrationResult = {
   duplicates: number;
   moves: number;
   transfers: number;
+  /** Fills written from envelope exports. */
+  fills: number;
   envelopesCreated: number;
   accountsCreated: number;
 };
@@ -756,7 +877,7 @@ export async function commitMigration(
     // An envelope move is not a transaction, so it carries its own identity
     // rather than a row in the external id table. Without this, a second run
     // would move the money a second time.
-    const moveIds = plan.moves.map((move) => move.externalId);
+    const moveIds = [...plan.moves, ...plan.fills].map((move) => move.externalId);
     for (let start = 0; start < moveIds.length; start += 1000) {
       const slice = moveIds.slice(start, start + 1000);
       if (slice.length === 0) break;
@@ -899,6 +1020,34 @@ export async function commitMigration(
       );
     }
 
+    // -- fills, from envelope exports --------------------------------------
+    //
+    // What the old app did: move money from the pool into the envelope, on the
+    // day it did it. Written like any allocation, so the envelope's history shows
+    // each fill and the totals never change - a move takes from one envelope
+    // exactly what it gives another (FR-37).
+
+    const freshFills = plan.fills.filter((fill) => !known.has(fill.externalId));
+    duplicates += plan.fills.length - freshFills.length;
+
+    if (freshFills.length > 0) {
+      await tx.insert(envelopeMoves).values(
+        freshFills.map((fill) => {
+          const envelopeId = envelopeFor(fill.envelope);
+          return {
+            fromEnvelopeId: fill.amountCents > 0 ? pool.id : envelopeId,
+            toEnvelopeId: fill.amountCents > 0 ? envelopeId : pool.id,
+            amountCents: Math.abs(fill.amountCents),
+            date: fill.date,
+            kind: 'allocation' as const,
+            note: FILLED_NOTE,
+            importBatchId: batchId,
+            externalId: fill.externalId,
+          };
+        }),
+      );
+    }
+
     await tx
       .update(importBatches)
       .set({ addedCount: added + transfersWritten, duplicateCount: duplicates })
@@ -910,6 +1059,7 @@ export async function commitMigration(
       duplicates,
       moves: freshMoves.length,
       transfers: transfersWritten,
+      fills: freshFills.length,
       envelopesCreated,
       accountsCreated,
     };
@@ -961,8 +1111,9 @@ export type Reconciliation = {
  *
  * They will not agree, and the reason is structural rather than a bug: the export
  * records what was *spent* out of each envelope but not what was ever *put in*,
- * because "Fill Envelopes" rows carry no amounts. So every envelope comes out
- * short by exactly what it was filled with over the years. This is the report
+ * because "Fill Envelopes" rows carry no amounts. So every envelope whose fills
+ * did not come across in an envelope export comes out short by exactly what it
+ * was filled with over the years. This is the report
  * that says so per envelope, and `applyReconciliation` is the one step that
  * closes it - as a dated, visible adjustment, not a silent correction.
  */

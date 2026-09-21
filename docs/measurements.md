@@ -111,8 +111,11 @@ All 284 of them net to exactly zero. As training data they were pure noise acros
 Also confirmed from the files: envelope names already arrive as `Group:Name`, so
 groups import directly. Income is a split into a pseudo-envelope that maps onto the
 income pool. "Fill Envelopes" rows exist but carry no amount and no per-envelope
-breakdown, which is why past envelope balances cannot be rebuilt from a transaction
-export — only past spending. Every transaction in the OFX file had a unique FITID
+breakdown, which is why past envelope balances cannot be rebuilt from the full
+export — only past spending. A later finding: exporting one envelope or category
+writes each fill *with* its envelope and amount. Taking only those rows from such a
+file, a real category export's two envelopes rebuilt to the cent against the sum of
+the file itself, transfers and a same-day double fill included. Every transaction in the OFX file had a unique FITID
 and the file carried a ledger balance, so FR-10 deduplication and the FR-14 balance
 check both work for this bank.
 

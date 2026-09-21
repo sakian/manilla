@@ -23,7 +23,11 @@ import {
   type MigrationMapping,
   type Unrepresentable,
 } from '../../src/migrate/migrate.ts';
-import { isMigrationSource, type MigrationSourceId } from '../../src/migrate/sources.ts';
+import {
+  isMigrationSource,
+  migrationSource,
+  type MigrationSourceId,
+} from '../../src/migrate/sources.ts';
 import { refreshRuleSuggestionCount } from '../../src/rules/rules.ts';
 import { localToday } from '../../src/budget/month.ts';
 import { requireUser } from '../auth.ts';
@@ -66,7 +70,14 @@ export type PlanSummary = {
   accounts: { name: string; uses: number }[];
   counts: Record<string, number>;
   /** What will actually be written, as opposed to what was read. */
-  willWrite: { transactions: number; lines: number; moves: number; transfers: number };
+  willWrite: { transactions: number; lines: number; moves: number; transfers: number; fills: number };
+  /** Envelope or category exports among the files, which bring fills. */
+  envelopeExports: number;
+  /** Envelopes whose fills came across, and ones the export uses that got none. */
+  filledEnvelopes: string[];
+  unfilledEnvelopes: string[];
+  /** Rows skipped because an earlier file had them already. */
+  overlapped: number;
   unrepresentable: Unrepresentable[];
   needsDefaultAccount: boolean;
   rowsWithoutAccount: number;
@@ -82,6 +93,17 @@ function sourceFrom(value: string): MigrationSourceId {
     throw new Error(`Manilla cannot migrate from "${value}".`);
   }
   return value;
+}
+
+/** Which envelopes the fills cover, so the report can name the ones they do not. */
+function fillCoverage(plan: ReturnType<typeof planMigration>) {
+  const pool = migrationSource(plan.from).poolEnvelope;
+  const filled = new Set(plan.fills.map((fill) => fill.envelope));
+  const names = plan.envelopes.map((envelope) => envelope.name).filter((name) => name !== pool);
+  return {
+    filledEnvelopes: names.filter((name) => filled.has(name)),
+    unfilledEnvelopes: names.filter((name) => !filled.has(name)),
+  };
 }
 
 export async function planMigrationAction(
@@ -106,7 +128,11 @@ export async function planMigrationAction(
           lines: plan.transactions.reduce((total, row) => total + row.lines.length, 0),
           moves: plan.moves.length,
           transfers: plan.transfers.length,
+          fills: plan.fills.length,
         },
+        envelopeExports: plan.envelopeExports,
+        ...fillCoverage(plan),
+        overlapped: plan.overlapped,
         // A six-year export can produce a long list; the screen shows the first
         // of them and says how many more there are.
         unrepresentable: plan.unrepresentable.slice(0, 200),
@@ -133,6 +159,7 @@ export async function commitMigrationAction(
       duplicates: number;
       moves: number;
       transfers: number;
+      fills: number;
       envelopesCreated: number;
       accountsCreated: number;
     }

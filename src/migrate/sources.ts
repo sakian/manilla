@@ -26,6 +26,13 @@ export const MIGRATION_SOURCES = [
     /** How to get the file, so nobody has to guess which export is the right one. */
     hint: 'Settings → Export, which emails you a CSV. Several files can go in at once if yours was split by date.',
     /**
+     * The full export records each fill with no amount, so envelope balances
+     * cannot be rebuilt from it. Exporting an envelope or a category on its own
+     * writes every fill with its amount - the one place the app does.
+     */
+    fillsHint:
+      'The full export leaves out what was put into each envelope. To bring that too, select each category (or envelope) in the app, choose Export CSV, and add those files alongside the full export - they can all go in together.',
+    /**
      * What this format calls its unallocated pool. Income landing here is income
      * rather than spending, and it maps onto Manilla's own pool (FR-28).
      */

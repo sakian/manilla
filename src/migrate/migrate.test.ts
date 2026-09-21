@@ -12,6 +12,7 @@ import {
 } from './sources.ts';
 import {
   CARRIED_OVER_NOTE,
+  FILLED_NOTE,
   MIGRATED_NOTE,
   MigrationError,
   applyReconciliation,
@@ -29,7 +30,8 @@ import {
   truncateAll,
   type Fixture,
 } from '../ledger/testdb.ts';
-import { transactions } from '../../db/schema.ts';
+import { envelopeMoves, envelopes, transactions } from '../../db/schema.ts';
+import { eq } from 'drizzle-orm';
 
 /**
  * A fixture shaped like the real export: D/M/Y dates, `Group:Name` envelopes,
@@ -73,7 +75,7 @@ describe('which apps can be migrated from', () => {
     // These two strings end up in an envelope's history, where the user reads
     // them. Named apps belong in the registry above and nowhere else, so a
     // public repo does not editorialise about anyone's product.
-    for (const note of [MIGRATED_NOTE, CARRIED_OVER_NOTE]) {
+    for (const note of [MIGRATED_NOTE, CARRIED_OVER_NOTE, FILLED_NOTE]) {
       for (const source of MIGRATION_SOURCES) {
         assert.ok(
           !note.toLowerCase().includes(source.label.toLowerCase()),
@@ -237,14 +239,90 @@ describe('reading an export', () => {
     assert.deepEqual(first, second);
   });
 
-  test('several files are read as one run (MG-1)', () => {
+  test('several files are read as one run, and what they share is read once (MG-1)', () => {
+    // This used to plan eight: occurrences were counted across files, so the
+    // second copy of each row looked like a fifth to eighth genuine charge and
+    // the commit had nothing to tell it otherwise.
     const plan = planMigration([EXPORT, EXPORT]);
-    assert.equal(plan.transactions.length, 8, 'both files are read');
-    assert.equal(
-      new Set(plan.transactions.map((t) => t.externalId)).size,
-      8,
-      'and the repeats are distinguishable, so the commit can decide',
+    assert.equal(plan.transactions.length, 4);
+    assert.equal(plan.overlapped, EXPORT.split('\n').length - 1);
+  });
+
+  test('files that overlap bring the shared rows once, and repeats within one file stay', () => {
+    const head = 'Date,Envelope,Account,Name,Notes,Check #,Amount,Status,Details';
+    const vending = '19/09/2026,Living:Groceries,Chequing,VENDING,,,-3.75,Cleared,';
+    const august = [head, '28/08/2026,Vehicle:Gas,Chequing,SHELL,,,-40.00,Cleared,', vending, vending];
+    const september = [head, vending, vending, '20/09/2026,Vehicle:Gas,Chequing,ESSO,,,-30.00,Cleared,'];
+
+    const plan = planMigration([august.join('\n'), september.join('\n')]);
+    assert.equal(plan.transactions.length, 4, 'shell, two vending, esso');
+    assert.equal(plan.overlapped, 2);
+  });
+});
+
+/**
+ * Shaped like an envelope or category export: every row names its envelope, and
+ * each fill carries that envelope's share - which the full export never does.
+ * Spending comes along too, and so does one side of an envelope transfer.
+ */
+const CATEGORY_EXPORT = [
+  'Date,Envelope,Account,Name,Notes,"Check #",Amount,Status,Details',
+  '01/09/2026,Vehicle:Gas,[none],"Fill Envelopes",,,150.00,,',
+  '01/09/2026,Vehicle:Insurance,[none],"Fill Envelopes",,,"1,200.00",,',
+  '19/09/2026,Vehicle:Gas,Chequing,SHELL 4471,,,-45.20,Cleared,',
+  '10/09/2026,Vehicle:Gas,,"Envelope Transfer",,,-25.00,,',
+  // Twice on one day in one file: the old app really filled it twice.
+  '01/08/2026,Vehicle:Gas,[none],"Fill Envelopes",,,150.00,,',
+  '01/08/2026,Vehicle:Gas,[none],"Fill Envelopes",,,150.00,,',
+].join('\n');
+
+/** One envelope from the category above, exported on its own as well. */
+const ENVELOPE_EXPORT = [
+  'Date,Envelope,Account,Name,Notes,"Check #",Amount,Status,Details',
+  '01/09/2026,Vehicle:Insurance,[none],"Fill Envelopes",,,"1,200.00",,',
+].join('\n');
+
+describe('fills from envelope and category exports', () => {
+  test('an envelope export is recognised, and only its fills are taken', () => {
+    const plan = planMigration([EXPORT, CATEGORY_EXPORT]);
+    assert.equal(plan.envelopeExports, 1);
+    assert.equal(plan.transactions.length, 4, 'the spending is the full export’s alone');
+    assert.equal(plan.moves.length, 1, 'and so is the transfer, which it has both halves of');
+    assert.equal(plan.coveredElsewhere, 2);
+    assert.deepEqual(
+      plan.fills.map((fill) => [fill.date, fill.envelope, fill.amountCents]),
+      [
+        ['2026-09-01', 'Vehicle:Gas', 15000],
+        ['2026-09-01', 'Vehicle:Insurance', 120000],
+        ['2026-08-01', 'Vehicle:Gas', 15000],
+        ['2026-08-01', 'Vehicle:Gas', 15000],
+      ],
     );
+    assert.equal(plan.counts.fill, 1, 'the full export’s marker is still just a marker');
+  });
+
+  test('an envelope that was only ever filled is still offered for mapping', () => {
+    const plan = planMigration([EXPORT, CATEGORY_EXPORT]);
+    assert.ok(plan.envelopes.some((envelope) => envelope.name === 'Vehicle:Insurance'));
+  });
+
+  test('a category and one of its envelopes, exported both ways, fill it once', () => {
+    const plan = planMigration([EXPORT, CATEGORY_EXPORT, ENVELOPE_EXPORT]);
+    assert.equal(plan.fills.filter((fill) => fill.envelope === 'Vehicle:Insurance').length, 1);
+    assert.equal(plan.overlapped, 1);
+  });
+
+  test('a short export borrows the date format the others settle', () => {
+    // Nothing above the 12th: on its own this could be the 9th of January.
+    const plan = planMigration([EXPORT, ENVELOPE_EXPORT.replace('01/09/2026', '09/01/2026')]);
+    assert.equal(plan.fills[0]!.date, '2026-01-09');
+    assert.ok(!plan.warnings.some((warning) => /could not be settled/.test(warning)));
+  });
+
+  test('envelope exports alone say the full export is missing', () => {
+    const plan = planMigration([CATEGORY_EXPORT]);
+    assert.equal(plan.transactions.length, 0);
+    assert.ok(plan.warnings.some((warning) => /full export/.test(warning)));
   });
 });
 
@@ -529,6 +607,63 @@ describe(
 
       const rows = await db.select().from(transactions);
       assert.equal(new Set(rows.map((row) => row.accountId)).size, 1);
+      assert.ok((await checkInvariant(db)).ok);
+    });
+
+    test('fills rebuild envelope balances, out of the pool (#7)', async () => {
+      const plan = planMigration([EXPORT, CATEGORY_EXPORT, ENVELOPE_EXPORT]);
+      const [insurance] = await db
+        .insert(envelopes)
+        .values({ groupId: env.groupId, name: 'Insurance' })
+        .returning({ id: envelopes.id });
+      const result = await commitMigration(db, plan, {
+        ...mappingFor(),
+        envelopes: {
+          ...mappingFor().envelopes,
+          'Vehicle:Insurance': { action: 'existing', envelopeId: insurance!.id },
+        },
+      });
+      assert.equal(result.fills, 4);
+
+      // Gas: three fills of 150.00, less -45.20, -40.00 of the split, -25.00 moved.
+      assert.equal(await balanceOf(env.gasId), 45000 - 11020);
+      assert.equal(await balanceOf(insurance!.id), 120000);
+      // The pool paid for every fill: 3200.00 of income less 1650.00 filled.
+      assert.equal(await balanceOf(env.unallocatedId), 320000 - 165000);
+      assert.ok((await checkInvariant(db)).ok);
+
+      const filled = await db.select().from(envelopeMoves).where(eq(envelopeMoves.note, FILLED_NOTE));
+      assert.equal(filled.length, 4);
+      assert.ok(filled.every((move) => move.kind === 'allocation'));
+    });
+
+    test('fills can be added by a later run, and a repeat adds none', async () => {
+      await commitMigration(db, planMigration([EXPORT]), mappingFor());
+
+      const withGas = {
+        ...mappingFor(),
+        envelopes: {
+          ...mappingFor().envelopes,
+          'Vehicle:Insurance': { action: 'create' as const, name: 'Insurance', group: 'Vehicle' },
+        },
+      };
+      const second = await commitMigration(db, planMigration([EXPORT, CATEGORY_EXPORT]), withGas);
+      assert.equal(second.added, 0, 'the history is already in');
+      assert.equal(second.fills, 4);
+
+      const third = await commitMigration(db, planMigration([EXPORT, CATEGORY_EXPORT]), withGas);
+      assert.equal(third.fills, 0);
+      assert.equal(await balanceOf(env.gasId), 45000 - 11020);
+    });
+
+    test('a fill taken back out moves money back to the pool', async () => {
+      const unfill = [
+        'Date,Envelope,Account,Name,Notes,"Check #",Amount,Status,Details',
+        '15/09/2026,Vehicle:Gas,[none],"Fill Envelopes",,,-20.00,,',
+        '01/09/2026,Vehicle:Gas,[none],"Fill Envelopes",,,100.00,,',
+      ].join('\n');
+      await commitMigration(db, planMigration([EXPORT, unfill]), mappingFor());
+      assert.equal(await balanceOf(env.gasId), 8000 - 11020);
       assert.ok((await checkInvariant(db)).ok);
     });
 

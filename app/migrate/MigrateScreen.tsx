@@ -9,10 +9,11 @@
  * once the history is in.
  *
  * The step that carries the most weight is the third one. Phase 0 established
- * that "Fill Envelopes" rows carry no amounts, so past envelope balances cannot
- * be rebuilt from the export at all - only past spending. Saying that plainly,
- * before anything is written, is the difference between a migration you can trust
- * and one that quietly comes out short.
+ * that the full export's "Fill Envelopes" rows carry no amounts, so past envelope
+ * balances cannot be rebuilt from it - only past spending. Envelope and category
+ * exports carry the amounts, and the report names every envelope none was given
+ * for. Saying that plainly, before anything is written, is the difference between
+ * a migration you can trust and one that quietly comes out short.
  */
 
 import { useCallback, useState, useTransition } from 'react';
@@ -117,6 +118,7 @@ export default function MigrateScreen({
     duplicates: number;
     moves: number;
     transfers: number;
+    fills: number;
   } | null>(null);
 
   // Reconciliation, once the history is in.
@@ -308,6 +310,7 @@ export default function MigrateScreen({
             {migrationSource(from).hint} Rows that appear in more than one file are recognised and
             brought in only once.
           </p>
+          <p className="muted">{migrationSource(from).fillsHint}</p>
 
           <input
             type="file"
@@ -591,6 +594,12 @@ export default function MigrateScreen({
               <span>Transfers between your accounts</span>
               <span>{summary.willWrite.transfers}</span>
             </div>
+            {summary.willWrite.fills > 0 && (
+              <div className="row">
+                <span>Fills into envelopes</span>
+                <span>{summary.willWrite.fills.toLocaleString()}</span>
+              </div>
+            )}
             <p className="muted footnote">
               All of it arrives confirmed, because you already categorized it where it came from
               (MG-5).
@@ -599,13 +608,25 @@ export default function MigrateScreen({
 
           <section className="panel">
             <h3>What cannot come across</h3>
-            <p className="budget-warning">
-              {summary.counts.fill ?? 0} &ldquo;Fill Envelopes&rdquo; rows carry no amounts and no
-              per-envelope breakdown, so the money that was <em>put into</em> envelopes over the
-              years is not in this export at all. Past <em>spending</em> rebuilds exactly; past
-              envelope <em>balances</em> do not. The last step of this wizard is where you enter
-              what your old app shows today, and the difference is recorded as a dated adjustment.
-            </p>
+            {summary.envelopeExports === 0 ? (
+              <p className="budget-warning">
+                {summary.counts.fill ?? 0} &ldquo;Fill Envelopes&rdquo; rows carry no amounts and no
+                per-envelope breakdown, so the money that was <em>put into</em> envelopes over the
+                years is not in this export at all. Past <em>spending</em> rebuilds exactly; past
+                envelope <em>balances</em> do not. {migrationSource(from).fillsHint} Without them,
+                the last step of this wizard is where you enter what your old app shows today, and
+                the difference is recorded as a dated adjustment.
+              </p>
+            ) : (
+              <FillCoverage summary={summary} />
+            )}
+
+            {summary.overlapped > 0 && (
+              <p className="muted">
+                {summary.overlapped.toLocaleString()} rows appeared in more than one file and are
+                brought in once.
+              </p>
+            )}
 
             {summary.unrepresentable.length > 0 ? (
               <>
@@ -656,8 +677,8 @@ export default function MigrateScreen({
           <section className="panel">
             <h3>Migrated</h3>
             <p className="muted">
-              {result.added.toLocaleString()} transactions, {result.transfers} account transfers and{' '}
-              {result.moves} envelope transfers are in.
+              {result.added.toLocaleString()} transactions, {result.transfers} account transfers,{' '}
+              {result.moves} envelope transfers and {result.fills.toLocaleString()} fills are in.
               {result.duplicates > 0 && ` ${result.duplicates} were already here and were left alone.`}
             </p>
             <div className="signin-actions">
@@ -670,7 +691,10 @@ export default function MigrateScreen({
           <section className="panel">
             <h3>Reconcile the balances (MG-7)</h3>
             <p className="muted">
-              Every envelope is now short by whatever was filled into it over the years, because the
+              {result.fills > 0
+                ? 'Envelopes whose fills came across should already match your old app. Any other '
+                : 'Every '}
+              envelope is short by whatever was filled into it over the years, because the full
               export does not record that. Type what your old app shows for each one today and the
               difference is written as a dated adjustment out of the income pool — visible in the
               envelope&rsquo;s history, not a number from nowhere. Leave one blank to skip it.
@@ -743,5 +767,34 @@ function KindSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * With envelope exports given, the gap is no longer every envelope - only the
+ * ones no export covered. Naming them is what lets someone go back for the
+ * missing file rather than find the shortfall months later.
+ */
+function FillCoverage({ summary }: { summary: PlanSummary }) {
+  const missing = summary.unfilledEnvelopes;
+  const shown = missing.slice(0, 12);
+  return (
+    <>
+      <p className="muted">
+        {summary.willWrite.fills.toLocaleString()} fills from {summary.envelopeExports} envelope or
+        category export{summary.envelopeExports === 1 ? '' : 's'}, so{' '}
+        {summary.filledEnvelopes.length} envelope{summary.filledEnvelopes.length === 1 ? '' : 's'}{' '}
+        rebuild with their balances, not just their spending.
+      </p>
+      {missing.length > 0 && (
+        <p className="budget-warning">
+          No fills were given for {missing.length} envelope{missing.length === 1 ? '' : 's'}:{' '}
+          {shown.join(', ')}
+          {missing.length > shown.length && ` and ${missing.length - shown.length} more`}. They come
+          out short by what was put into them. To fix that, go back and choose the files again with
+          their exports included, or settle them in the last step.
+        </p>
+      )}
+    </>
   );
 }
