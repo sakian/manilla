@@ -45,7 +45,7 @@ function today(): string {
 export function TransferDialog({
   envelopes,
   fromEnvelopeId,
-  onClose,
+  onClose: closed,
 }: {
   envelopes: EnvelopeChoice[];
   /** Pre-selected source, when the dialog was opened from one envelope's row. */
@@ -53,7 +53,7 @@ export function TransferDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
+  const onClose = useOverlay(closed);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [from, setFrom] = useState(fromEnvelopeId ?? envelopes[0]?.id ?? '');
@@ -167,14 +167,14 @@ export function TransferDialog({
 export function CoverDialog({
   envelopeId,
   envelopeName,
-  onClose,
+  onClose: closed,
 }: {
   envelopeId: string;
   envelopeName: string;
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
+  const onClose = useOverlay(closed);
   const [pending, startTransition] = useTransition();
   const [plan, setPlan] = useState<CoverPlan | null>(null);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -313,7 +313,7 @@ export function ArchiveDialog({
   envelopeName,
   balanceCents,
   envelopes,
-  onClose,
+  onClose: closed,
 }: {
   envelopeId: string;
   envelopeName: string;
@@ -322,7 +322,7 @@ export function ArchiveDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
+  const onClose = useOverlay(closed);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const others = envelopes.filter((envelope) => envelope.id !== envelopeId);

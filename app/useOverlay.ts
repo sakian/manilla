@@ -8,34 +8,49 @@
  * back to close it and lost the list you were reading. Pushing a history entry
  * when it opens makes back mean what it looks like it means.
  *
- * Closing is funnelled through history so there is one path rather than two:
- * `popstate` is the only thing that actually calls `onClose`, and a Cancel button
- * unmounts the overlay, whose cleanup pops the entry it added. That keeps the
- * history stack the same length whichever way the overlay was shut, so a second
- * back press leaves the page rather than undoing a phantom entry.
+ * There is exactly one way out, and it is the browser's: `popstate` is the only
+ * thing that calls `onClose`, and everything else - a Cancel button, a click on
+ * the backdrop, Escape, a successful save - asks for `history.back()` and lets the
+ * pop do the closing. That matters more than it sounds.
  *
- * Escape is here too, for the same reason: it is what the other half of the world
- * presses to mean the same thing.
+ * The first version undid its own history entry from the effect's cleanup, which
+ * broke the dialog outright under React's Strict Mode. Strict Mode mounts, cleans
+ * up, and mounts again; the cleanup's `history.back()` resolved *after* the second
+ * mount had installed its listener, so the dialog closed itself the instant it
+ * opened. A flicker and nothing else. Cleanup now only removes listeners - it
+ * touches no history at all - so there is no stray pop to catch.
+ *
+ * The cost is one dead history entry per overlay in development, where Strict Mode
+ * pushes twice. In production it pushes once and the stack comes out even.
  */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
-export function useOverlay(onClose: () => void): void {
-  // Held in a ref so the effect does not re-run - and re-push history - every
-  // time the parent renders a fresh closure.
+/** Returns the function to call instead of `onClose`, from anywhere in the overlay. */
+export function useOverlay(onClose: () => void): () => void {
+  // In a ref so the effect never re-runs - and never re-pushes - just because the
+  // parent handed down a fresh closure.
   const close = useRef(onClose);
   close.current = onClose;
+  const pushed = useRef(false);
+
+  const request = useCallback(() => {
+    // Go back if we have an entry to go back through; the pop closes us. If the
+    // push never happened, close directly rather than stealing someone's history.
+    if (pushed.current) window.history.back();
+    else close.current();
+  }, []);
 
   useEffect(() => {
-    const pushed = { current: true };
     window.history.pushState({ manillaOverlay: true }, '');
+    pushed.current = true;
 
     const onPop = () => {
       pushed.current = false;
       close.current();
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close.current();
+      if (event.key === 'Escape') request();
     };
 
     window.addEventListener('popstate', onPop);
@@ -44,9 +59,8 @@ export function useOverlay(onClose: () => void): void {
     return () => {
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('keydown', onKey);
-      // Closed some other way - a button, a click outside - so take the entry
-      // back out. The listener is already gone, so this cannot loop.
-      if (pushed.current) window.history.back();
     };
-  }, []);
+  }, [request]);
+
+  return request;
 }

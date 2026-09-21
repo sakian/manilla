@@ -65,7 +65,7 @@ export default function TransactionForm({
   envelopes,
   editing,
   defaultAccountId,
-  onClose,
+  onClose: closed,
 }: {
   accounts: AccountChoice[];
   envelopes: EnvelopeChoice[];
@@ -75,7 +75,7 @@ export default function TransactionForm({
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
+  const onClose = useOverlay(closed);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 

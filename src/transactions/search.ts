@@ -387,11 +387,13 @@ export async function filterChoices(db: Database): Promise<FilterChoices> {
 }
 
 /**
- * A one-line description of what is being shown, for the results header.
+ * A one-line description of what is being shown, in words.
  *
- * Built here rather than in the component because the same sentence belongs on
- * the search page, the account view and the top of an exported CSV, and three
- * copies of it would say three different things.
+ * No screen calls this today: the transactions view names a single envelope or
+ * account in its heading and leaves the rest to the filter controls themselves.
+ * It stays because putting a query into a sentence is a question about the query,
+ * not about a screen - and because the next thing that wants to say what it is
+ * showing, a CSV header or a saved search, should not write its own version.
  */
 export function describeQuery(
   query: TransactionQuery,

@@ -5,15 +5,9 @@ import { currentMonth } from '../../src/budget/month.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
 import { transferOptions } from '../../src/envelopes/transfer.ts';
 import { attention } from '../../src/notices/notices.ts';
-import {
-  describeQuery,
-  filterChoices,
-  isEmptyQuery,
-  searchTransactions,
-} from '../../src/transactions/search.ts';
+import { filterChoices, isEmptyQuery, searchTransactions } from '../../src/transactions/search.ts';
 import { requireUser } from '../auth.ts';
 import { Hint } from '../Hint.tsx';
-import { Money } from '../Money.tsx';
 import { Notices } from '../Notices.tsx';
 import { PAGE_SIZE, readForm, readPage, readQuery, withParams } from '../search/urlQuery.ts';
 import NewTransaction from './NewTransaction.tsx';
@@ -58,13 +52,6 @@ export default async function TransactionsPage(props: {
     listAccountCategories(connection, { includeArchived: true }),
     budgetMonth(connection, currentMonth()),
   ]);
-
-  const names = {
-    accounts: new Map(choices.accounts.map((row) => [row.id, row.name])),
-    accountGroups: new Map(choices.accountGroups.map((row) => [row.id, row.name])),
-    envelopes: new Map(choices.envelopes.map((row) => [row.id, row.name])),
-    envelopeGroups: new Map(choices.envelopeGroups.map((row) => [row.id, row.name])),
-  };
 
   // Exactly one of something, so its own figures can stand above the list.
   const onlyEnvelope =
@@ -150,24 +137,18 @@ export default async function TransactionsPage(props: {
           active={!empty}
         />
 
-        <p className="muted">
-          {empty
-            ? `${found.total.toLocaleString()} transaction${found.total === 1 ? '' : 's'}`
-            : `${describeQuery(query, names)} · ${found.total.toLocaleString()} found`}
-          , spent <Money cents={found.outCents} plain />, received{' '}
-          <Money cents={found.inCents} plain />
-        </p>
-
         <TransactionList
           rows={found.rows}
           accounts={liveAccounts}
           envelopes={envelopeChoices}
           {...(onlyAccount ? { defaultAccountId: onlyAccount.id } : {})}
           showAccount={!onlyAccount}
+          // The only place the count is stated, now the summary line is gone, so
+          // it has to say it even when everything fits on one page.
           heading={
             found.total > found.rows.length
               ? `Showing ${found.offset + 1}–${found.offset + found.rows.length} of ${found.total.toLocaleString()}`
-              : 'Transactions'
+              : `${found.total.toLocaleString()} transaction${found.total === 1 ? '' : 's'}`
           }
         />
 

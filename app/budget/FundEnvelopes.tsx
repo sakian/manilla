@@ -67,7 +67,7 @@ export default function FundEnvelopes({
   month,
   label,
   funding,
-  onClose,
+  onClose: closed,
 }: {
   month: string;
   label: string;
@@ -75,7 +75,7 @@ export default function FundEnvelopes({
   onClose: () => void;
 }) {
   const router = useRouter();
-  useOverlay(onClose);
+  const onClose = useOverlay(closed);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   /** Every row starts on "add", holding its planned monthly amount. */
