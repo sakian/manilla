@@ -481,8 +481,13 @@ more than one envelope, and the amount is what separates them, so one answer for
 answer is cached for that merchant - a fuel station is a fuel station - and an
 unsure one is asked again with its own amount. A monthly call budget is checked
 before each call rather than after, a failed call stops the layer instead of the
-import, and Settings shows exactly what is sent: payee text, amount, date and
-envelope names. Never an account number, a balance or anyone's name.
+import, and Settings shows exactly what is sent: payee text, amount, date, the
+memo when there is one, and your envelope names. Never a balance, and nothing
+from outside the transaction itself - though the memo is whatever your bank
+wrote there, and banks write names and partial account numbers into memos. It
+goes because on a line like `AMZN Mktp CA*5O3F50IB2` it is often the only thing
+that says what was bought. The switch is there for anyone who would rather it
+did not.
 
 **A budget is a plan; an allocation is a fact.** The plan says what each envelope
 should receive each month. Funding writes dated allocation records out of the

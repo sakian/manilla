@@ -9,17 +9,23 @@
  *    being off. Nothing happens without an API key, the monthly budget caps the
  *    spend, and everything still works with it off - the history layer measured
  *    62.8% accepted unchanged on its own.
- *  - **A cache per merchant.** The answer is about a merchant, not a
- *    transaction, so "SHELL #4471 CALGARY" and "SHELL 2280" cost one call
- *    between them, ever. On the real history this is the difference between
- *    827 merchants and 7,957 transactions.
+ *  - **A cache of confident answers, per merchant.** The model is asked per
+ *    *transaction*, because the amount is what separates two envelopes at one
+ *    merchant - caching per merchant regardless measured ten points worse. But
+ *    an answer given confidently is about the merchant rather than the charge,
+ *    so it is kept: "SHELL #4471" and "SHELL 2280" cost one call between them
+ *    after the first. An unsure answer is asked again with its own amount.
  *  - **A monthly call budget with a counter.** Checked before every call, not
  *    after, so it cannot be overrun by one batch.
  *  - **A record of every call.** Tokens, cost and errors, so a month that looks
  *    expensive can be explained rather than just totalled.
  *
- * What is sent is payee text, amount, date and the envelope names. Never an
- * account number, a balance, or anyone's name (NF-5).
+ * What is sent is payee text, amount, date, the memo when there is one, and the
+ * envelope names. Never a balance, and nothing from outside the transaction
+ * itself - but the memo is whatever the bank wrote, and banks write names and
+ * partial account numbers into memos. It is sent anyway because on a line like
+ * `AMZN Mktp CA*5O3F50IB2` it is often the only thing that says what was bought.
+ * Claiming otherwise in the interface would be the actual problem (NF-5).
  */
 
 import { and, desc, eq, gte, sql } from 'drizzle-orm';

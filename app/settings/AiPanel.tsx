@@ -106,12 +106,19 @@ export default function AiPanel({
         <ul>
           <li>The merchant name as your bank wrote it, tidied up</li>
           <li>The amount and the date</li>
+          <li>The memo, when the transaction has one</li>
           <li>Your envelope names, and a few merchants each already contains</li>
         </ul>
         <p className="muted">
-          Never an account number, a balance, a person&rsquo;s name, or anything about you. One
-          question per merchant, not per transaction, and the answer is kept so the same merchant is
-          never asked about twice.
+          Never a balance, never an account, and nothing from outside the transaction itself. Worth
+          knowing about the memo: it is whatever your bank wrote there, and banks write names into
+          it &mdash; <em>E-TRANSFER FROM</em> someone, or the tail of an account number on a
+          transfer. It is sent because it is often the only thing that says what a purchase was.
+        </p>
+        <p className="muted">
+          One question per transaction, because the amount is what separates a snack from a tank of
+          fuel at the same place. A confident answer is remembered for that merchant; an unsure one
+          is asked again with its own amount.
         </p>
       </details>
 
