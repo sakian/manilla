@@ -346,9 +346,15 @@ of that is needed for this one service.
 ## Backups (NF-7)
 
 ```bash
-npm run backup          # a compressed pg_dump, verified and pruned
+npm run backup          # a verified pg_dump, plus the node's identity, pruned
 npm run restore         # the newest backup into a scratch database, checked
 ```
+
+The backup takes the Tailscale sidecar's state as well as the database. It is
+small and load-bearing: it is what makes the machine `manilla.<tailnet>.ts.net`
+rather than some other name, and a passkey is bound to an exact hostname — so
+losing it would stop every registered passkey working at the same moment. A
+ledger restored under a name nobody can sign in to is not a restore.
 
 `scripts/backup.sh` writes to `backups/` (gitignored), reads the archive back to
 prove it is not a half-written file, and keeps the last 14. It runs Postgres's

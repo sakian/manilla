@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 #
-# A backup of the whole database (NF-7).
+# A backup of the whole database, and of the node's identity (NF-7).
 #
 #   bash scripts/backup.sh
 #
 # Writes a compressed pg_dump to $MANILLA_BACKUP_DIR (./backups by default),
 # verifies that the file it just wrote can actually be read back, and prunes
 # anything older than the retention count.
+#
+# It also copies the Tailscale sidecar's state, which is small and load-bearing:
+# it is what makes this machine `manilla.<tailnet>.ts.net` rather than some other
+# name. Lose it and Tailscale issues a new one - and a passkey is bound to an
+# exact hostname, so every registered passkey would stop working at the same
+# moment. A ledger restored under a name nobody can sign in to is not a restore.
 #
 # The verification matters more than it looks. A dump that failed halfway is
 # still a file of plausible size sitting in the right directory, and the only
@@ -72,5 +78,29 @@ for stale in "${OLD[@]:-}"; do
   rm -f "$stale"
   echo "backup: pruned $(basename "$stale")"
 done
+
+# The node's identity, taken from inside the container so it does not matter
+# where Docker keeps the volume. Skipped without complaint when the sidecar is
+# not running, because a development checkout has no tailnet node to lose.
+TS_CONTAINER="${MANILLA_TS_CONTAINER:-tailscale}"
+if docker compose ps --status running --services 2>/dev/null | grep -qx "$TS_CONTAINER"; then
+  TS_FILE="$DIR/tailscale-state-$STAMP.tar.gz"
+  if docker compose exec -T "$TS_CONTAINER" tar -czf - -C /var/lib/tailscale . > "$TS_FILE" 2>/dev/null &&
+     tar -tzf "$TS_FILE" >/dev/null 2>&1 &&
+     tar -tzf "$TS_FILE" 2>/dev/null | grep -q tailscaled.state; then
+    echo "backup: $TS_FILE ($(du -h "$TS_FILE" | cut -f1), node identity)"
+  else
+    # Loud, but not fatal: the ledger is backed up either way, and failing the
+    # whole run would turn a missing extra into a missing backup.
+    echo "backup: could not capture the Tailscale state - the database dump is fine" >&2
+    rm -f "$TS_FILE"
+  fi
+
+  mapfile -t OLD_TS < <(ls -1t "$DIR"/tailscale-state-*.tar.gz 2>/dev/null | tail -n "+$((KEEP + 1))")
+  for stale in "${OLD_TS[@]:-}"; do
+    [[ -n "$stale" ]] || continue
+    rm -f "$stale"
+  done
+fi
 
 echo "backup: $(ls -1 "$DIR"/manilla-*.dump 2>/dev/null | wc -l) kept, restore with scripts/restore.sh"

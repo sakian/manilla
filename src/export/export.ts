@@ -16,6 +16,7 @@
 import { asc } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import {
+  accountGroups,
   accounts,
   appSettings,
   budgetLines,
@@ -312,6 +313,14 @@ export async function exportCsv(db: Database, table: CsvTableName): Promise<stri
  * ledger, not the account - someone clearing their data to start again should
  * not also be locked out of the app they are still using. Signing out
  * everywhere is a separate button that already exists.
+ *
+ * `ai_calls` survives too, for a different reason: it is a record of money spent
+ * with a third party, not a record of your money, and a spend log that can be
+ * cleared by the thing doing the spending is not much of a log.
+ *
+ * Every other table goes, and the list has to be kept in step with the schema -
+ * `account_groups` was missed when it was added, which left a set of empty
+ * categories behind after an erase with nothing to say where they came from.
  */
 export async function eraseAllData(db: Database): Promise<Record<string, number>> {
   const before = {
@@ -333,6 +342,7 @@ export async function eraseAllData(db: Database): Promise<Record<string, number>
     await tx.delete(envelopes);
     await tx.delete(envelopeGroups);
     await tx.delete(accounts);
+    await tx.delete(accountGroups);
     await tx.delete(appSettings);
   });
 
