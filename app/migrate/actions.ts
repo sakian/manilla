@@ -24,6 +24,7 @@ import {
   type Unrepresentable,
 } from '../../src/migrate/migrate.ts';
 import { isMigrationSource, type MigrationSourceId } from '../../src/migrate/sources.ts';
+import { refreshRuleSuggestionCount } from '../../src/rules/rules.ts';
 import { localToday } from '../../src/budget/month.ts';
 import { requireUser } from '../auth.ts';
 
@@ -35,9 +36,26 @@ function failed(error: unknown): Failure {
 
 function refreshed(): void {
   revalidatePath('/migrate');
-  revalidatePath('/envelopes');
   revalidatePath('/accounts');
+  revalidatePath('/transactions');
   revalidatePath('/');
+}
+
+/**
+ * The rule-suggestion count is cached, because working it out is one of the two
+ * heaviest queries the notices run and they run on every screen. Whoever writes
+ * confirmed transactions owns invalidating it.
+ *
+ * A migration is the largest writer of confirmed transactions there is - six
+ * years of them in one go - and so the single biggest producer of "this payee
+ * always goes to one envelope" evidence. Without this, the app finished the one
+ * operation that fills the suggestion list and then said nothing about it until
+ * the next review sitting happened to refresh the count.
+ */
+async function countedAgain(connection: ReturnType<typeof db>): Promise<void> {
+  await refreshRuleSuggestionCount(connection);
+  revalidatePath('/review');
+  revalidatePath('/settings');
 }
 
 export type PlanSummary = {
@@ -120,9 +138,11 @@ export async function commitMigrationAction(
 > {
   try {
     await requireUser();
+    const connection = db();
     const plan = planMigration(files, { from: sourceFrom(from) });
-    const result = await commitMigration(db(), plan, mapping, meta);
+    const result = await commitMigration(connection, plan, mapping, meta);
     refreshed();
+    await countedAgain(connection);
     return { ok: true, ...result };
   } catch (error) {
     return failed(error);
@@ -170,8 +190,12 @@ export async function revertMigrationAction(
 ): Promise<{ ok: true; removed: number } | Failure> {
   try {
     await requireUser();
-    const removed = await revertMigration(db(), batchId);
+    const connection = db();
+    const removed = await revertMigration(connection, batchId);
     refreshed();
+    // Taking the history back out removes the evidence too, so a suggestion the
+    // migration earned must stop being offered.
+    await countedAgain(connection);
     return { ok: true, removed };
   } catch (error) {
     return failed(error);

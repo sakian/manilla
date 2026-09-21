@@ -315,6 +315,46 @@ describe(
       assert.ok(rows.every((row) => row.source === 'goodbudget'));
     });
 
+    test('the rule suggestions a migration earns are counted, not left stale', async () => {
+      const { ruleSuggestionCount, refreshRuleSuggestionCount, suggestedRules } = await import(
+        '../rules/rules.ts'
+      );
+
+      // Six years of history is the biggest producer of "this payee always goes
+      // to one envelope" evidence there is, so a migration is exactly when the
+      // suggestion list fills up. The count behind the notice is cached, because
+      // working it out is one of the two heaviest queries the notices run - and a
+      // cache is only as good as whoever invalidates it.
+      const repeated = [
+        'Date,Envelope,Account,Name,Notes,Check #,Amount,Status,Details',
+        ...Array.from(
+          { length: 6 },
+          (_, at) =>
+            `0${at + 1}/09/2026,Vehicle:Gas,Chequing,SHELL 4471,,,-45.20,Cleared,`,
+        ),
+        // One row a D/M/Y file can only be read one way, to settle the format.
+        '19/09/2026,Vehicle:Gas,Chequing,PETRO CANADA,,,-60.00,Cleared,',
+      ].join('\n');
+
+      assert.equal(await ruleSuggestionCount(db), 0, 'nothing before anything is written');
+
+      await commitMigration(db, planMigration([repeated]), mappingFor());
+
+      const earned = await suggestedRules(db);
+      assert.ok(earned.length > 0, 'one payee, one envelope, six times over');
+
+      // What the action does after committing. Without it the app finishes the
+      // one operation that fills this list and then says nothing about it.
+      assert.equal(await refreshRuleSuggestionCount(db), earned.length);
+      assert.equal(await ruleSuggestionCount(db), earned.length);
+
+      // And taking the history back out takes the evidence with it.
+      const [batch] = await db.select().from(transactions).limit(1);
+      assert.ok(batch);
+      await revertMigration(db, batch.importBatchId!);
+      assert.equal(await refreshRuleSuggestionCount(db), 0);
+    });
+
     test('running the same export again adds nothing (MG-1)', async () => {
       await commitMigration(db, planMigration([EXPORT]), mappingFor());
       const before = (await db.select().from(transactions)).length;
