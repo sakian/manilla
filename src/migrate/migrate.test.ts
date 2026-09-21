@@ -394,9 +394,12 @@ describe(
     });
 
     test('the rule suggestions a migration earns are counted, not left stale', async () => {
-      const { ruleSuggestionCount, refreshRuleSuggestionCount, suggestedRules } = await import(
-        '../rules/rules.ts'
-      );
+      const {
+        RULE_SUGGESTION_MINIMUM,
+        ruleSuggestionCount,
+        refreshRuleSuggestionCount,
+        suggestedRules,
+      } = await import('../rules/rules.ts');
 
       // Six years of history is the biggest producer of "this payee always goes
       // to one envelope" evidence there is, so a migration is exactly when the
@@ -406,9 +409,9 @@ describe(
       const repeated = [
         'Date,Envelope,Account,Name,Notes,Check #,Amount,Status,Details',
         ...Array.from(
-          { length: 6 },
+          { length: RULE_SUGGESTION_MINIMUM },
           (_, at) =>
-            `0${at + 1}/09/2026,Vehicle:Gas,Chequing,SHELL 4471,,,-45.20,Cleared,`,
+            `${String(at + 1).padStart(2, '0')}/09/2026,Vehicle:Gas,Chequing,SHELL 4471,,,-45.20,Cleared,`,
         ),
         // One row a D/M/Y file can only be read one way, to settle the format.
         '19/09/2026,Vehicle:Gas,Chequing,PETRO CANADA,,,-60.00,Cleared,',

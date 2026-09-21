@@ -148,13 +148,15 @@ describe(
     });
 
     test('rules worth suggesting are read from the count, not searched for', async () => {
-      const { refreshRuleSuggestionCount } = await import('../rules/rules.ts');
+      const { RULE_SUGGESTION_MINIMUM, refreshRuleSuggestionCount } = await import(
+        '../rules/rules.ts'
+      );
 
       // Nothing cached: the notices say nothing about rules, and cost nothing
       // finding that out.
       assert.ok(!(await kinds()).includes('rules_to_suggest'));
 
-      for (let at = 0; at < 6; at += 1) {
+      for (let at = 0; at < RULE_SUGGESTION_MINIMUM; at += 1) {
         await recordTransaction(db, {
           accountId,
           date: '2026-09-02',

@@ -15,6 +15,7 @@ import {
   listTransferRules,
   matchTransferRule,
   suggestedRules,
+  RULE_SUGGESTION_MINIMUM,
   type TransferRule,
 } from './rules.ts';
 import {
@@ -148,6 +149,9 @@ describe(
       await closeDb(db);
     });
 
+    /** Just enough history to be worth a rule, whatever the threshold is today. */
+    const enough = RULE_SUGGESTION_MINIMUM;
+
     /** `count` confirmed transactions from one payee, all in one envelope. */
     async function history(payee: string, envelopeId: string, count: number) {
       const { recordTransaction } = await import('../ledger/ledger.ts');
@@ -165,7 +169,7 @@ describe(
     }
 
     test('a payee sorted the same way often enough is worth a rule', async () => {
-      await history('NETFLIX.COM 866-579-7172', env.gasId, 6);
+      await history('NETFLIX.COM 866-579-7172', env.gasId, enough);
 
       const [suggestion] = await suggestedRules(db);
       assert.ok(suggestion);
@@ -173,16 +177,19 @@ describe(
       // reference number appended next month still hits it.
       assert.equal(suggestion.contains, normalizePayee('NETFLIX.COM 866-579-7172').key);
       assert.equal(suggestion.envelopeId, env.gasId);
-      assert.equal(suggestion.uses, 6);
+      assert.equal(suggestion.uses, enough);
     });
 
-    test('a habit needs more than a couple of goes', async () => {
-      await history('SOMEWHERE NEW', env.gasId, 2);
-      assert.deepEqual(await suggestedRules(db), []);
+    test('a habit needs more than a few goes', async () => {
+      await history('SOMEWHERE NEW', env.gasId, enough - 1);
+      assert.deepEqual(await suggestedRules(db), [], 'one short of the minimum is not a rule');
+
+      await history('SOMEWHERE NEW', env.gasId, 1);
+      assert.equal((await suggestedRules(db)).length, 1, 'and the minimum itself is');
     });
 
     test('a payee you deliberately sort two ways is not a rule', async () => {
-      await history('COSTCO WHOLESALE', env.gasId, 6);
+      await history('COSTCO WHOLESALE', env.gasId, enough);
       await history('COSTCO WHOLESALE', env.groceriesId, 3);
 
       assert.deepEqual(
@@ -193,7 +200,7 @@ describe(
     });
 
     test('a payee an existing rule already covers has nothing to suggest', async () => {
-      await history('SHELL 4471 CALGARY', env.gasId, 8);
+      await history('SHELL 4471 CALGARY', env.gasId, enough);
       assert.equal((await suggestedRules(db)).length, 1);
 
       await createEnvelopeRule(db, { contains: 'SHELL', envelopeId: env.gasId });
@@ -201,7 +208,7 @@ describe(
     });
 
     test('nothing is written on your behalf: accepting is what writes it', async () => {
-      await history('FREEDOM MOBILE', env.gasId, 7);
+      await history('FREEDOM MOBILE', env.gasId, enough);
 
       assert.equal(await countRules(db).then((counts) => counts.envelope), 0);
 
@@ -218,14 +225,14 @@ describe(
     });
 
     test('a declined suggestion stays declined', async () => {
-      await history('THE CORNER SHOP', env.gasId, 6);
+      await history('THE CORNER SHOP', env.gasId, enough);
       assert.equal((await suggestedRules(db)).length, 1);
 
       await dismissRuleSuggestion(db, normalizePayee('THE CORNER SHOP').key);
       assert.deepEqual(await suggestedRules(db), [], 'being asked every month is worse than not');
 
       // Declining one says nothing about the others.
-      await history('SOMEWHERE ELSE', env.groceriesId, 6);
+      await history('SOMEWHERE ELSE', env.groceriesId, enough);
       assert.equal((await suggestedRules(db)).length, 1);
       assert.deepEqual(await dismissedRuleSuggestions(db), [
         normalizePayee('THE CORNER SHOP').key,
@@ -237,10 +244,10 @@ describe(
       // other - and with only the count to go on, Postgres was free to hand the
       // ties back in any order. Adding a rule changes the query's plan, so the
       // list came back reshuffled after every "Add it".
-      await history('ZULU HARDWARE', env.gasId, 6);
-      await history('ALPHA BAKERY', env.gasId, 6);
-      await history('MIKE GARAGE', env.gasId, 9);
-      await history('BRAVO BOOKS', env.gasId, 6);
+      await history('ZULU HARDWARE', env.gasId, enough);
+      await history('ALPHA BAKERY', env.gasId, enough);
+      await history('MIKE GARAGE', env.gasId, enough + 3);
+      await history('BRAVO BOOKS', env.gasId, enough);
 
       const names = async () => (await suggestedRules(db)).map((rule) => rule.contains);
       const key = (payee: string) => normalizePayee(payee).key;
@@ -256,9 +263,9 @@ describe(
     });
 
     test('a declined suggestion does not take a place in the list', async () => {
-      await history('FIRST PLACE', env.gasId, 9);
-      await history('SECOND PLACE', env.gasId, 8);
-      await history('THIRD PLACE', env.gasId, 7);
+      await history('FIRST PLACE', env.gasId, enough + 2);
+      await history('SECOND PLACE', env.gasId, enough + 1);
+      await history('THIRD PLACE', env.gasId, enough);
 
       await dismissRuleSuggestion(db, normalizePayee('FIRST PLACE').key);
       assert.deepEqual(

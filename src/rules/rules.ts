@@ -246,8 +246,12 @@ export type SuggestedRule = {
   uses: number;
 };
 
-/** Below this a habit is a coincidence; a rule wants more than a couple of goes. */
-export const RULE_SUGGESTION_MINIMUM = 5;
+/**
+ * Below this a habit is a coincidence. It was five, which proved too eager: a
+ * rule outranks history for good, so it wants a payee sorted one way for most of
+ * a year of monthly bills, not a few weeks of coffee.
+ */
+export const RULE_SUGGESTION_MINIMUM = 10;
 
 const DISMISSED_KEY = 'dismissed_rule_suggestions';
 
