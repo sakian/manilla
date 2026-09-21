@@ -340,6 +340,12 @@ kbd {
   border-bottom: 1px solid var(--border);
 }
 
+/* A long title wraps rather than widening the dialog past the screen. */
+.picker-head > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .picker input {
   font: inherit;
   border: none;
@@ -759,10 +765,6 @@ input.amount {
   font-size: 14px;
 }
 
-.budget-row.fund {
-  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(86px, 1fr));
-}
-
 .budget-row.cover {
   grid-template-columns: minmax(0, 2fr) minmax(86px, 1fr) minmax(96px, 1fr);
 }
@@ -967,11 +969,11 @@ details[open] > summary > .group-summary::before {
 
 @media (max-width: 720px) {
   .budget-row,
-  .budget-row.fund,
   .budget-row.cover {
     grid-template-columns: minmax(0, 1fr) 96px;
     row-gap: 4px;
   }
+  /* Column names live on each cell at this width; see `.figure-label`. */
   .budget-row.head {
     display: none;
   }
@@ -1539,10 +1541,6 @@ details[open] > summary > .group-summary::before {
   padding: 3px 6px;
 }
 
-.fund-dialog {
-  width: min(680px, 100%);
-}
-
 @media (max-width: 720px) {
   /* Two labelled figures per line beats six unlabelled columns squeezed into
      one, and beats a horizontal scroll nobody discovers. */
@@ -1731,11 +1729,56 @@ details[open] > summary > .group-summary::before {
   font-weight: 620;
 }
 
+/*
+ * Written narrow-first, and widened by a min-width query rather than narrowed by
+ * a max-width one. The five-column version used to be the base rule and sat
+ * *after* the phone override in the file, so it quietly won on a phone and pushed
+ * the dialog off the right edge: its columns could not shrink below 382px. Stated
+ * this way there is no ordering to get wrong.
+ */
 .budget-row.fund {
-  grid-template-columns: minmax(0, 1.5fr) minmax(70px, 0.8fr) minmax(70px, 0.8fr) minmax(
-      132px,
-      1.2fr
-    ) minmax(70px, 0.8fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: 6px;
+  padding: 9px 0;
+}
+
+.budget-row.fund > span:first-child {
+  grid-column: 1 / -1;
+}
+
+.budget-row.fund > span:not(:first-child) {
+  text-align: left;
+}
+
+.budget-row.fund .figure {
+  justify-content: space-between;
+}
+
+/* Nothing in a grid cell may refuse to shrink. */
+.budget-row.fund > span,
+.budget-row.fund .figure,
+.amount-entry {
+  min-width: 0;
+}
+
+@media (min-width: 721px) {
+  .budget-row.fund {
+    grid-template-columns: minmax(0, 1.5fr) minmax(64px, 0.7fr) minmax(64px, 0.7fr) minmax(
+        126px,
+        1.1fr
+      ) minmax(64px, 0.7fr);
+    row-gap: 0;
+    padding: 5px 0;
+  }
+  .budget-row.fund > span:first-child {
+    grid-column: auto;
+  }
+  .budget-row.fund > span:not(:first-child) {
+    text-align: right;
+  }
+  .budget-row.fund .figure {
+    justify-content: flex-end;
+  }
 }
 
 /* The add/set choice belongs against the box it changes the meaning of. */
@@ -1746,36 +1789,30 @@ details[open] > summary > .group-summary::before {
   justify-content: flex-end;
 }
 
-.row-mode {
+/* Two fixed labels, so it is the same width whichever it reads. */
+.mode-toggle {
   font: inherit;
   font-size: 11px;
-  padding: 2px 4px;
+  width: 36px;
+  padding: 3px 0;
+  text-align: center;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text-dim);
+  flex: 0 0 auto;
+}
+
+.mode-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .amount-entry .amount {
-  width: 84px;
-}
-
-@media (max-width: 720px) {
-  /* Two labelled figures per line, the name across the top. */
-  .budget-row.fund {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    row-gap: 6px;
-    padding: 9px 0;
-  }
-  .budget-row.fund > span:first-child {
-    grid-column: 1 / -1;
-  }
-  .budget-row.fund > span:not(:first-child) {
-    text-align: left;
-  }
-  .budget-row.fund .figure {
-    justify-content: space-between;
-  }
+  width: 100%;
+  min-width: 0;
+  max-width: 96px;
 }
 
 /* --- Notices -------------------------------------------------------------- */

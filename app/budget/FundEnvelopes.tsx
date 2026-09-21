@@ -87,20 +87,19 @@ export default function FundEnvelopes({
   const modeOf = useCallback((envelopeId: string) => modes[envelopeId] ?? 'add', [modes]);
 
   /**
-   * Switching a row re-seeds that row, because "50" as an addition is not "50" as
-   * a target. Add goes back to the plan; a target starts at what the envelope
-   * holds now, so the row moves nothing until a figure is actually chosen.
+   * Toggling a row changes what its figure means and leaves the figure alone.
+   *
+   * Re-seeding it seemed tidier - "50" as an addition is not "50" as a target -
+   * but it threw away something typed on purpose, and the "moves" column already
+   * says what the row will do under the new reading. Changing the meaning is the
+   * point of the toggle; changing the number too is the toggle deciding for you.
    */
-  const switchMode = useCallback(
-    (line: { envelopeId: string; proposedCents: number; balanceCents: number }, next: Mode) => {
-      setModes((current) => ({ ...current, [line.envelopeId]: next }));
-      setAmounts((current) => ({
-        ...current,
-        [line.envelopeId]: inputFromCents(next === 'add' ? line.proposedCents : line.balanceCents),
-      }));
-    },
-    [],
-  );
+  const toggleMode = useCallback((envelopeId: string) => {
+    setModes((current) => ({
+      ...current,
+      [envelopeId]: (current[envelopeId] ?? 'add') === 'add' ? 'target' : 'add',
+    }));
+  }, []);
 
   /** What each row would move, and what is unreadable, in one pass. */
   const moves = useMemo(() => {
@@ -240,16 +239,24 @@ export default function FundEnvelopes({
                   </span>
 
                   <span className="figure amount-entry">
-                    <select
-                      className="row-mode"
-                      value={mode}
-                      aria-label={`How the amount for ${line.name} is read`}
+                    {/* One narrow control that says which of two things the box
+                        beside it means. A select sized itself to its widest
+                        option and pushed the row off a phone. */}
+                    <button
+                      type="button"
+                      className="mode-toggle"
+                      aria-pressed={mode === 'target'}
+                      aria-label={
+                        mode === 'add'
+                          ? `${line.name}: adding to the balance. Press to set the balance instead.`
+                          : `${line.name}: setting the balance. Press to add to it instead.`
+                      }
+                      title={mode === 'add' ? 'Adding to the balance' : 'Setting the balance'}
                       disabled={pending}
-                      onChange={(event) => switchMode(line, event.target.value as Mode)}
+                      onClick={() => toggleMode(line.envelopeId)}
                     >
-                      <option value="add">add</option>
-                      <option value="target">set to</option>
-                    </select>
+                      {mode === 'add' ? 'add' : 'set'}
+                    </button>
                     <input
                       className="amount"
                       inputMode="decimal"
