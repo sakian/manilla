@@ -15,9 +15,15 @@
  * edit rather than a decision.
  *
  * A suggestion is only *pre-filled* when the pipeline is confident enough to bet
- * on it (0.95, where measurement put the line). Below that the row starts empty
- * and the suggestion is offered as something to tap - a pre-filled guess reads as
- * an answer, and an unsure guess should not.
+ * on it (0.95, where measurement put the line). Below that the row starts empty,
+ * because a pre-filled guess reads as an answer and an unsure guess should not -
+ * the guess is still there, at the top of the picker, where it is offered rather
+ * than assumed.
+ *
+ * One control per card decides everything: pressing the envelope opens a picker
+ * that also holds "not spending", because "which envelope" and "no envelope at
+ * all" are the same question. Word-links beside it were a second way to do what
+ * the picker does.
  *
  * The bulk "confirm the confident ones" button is gone. It settled about a sixth
  * of a queue without anybody looking, which is a strange thing to offer on a
@@ -30,10 +36,15 @@ import type { EnvelopeOption, QueueRow } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
 import { markAsTransferAction, saveReviewAction } from '../actions.ts';
 
+/**
+ * Spending is red, so it does not also need a minus sign - every row in a queue of
+ * imported spending would carry one, which makes it punctuation rather than
+ * information. Money coming *in* is the exception worth marking, so it gets a +.
+ */
 function formatMoney(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
   const abs = Math.abs(cents);
-  return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
+  const amount = `$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
+  return cents > 0 ? `+${amount}` : amount;
 }
 
 function longDate(date: string): string {
@@ -43,24 +54,23 @@ function longDate(date: string): string {
 }
 
 /**
- * How sure the pipeline is, in words rather than a bare number.
+ * How sure the pipeline is: one word and a number.
  *
- * The percentage is kept beside the word because the two say different things: the
- * word is whether to trust it at a glance, the number is how close to the line it
- * sits. "Likely 62%" and "likely 94%" both mean look, but not equally hard.
+ * One word because it is read at a glance down a column, and a column of phrases
+ * is a paragraph. The number stays beside it because the two say different things
+ * - the word is whether to trust it, the number is how close to the line it sits.
+ * "Likely 62" and "likely 94" both mean look, but not equally hard.
  */
-function confidenceOf(row: QueueRow): { label: string; tone: string; detail: string } | null {
+function confidenceOf(row: QueueRow): { label: string; tone: string; detail: string } {
   if (row.confidence === null || !row.envelopeId) {
-    return { label: 'no idea', tone: 'none', detail: 'nothing to suggest' };
+    return { label: 'unknown', tone: 'none', detail: '' };
   }
   const percent = `${Math.round(row.confidence * 100)}%`;
-  if (row.confidence >= BAND_THRESHOLDS.high) {
-    return { label: 'sure', tone: 'high', detail: percent };
-  }
+  if (row.confidence >= BAND_THRESHOLDS.high) return { label: 'sure', tone: 'high', detail: percent };
   if (row.confidence >= BAND_THRESHOLDS.medium) {
     return { label: 'likely', tone: 'medium', detail: percent };
   }
-  return { label: 'a guess', tone: 'low', detail: percent };
+  return { label: 'guess', tone: 'low', detail: percent };
 }
 
 type Decision = {
@@ -100,9 +110,10 @@ export default function ReviewQueue({
   );
 
   const [picking, setPicking] = useState<QueueRow | null>(null);
+  /** The picker shows envelopes first, and the account list once "not spending". */
+  const [pickingTransfer, setPickingTransfer] = useState(false);
   const [filter, setFilter] = useState('');
   const [pickCursor, setPickCursor] = useState(0);
-  const [transferring, setTransferring] = useState<QueueRow | null>(null);
   const [transferRule, setTransferRule] = useState(true);
   const filterRef = useRef<HTMLInputElement>(null);
 
@@ -127,14 +138,27 @@ export default function ReviewQueue({
     }));
   }, []);
 
+  const openPicker = useCallback((row: QueueRow) => {
+    setPicking(row);
+    setPickingTransfer(false);
+    setFilter('');
+    setPickCursor(0);
+    setTimeout(() => filterRef.current?.focus(), 0);
+  }, []);
+
+  const closePicker = useCallback(() => {
+    setPicking(null);
+    setPickingTransfer(false);
+    setFilter('');
+  }, []);
+
   /** Choosing an envelope is a decision, so it confirms the row as well. */
   const choose = useCallback(
     (id: string, envelopeId: string, createRule = false) => {
       set(id, { envelopeId, confirmed: true, createRule });
-      setPicking(null);
-      setFilter('');
+      closePicker();
     },
-    [set],
+    [closePicker, set],
   );
 
   const ready = useMemo(
@@ -185,48 +209,44 @@ export default function ReviewQueue({
           setError(result.error);
           return;
         }
-        setTransferring(null);
+        closePicker();
         setNote('Recorded as a transfer between your accounts.');
         router.refresh();
       });
     },
-    [router],
+    [closePicker, router],
   );
 
   // Escape closes whichever overlay is open. These are not routed, so the
   // history hook the dialogs use would be overkill for a list picker.
   useEffect(() => {
-    if (!picking && !transferring) return;
+    if (!picking) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setPicking(null);
-      setTransferring(null);
-      setFilter('');
+      if (event.key === 'Escape') closePicker();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [picking, transferring]);
+  }, [closePicker, picking]);
+
+  /** The row's own suggestion, shown at the top of its picker. */
+  const suggested = useMemo(
+    () =>
+      picking?.envelopeId
+        ? (envelopes.find((envelope) => envelope.id === picking.envelopeId) ?? null)
+        : null,
+    [envelopes, picking],
+  );
 
   const matches = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    if (!needle) return envelopes;
+    const rest = suggested ? envelopes.filter((envelope) => envelope.id !== suggested.id) : envelopes;
+    if (!needle) return rest;
     return envelopes.filter(
       (envelope) =>
         envelope.name.toLowerCase().includes(needle) ||
         envelope.groupName.toLowerCase().includes(needle),
     );
-  }, [envelopes, filter]);
-
-  // Rows come back newest first; the headings make the run of dates legible.
-  const byDate = useMemo(() => {
-    const groups: { date: string; rows: QueueRow[] }[] = [];
-    for (const row of rows) {
-      const last = groups.at(-1);
-      if (last && last.date === row.date) last.rows.push(row);
-      else groups.push({ date: row.date, rows: [row] });
-    }
-    return groups;
-  }, [rows]);
+  }, [envelopes, filter, suggested]);
 
   if (rows.length === 0) {
     return (
@@ -244,90 +264,60 @@ export default function ReviewQueue({
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
 
-      {byDate.map((group) => (
-        <div key={group.date} className="queue-day">
-          <h3 className="queue-date-head">{longDate(group.date)}</h3>
+      {rows.map((row) => {
+        const decision = decisionFor(row.id);
+        const confidence = confidenceOf(row);
+        const chosen = decision.envelopeId;
+        /** Pre-filled means the pipeline was sure; only those offer a one-press confirm. */
+        const prefilled = row.band === 'high' && row.envelopeId !== null;
 
-          {group.rows.map((row) => {
-            const decision = decisionFor(row.id);
-            const confidence = confidenceOf(row);
-            const chosen = decision.envelopeId;
-            const suggestion =
-              row.envelopeId && row.envelopeId !== chosen ? row.envelopeId : null;
+        return (
+          <div key={row.id} className={`queue-row${decision.confirmed ? ' decided' : ''}`}>
+            <span className="queue-payee">
+              {row.payeeDisplay}
+              {row.memo && <span className="muted"> · {row.memo}</span>}
+            </span>
 
-            return (
-              <div
-                key={row.id}
-                className={`queue-row${decision.confirmed ? ' decided' : ''}`}
+            <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
+              {formatMoney(row.amountCents)}
+            </span>
+
+            <span className="muted queue-meta">
+              <span>{longDate(row.date)}</span>
+              <span>{row.accountName}</span>
+              <span className={`band ${confidence.tone}`} title={row.reason ?? undefined}>
+                {confidence.label}
+                {confidence.detail && ` ${confidence.detail}`}
+              </span>
+              {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
+            </span>
+
+            <span className="queue-choice">
+              {/* Everything this row can become is behind this one control. */}
+              <button
+                className={`envelope-pick${chosen ? ' chosen' : ''}`}
+                onClick={() => openPicker(row)}
+                disabled={pending}
               >
-                <span className="queue-payee">
-                  {row.payeeDisplay}
-                  {row.memo && <span className="muted"> · {row.memo}</span>}
-                </span>
+                {chosen ? envelopeName.get(chosen) : 'Choose an envelope'}
+              </button>
 
-                <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
-                  {formatMoney(row.amountCents)}
-                </span>
-
-                <span className="muted queue-meta">
-                  {row.accountName}
-                  {confidence && (
-                    <span className={`band ${confidence.tone}`}>
-                      {confidence.label} {confidence.detail}
-                    </span>
-                  )}
-                  {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
-                </span>
-
-                <span className="queue-choice">
-                  <button
-                    className={`envelope-pick${chosen ? ' chosen' : ''}`}
-                    onClick={() => {
-                      setPicking(row);
-                      setFilter('');
-                      setPickCursor(0);
-                      setTimeout(() => filterRef.current?.focus(), 0);
-                    }}
-                    disabled={pending}
-                  >
-                    {chosen ? envelopeName.get(chosen) : 'Choose an envelope'}
-                  </button>
-
-                  {/* The suggestion, when it was not sure enough to fill in. */}
-                  {suggestion && !decision.confirmed && (
-                    <button
-                      className="link-button"
-                      onClick={() => choose(row.id, suggestion)}
-                      disabled={pending}
-                      title={row.reason ?? undefined}
-                    >
-                      use {envelopeName.get(suggestion)}
-                    </button>
-                  )}
-
-                  <label className="queue-confirm">
-                    <input
-                      type="checkbox"
-                      checked={decision.confirmed}
-                      disabled={pending || chosen === null}
-                      onChange={(event) => set(row.id, { confirmed: event.target.checked })}
-                    />
-                    <span>{decision.confirmed ? 'Confirmed' : 'Confirm'}</span>
-                  </label>
-
-                  <button
-                    className="link-button"
-                    onClick={() => setTransferring(row)}
-                    disabled={pending}
-                  >
-                    not spending
-                  </button>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      ))}
+              {/* Choosing is itself a decision, so it confirms; a row that was
+                  filled in for you has not been decided by anyone yet, and that
+                  is the one that needs a press. */}
+              {(prefilled || decision.confirmed) && chosen && (
+                <button
+                  className={decision.confirmed ? 'link-button' : 'primary confirm'}
+                  onClick={() => set(row.id, { confirmed: !decision.confirmed })}
+                  disabled={pending}
+                >
+                  {decision.confirmed ? 'Unconfirm' : 'Confirm'}
+                </button>
+              )}
+            </span>
+          </div>
+        );
+      })}
 
       {/* Sticky, because the list is long and the decision to stop is made at the
           bottom of it as often as the top. */}
@@ -340,67 +330,8 @@ export default function ReviewQueue({
         </button>
       </div>
 
-      {transferring && (
-        <div className="picker-backdrop" onClick={() => setTransferring(null)}>
-          <div className="picker dialog" onClick={(event) => event.stopPropagation()}>
-            <div className="picker-head">
-              <strong>{transferring.payeeDisplay}</strong>
-              <span className={`money ${transferring.amountCents < 0 ? 'neg' : 'pos'}`}>
-                {formatMoney(transferring.amountCents)}
-              </span>
-            </div>
-            <div className="dialog-body">
-              <p className="muted">
-                {transferring.amountCents < 0
-                  ? 'Which account did it go to?'
-                  : 'Which account did it come from?'}{' '}
-                Money moving between your own accounts is neither spending nor income, so no
-                envelope changes. This one is written straight away rather than waiting for Save,
-                because it writes both halves.
-              </p>
-              <div className="picker-list">
-                {accounts
-                  .filter((account) => account.name !== transferring.accountName)
-                  .map((account) => (
-                    <button
-                      key={account.id}
-                      className="picker-option"
-                      onClick={() => markTransfer(transferring, account.id, transferRule)}
-                      disabled={pending}
-                    >
-                      <span>{account.name}</span>
-                    </button>
-                  ))}
-              </div>
-            </div>
-            <label className="picker-rule">
-              <input
-                type="checkbox"
-                checked={transferRule}
-                onChange={(event) => setTransferRule(event.target.checked)}
-              />
-              <span>
-                Always treat <strong>{transferring.payeeDisplay}</strong> on{' '}
-                {transferring.accountName} as a transfer
-              </span>
-            </label>
-            <div className="picker-foot dialog-foot">
-              <button onClick={() => setTransferring(null)} disabled={pending}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {picking && (
-        <div
-          className="picker-backdrop"
-          onClick={() => {
-            setPicking(null);
-            setFilter('');
-          }}
-        >
+        <div className="picker-backdrop" onClick={closePicker}>
           <div className="picker" onClick={(event) => event.stopPropagation()}>
             <div className="picker-head">
               <strong>{picking.payeeDisplay}</strong>
@@ -409,54 +340,124 @@ export default function ReviewQueue({
               </span>
             </div>
 
-            <input
-              ref={filterRef}
-              value={filter}
-              placeholder="Type to narrow"
-              onChange={(event) => {
-                setFilter(event.target.value);
-                setPickCursor(0);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault();
-                  setPickCursor((at) => Math.min(at + 1, matches.length - 1));
-                } else if (event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  setPickCursor((at) => Math.max(at - 1, 0));
-                } else if (event.key === 'Enter') {
-                  event.preventDefault();
-                  const picked = matches[pickCursor];
-                  if (picked) choose(picking.id, picked.id, event.shiftKey);
-                }
-              }}
-            />
+            {pickingTransfer ? (
+              <>
+                <div className="dialog-body">
+                  <p className="muted">
+                    {picking.amountCents < 0
+                      ? 'Which of your accounts did it go to?'
+                      : 'Which of your accounts did it come from?'}{' '}
+                    Money moving between your own accounts is neither spending nor income, so no
+                    envelope changes. This is written straight away rather than waiting for Save,
+                    because it writes both halves.
+                  </p>
+                  <div className="picker-list">
+                    {accounts
+                      .filter((account) => account.name !== picking.accountName)
+                      .map((account) => (
+                        <button
+                          key={account.id}
+                          className="picker-option"
+                          onClick={() => markTransfer(picking, account.id, transferRule)}
+                          disabled={pending}
+                        >
+                          <span>{account.name}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+                <label className="picker-rule">
+                  <input
+                    type="checkbox"
+                    checked={transferRule}
+                    onChange={(event) => setTransferRule(event.target.checked)}
+                  />
+                  <span>
+                    Always treat <strong>{picking.payeeDisplay}</strong> on {picking.accountName} as
+                    a transfer
+                  </span>
+                </label>
+                <div className="picker-foot dialog-foot">
+                  <button onClick={() => setPickingTransfer(false)} disabled={pending}>
+                    Back to envelopes
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <input
+                  ref={filterRef}
+                  value={filter}
+                  placeholder="Type to narrow"
+                  onChange={(event) => {
+                    setFilter(event.target.value);
+                    setPickCursor(0);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      setPickCursor((at) => Math.min(at + 1, matches.length - 1));
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      setPickCursor((at) => Math.max(at - 1, 0));
+                    } else if (event.key === 'Enter') {
+                      event.preventDefault();
+                      const picked = matches[pickCursor];
+                      if (picked) choose(picking.id, picked.id, event.shiftKey);
+                    }
+                  }}
+                />
 
-            <div className="picker-list">
-              {matches.length === 0 && (
-                <div className="muted picker-empty">No envelope matches.</div>
-              )}
-              {matches.map((envelope, index) => (
-                <button
-                  key={envelope.id}
-                  className={`picker-option${index === pickCursor ? ' active' : ''}`}
-                  onClick={(event) => choose(picking.id, envelope.id, event.shiftKey)}
-                  onMouseEnter={() => setPickCursor(index)}
-                >
-                  <span>{envelope.name}</span>
-                  <span className="muted">{envelope.groupName}</span>
-                </button>
-              ))}
-            </div>
+                <div className="picker-list">
+                  {/* The guess, offered at the top rather than assumed into the
+                      row. Not repeated further down the list. */}
+                  {suggested && !filter && (
+                    <button
+                      className="picker-option suggested"
+                      onClick={(event) => choose(picking.id, suggested.id, event.shiftKey)}
+                    >
+                      <span>{suggested.name}</span>
+                      <span className="muted">suggested · {suggested.groupName}</span>
+                    </button>
+                  )}
 
-            <div className="picker-foot muted">
-              <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>↵</kbd> choose ·{' '}
-              <kbd>shift</kbd>+<kbd>↵</kbd> choose and always use it for this payee ·{' '}
-              <kbd>esc</kbd> cancel
-            </div>
+                  {/* "No envelope at all" is the same question as "which one". */}
+                  <button
+                    className="picker-option"
+                    onClick={() => setPickingTransfer(true)}
+                    disabled={pending}
+                  >
+                    <span>Not spending</span>
+                    <span className="muted">a transfer between my own accounts</span>
+                  </button>
+
+                  {matches.length === 0 && (
+                    <div className="muted picker-empty">No envelope matches.</div>
+                  )}
+                  {matches.map((envelope, index) => (
+                    <button
+                      key={envelope.id}
+                      className={`picker-option${index === pickCursor ? ' active' : ''}`}
+                      onClick={(event) => choose(picking.id, envelope.id, event.shiftKey)}
+                      onMouseEnter={() => setPickCursor(index)}
+                    >
+                      <span>{envelope.name}</span>
+                      <span className="muted">{envelope.groupName}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="picker-foot muted">
+                  <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>↵</kbd> choose ·{' '}
+                  <kbd>shift</kbd>+<kbd>↵</kbd> choose and always use it for this payee ·{' '}
+                  <kbd>esc</kbd> cancel
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
+
     </div>
   );
 }

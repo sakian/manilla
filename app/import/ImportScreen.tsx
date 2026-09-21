@@ -192,12 +192,19 @@ export default function ImportScreen({
         return;
       }
 
-      setNote(
-        `Imported ${result.added} ${result.added === 1 ? 'transaction' : 'transactions'}` +
-          (result.linked > 0 ? `, linked ${result.linked}` : '') +
-          (result.skipped > 0 ? `, skipped ${result.skipped}` : '') + '.',
-      );
       reset();
+      // Straight to the queue, looking only at what just arrived. Deciding where
+      // these went is the rest of importing them, and it is the same screen - so
+      // it should be the same screen, not a summary of one.
+      if (result.added > 0) {
+        router.push(`/review?batch=${result.batchId}`);
+        return;
+      }
+      setNote(
+        result.linked > 0 || result.skipped > 0
+          ? `Nothing new. Linked ${result.linked}, skipped ${result.skipped}.`
+          : 'Nothing new in that file.',
+      );
       router.refresh();
     });
   }, [chosenAccount, decisionFor, loaded, needsAccount, preview, reset, router]);

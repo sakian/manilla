@@ -1958,3 +1958,13 @@ details[open] > summary > .group-summary::before {
   font-size: 13px;
   line-height: 1;
 }
+
+/* The row's own suggestion, at the top of its picker rather than filled in for it. */
+.picker-option.suggested {
+  background: var(--accent-soft);
+}
+
+.queue-choice .confirm {
+  font-size: 13px;
+  padding: 5px 12px;
+}

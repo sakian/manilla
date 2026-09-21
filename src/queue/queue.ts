@@ -46,10 +46,15 @@ export type EnvelopeOption = {
   groupName: string;
 };
 
-/** Everything awaiting review, newest first (RQ-1). */
+/**
+ * Everything awaiting review, newest first (RQ-1).
+ *
+ * `importBatchId` narrows it to one import, which is what the screen after an
+ * import shows: the same queue, looking only at what just arrived.
+ */
 export async function pendingTransactions(
   db: Database,
-  options: { limit?: number } = {},
+  options: { limit?: number; importBatchId?: string } = {},
 ): Promise<QueueRow[]> {
   const rows = await db
     .select({
@@ -71,7 +76,13 @@ export async function pendingTransactions(
     .leftJoin(envelopes, eq(txnLines.envelopeId, envelopes.id))
     .leftJoin(suggestions, eq(suggestions.transactionId, transactions.id))
     .where(
-      and(eq(transactions.status, 'pending_review'), eq(transactions.kind, 'spending')),
+      and(
+        eq(transactions.status, 'pending_review'),
+        eq(transactions.kind, 'spending'),
+        ...(options.importBatchId
+          ? [eq(transactions.importBatchId, options.importBatchId)]
+          : []),
+      ),
     )
     .orderBy(desc(transactions.date), desc(transactions.createdAt))
     .limit(options.limit ?? 200);
