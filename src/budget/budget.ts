@@ -482,9 +482,9 @@ export type FundingLine = {
   name: string;
   groupName: string;
   plannedCents: number;
-  /** Net allocated into it already this month. */
+  /** Net allocated into it already this month, shown so double-funding is visible. */
   alreadyAllocatedCents: number;
-  /** What this run would move: the remainder of the plan, never negative. */
+  /** What the row starts at: this envelope's planned monthly amount. */
   proposedCents: number;
   /**
    * What the envelope holds now, carry-over included. Needed because the funding
@@ -510,18 +510,25 @@ export type FundingPlan = {
  * FR-29's preview: what a one-click fund would do, computed and shown before
  * anything is written.
  *
- * Each line proposes the plan *minus what the month already received*, so an
- * envelope funded by hand earlier in the month is topped up rather than filled
- * twice, and an envelope already at its plan proposes nothing.
+ * Each line starts at the envelope's planned monthly amount, and at nothing when
+ * it has no plan.
  *
- * Every live envelope gets a line, including ones with no plan at all. A plan is
- * what funding *proposes*, not what it is allowed to do: "put whatever is left
- * into Savings" is an ordinary month, and Savings has no monthly figure. Leaving
- * the unplanned ones out meant the only way to fund them was a separate transfer
- * from the pool, which is the same operation typed somewhere else.
+ * It used to propose the plan *minus* what the month had already received, so
+ * that funding twice would top up rather than fill twice. That was wrong in a way
+ * the real ledger found: an envelope with no plan at all, which had money moved
+ * *out* of it this month, proposed being filled with the amount that left -
+ * `max(0, 0 - -40616)`. Money deliberately taken out came back as a suggestion,
+ * on an envelope nobody had budgeted for.
  *
- * They propose nothing, so the total and the one-click default are unchanged -
- * `fundEnvelopes` drops zero amounts, so an untouched row writes no move.
+ * The plan is now taken literally: it says what this envelope gets each month, so
+ * that is what the row offers. `alreadyAllocatedCents` rides along and is shown
+ * beside it, so funding a month twice is visible before it is applied rather than
+ * silently absorbed - the honest version of the same protection.
+ *
+ * Every live envelope gets a line, including ones with no plan. A plan is what
+ * funding *proposes*, not what it is allowed to do: "put whatever is left into
+ * Savings" is an ordinary month, and Savings has no monthly figure. Rows left
+ * alone write nothing, because `fundEnvelopes` drops zero amounts.
  */
 export async function planFunding(
   db: Database,
@@ -547,7 +554,7 @@ export function fundingFromBudget(budget: BudgetMonth): FundingPlan {
       groupName: row.groupName,
       plannedCents: row.plannedCents,
       alreadyAllocatedCents: row.allocatedCents,
-      proposedCents: Math.max(0, row.plannedCents - row.allocatedCents),
+      proposedCents: row.plannedCents,
       balanceCents: row.balanceCents,
     }));
 

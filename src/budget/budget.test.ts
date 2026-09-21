@@ -273,7 +273,7 @@ describe(
       assert.equal(await balanceOf(env.gasId), 20000);
     });
 
-    test('funding twice does not fill twice: the second run proposes the remainder', async () => {
+    test('a row starts at the plan, with what the month already got shown beside it', async () => {
       await receiveIncome(400000);
       await setPlanned(db, env.gasId, 20000);
 
@@ -283,19 +283,37 @@ describe(
 
       const plan = await planFunding(db, '2026-09', { today: '2026-09-19' });
       const gas = plan.lines.find((line) => line.envelopeId === env.gasId)!;
-      assert.equal(gas.alreadyAllocatedCents, 8000);
-      assert.equal(gas.proposedCents, 12000, 'only the remainder of the plan');
 
-      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 12000 }], {
+      // The plan is taken literally. Funding again would add another $200, which
+      // is why what the month has already had is carried alongside and shown.
+      assert.equal(gas.proposedCents, 20000);
+      assert.equal(gas.alreadyAllocatedCents, 8000);
+    });
+
+    test('an envelope with money taken out this month proposes only its plan', async () => {
+      // The real ledger found this: an envelope with no plan, which had money
+      // moved out of it this month, used to propose being filled with the amount
+      // that left - because the proposal was plan minus net allocated.
+      await receiveIncome(400000);
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.groceriesId, amountCents: 40616 }], {
+        today: '2026-09-19',
+      });
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.groceriesId, amountCents: -40616 }], {
         today: '2026-09-19',
       });
 
-      const after = await planFunding(db, '2026-09', { today: '2026-09-19' });
-      assert.equal(after.lines.find((line) => line.envelopeId === env.gasId)!.proposedCents, 0);
-      assert.equal(await balanceOf(env.gasId), 20000, 'funded exactly once over two runs');
+      const plan = await planFunding(db, '2026-09', { today: '2026-09-19' });
+      const groceries = plan.lines.find((line) => line.envelopeId === env.groceriesId)!;
+
+      assert.equal(groceries.alreadyAllocatedCents, 0, 'in and out again');
+      assert.equal(
+        groceries.proposedCents,
+        0,
+        'no plan means nothing proposed, whatever moved through it',
+      );
     });
 
-    test('an envelope funded past its plan proposes nothing, never a clawback', async () => {
+    test('a proposal is never negative, so funding never claws money back on its own', async () => {
       await receiveIncome(400000);
       await setPlanned(db, env.gasId, 20000);
       await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 30000 }], {
@@ -303,7 +321,9 @@ describe(
       });
 
       const plan = await planFunding(db, '2026-09', { today: '2026-09-19' });
-      assert.equal(plan.lines.find((line) => line.envelopeId === env.gasId)!.proposedCents, 0);
+      const gas = plan.lines.find((line) => line.envelopeId === env.gasId)!;
+      assert.equal(gas.proposedCents, 20000, 'the plan, not a correction to it');
+      assert.ok(plan.lines.every((line) => line.proposedCents >= 0));
     });
 
     test('funding moves money out of the pool and into each envelope', async () => {

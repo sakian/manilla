@@ -1696,9 +1696,18 @@ details[open] > summary > .group-summary::before {
   width: min(760px, 100%);
 }
 
-/* Available, before and after, pinned above the scrolling rows: the whole point
-   of the preview is watching this number while you type. */
+/*
+ * Available, before and after, pinned above the scrolling rows: watching that
+ * number while you type is the whole point of a preview.
+ *
+ * Both belt and braces. It sits outside the scrolling body, and it is also
+ * `sticky`, so it stays put whichever element ends up doing the scrolling on a
+ * given screen height.
+ */
 .fund-summary {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 22px;
@@ -1722,12 +1731,33 @@ details[open] > summary > .group-summary::before {
   font-weight: 620;
 }
 
-.fund-mode {
-  margin: 12px 14px 0;
+.budget-row.fund {
+  grid-template-columns: minmax(0, 1.5fr) minmax(70px, 0.8fr) minmax(70px, 0.8fr) minmax(
+      132px,
+      1.2fr
+    ) minmax(70px, 0.8fr);
 }
 
-.budget-row.fund {
-  grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(72px, 1fr));
+/* The add/set choice belongs against the box it changes the meaning of. */
+.amount-entry {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.row-mode {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-dim);
+}
+
+.amount-entry .amount {
+  width: 84px;
 }
 
 @media (max-width: 720px) {

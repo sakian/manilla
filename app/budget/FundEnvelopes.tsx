@@ -14,10 +14,12 @@
  * split can be worked out and changed and worked out again without the books
  * passing through a state nobody chose. One server call writes the lot.
  *
- * **Add, or set a target.** "Another fifty into Groceries" and "make Groceries
- * two hundred" are both natural, and which one you reach for depends on whether
- * you are topping up or deciding. Setting a target needs the current balance to
- * subtract from, which is why a funding line carries it.
+ * **Add, or set a target - per envelope.** "Another fifty into Groceries" and
+ * "make Savings two hundred" are both natural, and a month is usually a mix of
+ * the two: top up the regulars, decide a figure for the one you are thinking
+ * about. A single switch for the whole dialog forced one language on every row.
+ * Setting a target needs the current balance to subtract from, which is why a
+ * funding line carries it.
  *
  * **Amounts can be negative.** Taking a hundred out of Groceries and putting it
  * into Savings is one decision, and it belongs in one sitting rather than split
@@ -74,35 +76,30 @@ export default function FundEnvelopes({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>('add');
-
-  const seed = useCallback(
-    (next: Mode) =>
-      Object.fromEntries(
-        funding.lines.map((line) => [
-          line.envelopeId,
-          inputFromCents(
-            next === 'add' ? line.proposedCents : line.balanceCents + line.proposedCents,
-          ),
-        ]),
-      ),
-    [funding.lines],
+  /** Every row starts on "add", holding its planned monthly amount. */
+  const [modes, setModes] = useState<Record<string, Mode>>({});
+  const [amounts, setAmounts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      funding.lines.map((line) => [line.envelopeId, inputFromCents(line.proposedCents)]),
+    ),
   );
 
-  const [amounts, setAmounts] = useState<Record<string, string>>(() => seed('add'));
+  const modeOf = useCallback((envelopeId: string) => modes[envelopeId] ?? 'add', [modes]);
 
   /**
-   * Switching mode re-reads the same proposal in the other language rather than
-   * leaving the old numbers meaning something new: "50" as an addition is not
-   * "50" as a target.
+   * Switching a row re-seeds that row, because "50" as an addition is not "50" as
+   * a target. Add goes back to the plan; a target starts at what the envelope
+   * holds now, so the row moves nothing until a figure is actually chosen.
    */
   const switchMode = useCallback(
-    (next: Mode) => {
-      if (next === mode) return;
-      setMode(next);
-      setAmounts(seed(next));
+    (line: { envelopeId: string; proposedCents: number; balanceCents: number }, next: Mode) => {
+      setModes((current) => ({ ...current, [line.envelopeId]: next }));
+      setAmounts((current) => ({
+        ...current,
+        [line.envelopeId]: inputFromCents(next === 'add' ? line.proposedCents : line.balanceCents),
+      }));
     },
-    [mode, seed],
+    [],
   );
 
   /** What each row would move, and what is unreadable, in one pass. */
@@ -114,7 +111,7 @@ export default function FundEnvelopes({
     for (const line of funding.lines) {
       const typed = amounts[line.envelopeId] ?? '';
       try {
-        const cents = moveFor(mode, typed, line.balanceCents);
+        const cents = moveFor(modeOf(line.envelopeId), typed, line.balanceCents);
         byEnvelope.set(line.envelopeId, cents);
         total += cents;
       } catch {
@@ -124,7 +121,7 @@ export default function FundEnvelopes({
     }
 
     return { byEnvelope, total, bad };
-  }, [amounts, funding.lines, mode]);
+  }, [amounts, funding.lines, modeOf]);
 
   const availableAfter = funding.availableCents - moves.total;
   const touched = [...moves.byEnvelope.values()].filter((cents) => cents !== 0).length;
@@ -138,7 +135,9 @@ export default function FundEnvelopes({
         envelopeId: line.envelopeId,
         // Sent as an amount to move whichever way it was typed, so the server
         // never has to know which language the dialog was in.
-        amount: inputFromCents(moveFor(mode, amounts[line.envelopeId] ?? '0', line.balanceCents)),
+        amount: inputFromCents(
+          moveFor(modeOf(line.envelopeId), amounts[line.envelopeId] ?? '0', line.balanceCents),
+        ),
       }));
     } catch (problem) {
       setError(
@@ -158,18 +157,21 @@ export default function FundEnvelopes({
       onClose();
       router.refresh();
     });
-  }, [amounts, funding.lines, mode, month, onClose, router]);
+  }, [amounts, funding.lines, modeOf, month, onClose, router]);
 
   return (
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker dialog fund-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="picker-head">
-          <strong>Move money · {label}</strong>
-          <Hint label="How this screen works">
-            Every figure here is worked out in your browser — nothing moves until you press Apply.
-            Each row starts at whatever is left of its plan for {label}, so applying twice does not
-            fill twice. Envelopes with no plan are listed too; type into one to put something there.
-            A negative amount takes money back out of an envelope and returns it to Available.
+          <strong>Fund envelopes · {label}</strong>
+          <Hint label="How funding works">
+            Money out of Available and into the envelopes. Every figure here is worked out in your
+            browser — nothing moves until you press Apply. Each row starts at its planned monthly
+            amount, and at nothing when it has no plan; what the envelope has already had this month
+            sits beside it, so funding twice is visible before you do it. Choose <em>add</em> to put
+            an amount in, or <em>set to</em> to name the balance you want and let Manilla work out
+            the difference. Either can be negative, which takes money back out and returns it to
+            Available.
           </Hint>
         </div>
 
@@ -188,23 +190,6 @@ export default function FundEnvelopes({
               {money(availableAfter)}
             </span>
           </span>
-        </div>
-
-        <div className="segmented fund-mode">
-          <button
-            className={mode === 'add' ? 'active' : ''}
-            onClick={() => switchMode('add')}
-            disabled={pending}
-          >
-            Add to balance
-          </button>
-          <button
-            className={mode === 'target' ? 'active' : ''}
-            onClick={() => switchMode('target')}
-            disabled={pending}
-          >
-            Set balance to
-          </button>
         </div>
 
         <div className="dialog-body">
@@ -229,12 +214,13 @@ export default function FundEnvelopes({
               <span>Envelope</span>
               <span>Planned</span>
               <span>Balance</span>
-              <span>{mode === 'add' ? 'Add' : 'Set to'}</span>
+              <span>Add or set</span>
               <span>Moves</span>
             </div>
 
             {funding.lines.map((line) => {
               const moved = moves.byEnvelope.get(line.envelopeId) ?? 0;
+              const mode = modeOf(line.envelopeId);
               return (
                 <div key={line.envelopeId} className="budget-row fund">
                   <span className="plan-name">
@@ -253,8 +239,17 @@ export default function FundEnvelopes({
                     </span>
                   </span>
 
-                  <span className="figure">
-                    <span className="figure-label">{mode === 'add' ? 'add' : 'set to'}</span>
+                  <span className="figure amount-entry">
+                    <select
+                      className="row-mode"
+                      value={mode}
+                      aria-label={`How the amount for ${line.name} is read`}
+                      disabled={pending}
+                      onChange={(event) => switchMode(line, event.target.value as Mode)}
+                    >
+                      <option value="add">add</option>
+                      <option value="target">set to</option>
+                    </select>
                     <input
                       className="amount"
                       inputMode="decimal"

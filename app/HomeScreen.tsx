@@ -165,14 +165,15 @@ export default function HomeScreen({
   const notices = useMemo<Notice[]>(() => {
     const list: Notice[] = [];
 
+    // One line each. A notice is a thing to notice, not a paragraph about it -
+    // what to do about each of these is on the screen it links to, or in the
+    // button beside the thing itself.
     if (!headline.invariantOk) {
       list.push({
         kind: 'bad',
         text: (
           <>
-            Envelopes and accounts disagree by{' '}
-            <Money cents={headline.unexplainedCents} plain />, which should never happen. The most
-            recent import is the place to look.
+            Envelopes and accounts disagree by <Money cents={headline.unexplainedCents} plain />
           </>
         ),
       });
@@ -183,9 +184,7 @@ export default function HomeScreen({
         kind: 'bad',
         text: (
           <>
-            Available is <Money cents={-headline.unallocatedCents} plain /> overdrawn: the envelopes
-            hold more than has actually arrived, so some balance below is money you do not have yet.
-            Take some back with Fund envelopes, or leave it until income covers it.
+            Available overdrawn by <Money cents={-headline.unallocatedCents} plain />
           </>
         ),
       });
@@ -194,12 +193,7 @@ export default function HomeScreen({
     if (headline.overspentCount > 0) {
       list.push({
         kind: 'warn',
-        text: (
-          <>
-            {headline.overspentCount} envelope{headline.overspentCount === 1 ? ' is' : 's are'}{' '}
-            overspent. Cover puts it right from another envelope.
-          </>
-        ),
+        text: `${headline.overspentCount} envelope${headline.overspentCount === 1 ? '' : 's'} overspent`,
       });
     }
 
@@ -207,12 +201,7 @@ export default function HomeScreen({
       list.push({
         kind: 'info',
         href: '/review',
-        text: (
-          <>
-            {headline.waiting} transaction{headline.waiting === 1 ? '' : 's'} waiting to be
-            categorized.
-          </>
-        ),
+        text: `${headline.waiting} to review`,
       });
     }
 
@@ -221,8 +210,7 @@ export default function HomeScreen({
         kind: 'info',
         text: (
           <>
-            <Money cents={headline.unallocatedCents} plain /> in Available, not yet given to an
-            envelope.
+            <Money cents={headline.unallocatedCents} plain /> in Available
           </>
         ),
       });
@@ -306,21 +294,22 @@ export default function HomeScreen({
                 setTransferOpen(true);
               }}
               disabled={pending}
+              title="Move money from one envelope to another"
             >
-              Move between envelopes
+              Move
             </button>
             {/* Every envelope is fundable, so this is only unreachable when
                 there are none at all. */}
-            {/* No amount in the label: it was the plan's remainder, which is
-                one of several things this dialog does and not the one anyone
-                came for. */}
+            {/* One word each. What they do is explained where it happens, by the
+                dialog that opens - not by a label long enough to need reading
+                every time you glance at the screen. */}
             <button
               className="primary"
               onClick={() => setFunded(true)}
               disabled={pending || funding.lines.length === 0}
               title="Put money into envelopes out of Available, or take it back"
             >
-              Fund envelopes
+              Fund
             </button>
             <button
               onClick={() => setEditing(!editing)}
