@@ -32,7 +32,7 @@ import {
   primaryKey,
   check,
 } from 'drizzle-orm/pg-core';
-import { relations, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 /** Cents. Drizzle returns bigint columns as strings by default; `mode: 'number'` keeps them as safe integers. */
 const cents = (name: string) => bigint(name, { mode: 'number' });
@@ -536,46 +536,21 @@ export const rules = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Relations
+// Row types
 // ---------------------------------------------------------------------------
 
-export const accountsRelations = relations(accounts, ({ many }) => ({
-  transactions: many(transactions),
-}));
-
-export const envelopeGroupsRelations = relations(envelopeGroups, ({ many }) => ({
-  envelopes: many(envelopes),
-}));
-
-export const envelopesRelations = relations(envelopes, ({ one, many }) => ({
-  group: one(envelopeGroups, {
-    fields: [envelopes.groupId],
-    references: [envelopeGroups.id],
-  }),
-  lines: many(txnLines),
-}));
-
-export const transactionsRelations = relations(transactions, ({ one, many }) => ({
-  account: one(accounts, {
-    fields: [transactions.accountId],
-    references: [accounts.id],
-  }),
-  lines: many(txnLines),
-  externalIds: many(transactionExternalIds),
-  suggestion: one(suggestions),
-}));
-
-export const txnLinesRelations = relations(txnLines, ({ one }) => ({
-  transaction: one(transactions, {
-    fields: [txnLines.transactionId],
-    references: [transactions.id],
-  }),
-  envelope: one(envelopes, {
-    fields: [txnLines.envelopeId],
-    references: [envelopes.id],
-  }),
-}));
-
+/**
+ * One name per table for the shape a select returns.
+ *
+ * Kept complete rather than trimmed to what is imported today: the value is in
+ * being able to reach for `TxnLine` without first going and writing the line
+ * that declares it, and an incomplete list of these is worse than none.
+ *
+ * Drizzle's `relations()` declarations used to sit here too. They were never
+ * referenced - nothing in Manilla uses the `db.query` builder's `with:`, every
+ * read is the select builder - and a reader who saw them would reasonably go
+ * looking for the joins they imply.
+ */
 export type Account = typeof accounts.$inferSelect;
 export type AccountGroup = typeof accountGroups.$inferSelect;
 export type Envelope = typeof envelopes.$inferSelect;

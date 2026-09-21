@@ -13,7 +13,6 @@ import { db } from '../../db/client.ts';
 import {
   fundEnvelopes,
   reverseAllocation,
-  setExpectedIncome,
   setPlanned,
 } from '../../src/budget/budget.ts';
 import { assertMonth } from '../../src/budget/month.ts';
@@ -40,18 +39,6 @@ export async function setPlannedAction(
     await requireUser();
     const cents = centsFromInput(amount);
     await setPlanned(db(), envelopeId, cents, month ? { month: assertMonth(month) } : {});
-    refreshed();
-    return { ok: true };
-  } catch (error) {
-    return failed(error);
-  }
-}
-
-export async function setExpectedIncomeAction(amount: string): Promise<ActionResult> {
-  try {
-    await requireUser();
-    const trimmed = amount.trim();
-    await setExpectedIncome(db(), trimmed === '' ? null : centsFromInput(trimmed));
     refreshed();
     return { ok: true };
   } catch (error) {

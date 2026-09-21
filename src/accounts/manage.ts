@@ -269,14 +269,6 @@ export async function unarchiveAccount(db: Database, accountId: string): Promise
   await db.update(accounts).set({ archivedAt: null }).where(eq(accounts.id, accountId));
 }
 
-export async function reorderAccounts(db: Database, orderedIds: string[]): Promise<void> {
-  await db.transaction(async (tx) => {
-    for (const [index, id] of orderedIds.entries()) {
-      await tx.update(accounts).set({ position: index }).where(eq(accounts.id, id));
-    }
-  });
-}
-
 /**
  * One transaction as a list shows it. The shape the transaction list renders,
  * and a subset of what {@link searchTransactions} returns, so the two views
@@ -316,11 +308,3 @@ export async function accountTransactions(
   return found.rows;
 }
 
-/** The most recent transactions across every account, for the accounts screen. */
-export async function recentTransactions(
-  db: Database,
-  options: { limit?: number } = {},
-): Promise<AccountTransaction[]> {
-  const found = await searchTransactions(db, options.limit ? { limit: options.limit } : {});
-  return found.rows;
-}

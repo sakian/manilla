@@ -166,11 +166,6 @@ export async function recordAiCall(
   });
 }
 
-/** The recent calls, newest first, for the settings page. */
-export async function recentAiCalls(db: Database, limit = 10) {
-  return db.select().from(aiCalls).orderBy(desc(aiCalls.createdAt)).limit(limit);
-}
-
 // ---------------------------------------------------------------------------
 // The merchant cache
 // ---------------------------------------------------------------------------

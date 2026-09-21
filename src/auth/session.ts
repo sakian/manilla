@@ -64,6 +64,13 @@ export async function createSession(
     createdAt: now,
   });
 
+  // Sweep on the way in. `verifySession` drops a lapsed row when it meets one,
+  // which covers every session anybody comes back to - but a session that is
+  // never used again is never met, so without this the table only grows. Signing
+  // in is the right moment: rare, already writing here, and nobody is waiting on
+  // a page render for it.
+  await purgeExpiredSessions(db, now);
+
   return { token, expiresAt };
 }
 
@@ -138,7 +145,14 @@ export async function destroyAllSessions(db: Database, userId: string): Promise<
   return removed.length;
 }
 
-/** Housekeeping. Expired rows are also removed on use, so this is belt and braces. */
+/**
+ * Housekeeping: everything lapsed or past its absolute end, gone.
+ *
+ * Called on every sign-in (see `createSession`), which is often enough for a
+ * table that gains a row per device per fortnight and rare enough to cost
+ * nothing. `verifySession` also drops a row the moment it finds it expired, so
+ * this only ever collects the sessions nobody came back to.
+ */
 export async function purgeExpiredSessions(db: Database, now: Date = new Date()): Promise<number> {
   const bornBefore = new Date(now.getTime() - ABSOLUTE_TIMEOUT_MS);
   const removed = await db

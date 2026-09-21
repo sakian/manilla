@@ -290,12 +290,24 @@ describe(
 
     test('purging removes lapsed sessions and keeps live ones', async () => {
       const userId = await makeUser();
-      const old = new Date('2026-01-01T00:00:00Z');
-      await createSession(db, userId, old);
+      await createSession(db, userId, new Date('2026-01-01T00:00:00Z'));
       const live = await createSession(db, userId, new Date());
 
-      const purged = await purgeExpiredSessions(db);
-      assert.equal(purged, 1);
+      assert.ok(await verifySession(db, live.token));
+      assert.equal(await purgeExpiredSessions(db), 0, 'the sign-in above already swept');
+    });
+
+    // A session nobody comes back to is never met by `verifySession`, so without
+    // a sweep somewhere the table only ever grows.
+    test('signing in sweeps the sessions nobody came back to', async () => {
+      const userId = await makeUser();
+      await createSession(db, userId, new Date('2026-01-01T00:00:00Z'));
+      await createSession(db, userId, new Date('2026-02-01T00:00:00Z'));
+
+      const live = await createSession(db, userId, new Date());
+
+      const rows = await db.select().from(sessions);
+      assert.equal(rows.length, 1, 'both lapsed rows went on the way in');
       assert.ok(await verifySession(db, live.token));
     });
 

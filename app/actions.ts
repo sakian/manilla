@@ -3,12 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '../db/client.ts';
 import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
-import {
-  pairTransferHalves,
-  recategorize,
-  saveReview,
-  type ReviewDecision,
-} from '../src/queue/queue.ts';
+import { pairTransferHalves, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
 import { createTransferRule } from '../src/rules/rules.ts';
 import { requireUser } from './auth.ts';
@@ -33,23 +28,6 @@ export async function saveReviewAction(decisions: ReviewDecision[]) {
   revalidatePath('/transactions');
   revalidatePath('/');
   return result;
-}
-
-export async function recategorizeAction(
-  transactionId: string,
-  envelopeId: string,
-  options: { createRule?: boolean } = {},
-) {
-  await requireUser();
-  await recategorize(db(), {
-    transactionId,
-    envelopeId,
-    confirm: true,
-    createRule: options.createRule,
-  });
-  revalidatePath('/review');
-  revalidatePath('/');
-  return { ok: true };
 }
 
 /**

@@ -328,27 +328,6 @@ kbd {
   color: var(--text);
 }
 
-.queue-confirm {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.queue-date-head {
-  margin: 18px 0 2px;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
-}
-
-.queue-day:first-child .queue-date-head {
-  margin-top: 0;
-}
-
 /* The decision to stop is made at the bottom of a long list as often as the top. */
 .queue-save {
   position: sticky;
@@ -684,22 +663,6 @@ input.amount {
   letter-spacing: -0.01em;
 }
 
-.month-nav {
-  display: flex;
-  gap: 12px;
-  font-size: 14px;
-}
-
-.month-nav a {
-  color: var(--text-dim);
-  text-decoration: none;
-  font-family: var(--mono);
-}
-
-.month-nav a:hover {
-  color: var(--text);
-}
-
 .budget-warning {
   border: 1px solid var(--medium);
   color: var(--medium);
@@ -756,20 +719,6 @@ input.amount {
   font-weight: 600;
   padding: 10px 0 4px;
   font-size: 14px;
-}
-
-.expected-income {
-  padding-bottom: 6px;
-}
-
-.expected-income .field input {
-  width: 140px;
-}
-
-.expected-income p {
-  margin: 0;
-  font-size: 13px;
-  max-width: 68ch;
 }
 
 /* --- Envelopes ----------------------------------------------------------- */
@@ -1078,76 +1027,9 @@ details[open] > summary > .group-summary::before {
   margin: 4px 0 8px;
 }
 
-.import-row {
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1.6fr) 110px minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-  border-left: 3px solid transparent;
-  padding-left: 8px;
-}
-
-.import-row:last-child {
-  border-bottom: none;
-}
-
-/* Only the rows that need a decision are marked; "new" is the quiet default. */
-.import-row.possible_duplicate {
-  border-left-color: var(--medium);
-}
-
-.import-row.duplicate {
-  opacity: 0.6;
-}
-
-.import-payee {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.import-row .money {
-  text-align: right;
-}
-
-.import-actions {
-  display: flex;
-  gap: 4px;
-  justify-content: flex-end;
-}
-
-.import-actions button {
-  font-size: 12px;
-  padding: 3px 8px;
-  text-transform: lowercase;
-}
-
-.import-actions button.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
 .budget-warning.ok {
   border-color: var(--high);
   color: var(--high);
-}
-
-@media (max-width: 720px) {
-  .import-row {
-    grid-template-columns: 52px minmax(0, 1fr) 96px;
-    grid-template-areas:
-      'date payee amount'
-      'env  env   env'
-      'act  act   act';
-    row-gap: 6px;
-  }
-  .import-row > .txn-date { grid-area: date; }
-  .import-payee { grid-area: payee; }
-  .import-row > .money { grid-area: amount; }
-  .import-envelope { grid-area: env; }
-  .import-actions { grid-area: act; justify-content: flex-start; }
 }
 
 .picker-rule {
@@ -2140,11 +2022,6 @@ details[open] > summary > .group-summary::before {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-dim);
-}
-
-.picker-empty {
-  padding: 14px;
-  font-size: 13px;
 }
 
 /* A rule Manilla noticed and is asking about (CA-2). */
