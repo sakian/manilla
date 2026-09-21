@@ -1,0 +1,5 @@
+# Manilla is reachable only from a private tailnet, so nothing here should ever
+# be crawled. This file exists so that if it ever is reachable by accident, the
+# well-behaved half of the internet leaves it alone.
+User-agent: *
+Disallow: /
