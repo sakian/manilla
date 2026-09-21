@@ -228,6 +228,8 @@ export default function ImportScreen({
 
   return (
     <>
+      {notices}
+
       <div className="page-head">
         <h2>Import a statement</h2>
         <p className="muted">
@@ -235,8 +237,6 @@ export default function ImportScreen({
           do.
         </p>
       </div>
-
-      {notices}
 
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}

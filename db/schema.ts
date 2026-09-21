@@ -146,10 +146,31 @@ export const sessions = pgTable(
 // Accounts and envelopes
 // ---------------------------------------------------------------------------
 
+/**
+ * A category of accounts, the same shape as an envelope group.
+ *
+ * Accounts already carry a `kind`, which is what a statement needs to know, but
+ * "Day to day" and "Long term" is how a household actually thinks about them and
+ * no fixed list of kinds can express that.
+ */
+export const accountGroups = pgTable('account_groups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  position: integer('position').notNull().default(0),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+});
+
 export const accounts = pgTable(
   'accounts',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    /**
+     * Nullable, unlike an envelope's group: accounts existed before groups did,
+     * and inventing a group for them on migration would put a name nobody chose
+     * on the screen. An account with no group is shown last, under "No group",
+     * until it is given one.
+     */
+    groupId: uuid('group_id').references(() => accountGroups.id),
     name: text('name').notNull(),
     kind: accountKind('kind').notNull(),
     currency: text('currency').notNull().default('CAD'),
@@ -162,7 +183,10 @@ export const accounts = pgTable(
     archivedAt: timestamp('archived_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('accounts_external_idx').on(table.externalAccountId)],
+  (table) => [
+    uniqueIndex('accounts_external_idx').on(table.externalAccountId),
+    index('accounts_group_idx').on(table.groupId),
+  ],
 );
 
 export const envelopeGroups = pgTable('envelope_groups', {
@@ -553,6 +577,7 @@ export const txnLinesRelations = relations(txnLines, ({ one }) => ({
 }));
 
 export type Account = typeof accounts.$inferSelect;
+export type AccountGroup = typeof accountGroups.$inferSelect;
 export type Envelope = typeof envelopes.$inferSelect;
 export type EnvelopeGroup = typeof envelopeGroups.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;

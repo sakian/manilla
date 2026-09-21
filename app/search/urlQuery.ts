@@ -29,10 +29,20 @@ function one(value: string | string[] | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-/** Repeatable params arrive as an array from one shape of URL and a string from another. */
+/**
+ * Repeatable params arrive as an array from one shape of URL and a string from
+ * another.
+ *
+ * `all` is dropped: an account's own page uses it to mean "every account", and it
+ * must never reach a query as an id - the columns are uuids, so Postgres would
+ * refuse the whole request rather than return nothing.
+ */
 function many(value: string | string[] | undefined): string[] {
   const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
-  return values.flatMap((item) => item.split(',')).map((item) => item.trim()).filter(Boolean);
+  return values
+    .flatMap((item) => item.split(','))
+    .map((item) => item.trim())
+    .filter((item) => item !== '' && item !== 'all');
 }
 
 function cents(value: string | undefined): number | undefined {
@@ -174,10 +184,16 @@ export function writeQuery(values: Partial<FormValues>, extra: Params = {}): str
  * so a filter this file does not know about - one added later, or one typed by
  * hand - survives paging instead of being quietly dropped.
  */
-export function withParams(path: string, params: Params, page = 1): string {
+export function withParams(
+  path: string,
+  params: Params,
+  page = 1,
+  override: Params = {},
+): string {
   const query = new URLSearchParams();
+  const all = { ...params, ...override };
 
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(all)) {
     if (key === 'page') continue;
     const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
     for (const item of values) {

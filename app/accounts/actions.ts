@@ -12,6 +12,14 @@ import {
   unarchiveAccount,
   type AccountKind,
 } from '../../src/accounts/manage.ts';
+import {
+  archiveAccountGroup,
+  createAccountGroup,
+  moveAccountToGroup,
+  nudgeAccountGroup,
+  renameAccountGroup,
+  unarchiveAccountGroup,
+} from '../../src/accounts/groups.ts';
 import { requireUser } from '../auth.ts';
 import { centsFromInput } from '../amount.ts';
 
@@ -92,6 +100,89 @@ export async function unarchiveAccountAction(accountId: string): Promise<ActionR
   try {
     await requireUser();
     await unarchiveAccount(db(), accountId);
+    refreshed();
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Categories (FR-1, FR-3)
+// ---------------------------------------------------------------------------
+
+export async function createAccountGroupAction(name: string): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await createAccountGroup(db(), name);
+    refreshed();
+    return { ok: true, message: 'Category added.' };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function renameAccountGroupAction(
+  groupId: string,
+  name: string,
+): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await renameAccountGroup(db(), groupId, name);
+    refreshed();
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function archiveAccountGroupAction(groupId: string): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await archiveAccountGroup(db(), groupId);
+    refreshed();
+    return {
+      ok: true,
+      message: 'Category archived. Its accounts are still here, without a category.',
+    };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function unarchiveAccountGroupAction(groupId: string): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await unarchiveAccountGroup(db(), groupId);
+    refreshed();
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function nudgeAccountGroupAction(
+  groupId: string,
+  direction: 'up' | 'down',
+): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await nudgeAccountGroup(db(), groupId, direction);
+    refreshed();
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** An empty string means "no category", which is a real choice here. */
+export async function moveAccountToGroupAction(
+  accountId: string,
+  groupId: string,
+): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await moveAccountToGroup(db(), accountId, groupId === '' ? null : groupId);
     refreshed();
     return { ok: true };
   } catch (error) {

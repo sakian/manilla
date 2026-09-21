@@ -31,6 +31,7 @@ export default function TransactionFilters({
   accounts,
   envelopes,
   pinnedAccountId,
+  everyAccountValue,
   active,
 }: {
   /** Where to navigate: `/search`, or the account view. */
@@ -40,6 +41,12 @@ export default function TransactionFilters({
   envelopes: EnvelopeFilterChoice[];
   /** Set on the account view, where the account is the page rather than a filter. */
   pinnedAccountId?: string;
+  /**
+   * The value the account control uses for "every account". On an account's own
+   * page the absence of a filter would mean "this account", so widening to all of
+   * them has to be said explicitly rather than by leaving the box empty.
+   */
+  everyAccountValue?: string;
   /** Whether anything is currently being filtered, so "Clear" can be hidden. */
   active: boolean;
 }) {
@@ -186,7 +193,7 @@ export default function TransactionFilters({
                   set('accounts', event.target.value ? [event.target.value] : [])
                 }
               >
-                <option value="">Every account</option>
+                <option value={everyAccountValue ?? ''}>Every account</option>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.name}

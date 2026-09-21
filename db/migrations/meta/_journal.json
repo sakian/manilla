@@ -43,6 +43,13 @@
       "when": 1789907960835,
       "tag": "0005_flashy_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789955402372,
+      "tag": "0006_purple_korath",
+      "breakpoints": true
     }
   ]
 }

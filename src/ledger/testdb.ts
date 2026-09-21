@@ -88,7 +88,7 @@ export async function truncateAll(db: Database): Promise<void> {
     truncate table
       txn_lines, suggestions, transaction_external_ids, transactions,
       envelope_moves, budget_lines, rules, import_batches,
-      envelopes, envelope_groups, accounts,
+      envelopes, envelope_groups, accounts, account_groups,
       sessions, credentials, recovery_codes, webauthn_challenges, users,
       app_settings, ai_calls, ai_suggestion_cache
     restart identity cascade

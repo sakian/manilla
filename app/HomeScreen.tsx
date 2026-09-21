@@ -210,6 +210,8 @@ export default function HomeScreen({
 
   return (
     <>
+      {notices}
+
       <div className="page-head">
         <div className="month-head">
           <h2>
@@ -264,8 +266,6 @@ export default function HomeScreen({
         </div>
 
       </div>
-
-      {notices}
 
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}

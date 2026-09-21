@@ -60,6 +60,12 @@ planned amounts behind an Edit button. Envelopes are alphabetical inside their
 group and groups keep a manual order — dozens of one are scanned, a handful of the
 other are read as a shape.
 
+The accounts screen is deliberately the same screen for the other half of the
+ledger: accounts under categories you name, two lines per card, the whole card a
+link into the account, everything structural behind Edit. Its transactions live on
+the account's own page, the way an envelope's history lives on the envelope's, and
+widening the account filter there searches the whole ledger.
+
 What needs attention is one ranked list, read once on the server and shown on
 every main screen: a ledger that does not add up, an overdrawn pool, overspent
 envelopes, a plan beyond the income to fund it, transactions to review. A quiet
@@ -144,7 +150,8 @@ app/                    the web app (Next.js App Router)
   reports/              spending by envelope, month by month, with CSV (RP-1 to RP-6)
   transactions/         entering, correcting and deleting by hand (FR-2, FR-4, FR-5)
   envelopes/[id]/       one envelope: its history, transfers, cover an overspend (VW-4, FR-34, FR-35)
-  accounts/             accounts and their transactions, filterable (FR-1, VW-5)
+  accounts/             accounts under categories (FR-1, FR-3)
+  accounts/[id]/        one account: its balance and its transactions (VW-5)
   login/, settings/     passkey sign-in and registered devices (NF-3)
   auth.ts               the session check every page and action goes through
 proxy.ts                redirects a signed-out browser before a page renders
@@ -167,6 +174,7 @@ src/
   ai/ai.ts              the off switch, budget, merchant cache and accuracy measure (NF-5)
   export/export.ts      the whole ledger as JSON or CSV (NF-6)
   transactions/manage.ts manual entry, edits, deletions, account transfers
+  accounts/groups.ts    categories of accounts, shaped like envelope groups (FR-3)
   transactions/search.ts the one filter query behind every transaction list (VW-5, VW-6)
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
