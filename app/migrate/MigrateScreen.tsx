@@ -29,6 +29,7 @@ import {
   type MigrationSourceId,
 } from '../../src/migrate/sources.ts';
 import { centsFromInput, inputFromCents } from '../amount.ts';
+import { Hint } from '../Hint.tsx';
 import {
   applyReconciliationAction,
   commitMigrationAction,
@@ -227,11 +228,13 @@ export default function MigrateScreen({
   return (
     <>
       <div className="page-head">
-        <h2>Bring in your budgeting history</h2>
-        <p className="muted">
-          Six years of transactions, their envelopes and their splits. Nothing is written until you
-          have seen what it will do, and the whole thing can be undone in one step.
-        </p>
+        <h2>
+          Bring in your budgeting history{' '}
+          <Hint label="How the migration works">
+          Years of transactions, their envelopes and their splits. Nothing is written until you have
+            seen what it will do, and the whole thing can be undone in one step.
+          </Hint>
+        </h2>
       </div>
 
       {error && <p className="signin-error">{error}</p>}

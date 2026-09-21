@@ -9,6 +9,7 @@ import {
   searchTransactions,
 } from '../../src/transactions/search.ts';
 import { requireUser } from '../auth.ts';
+import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
 import { PAGE_SIZE, readForm, readPage, readQuery, withParams } from '../search/urlQuery.ts';
 import TransactionFilters from '../transactions/TransactionFilters.tsx';
@@ -65,11 +66,14 @@ export default async function AccountsPage(props: {
   return (
     <>
       <div className="page-head">
-        <h2>Accounts</h2>
-        <p className="muted">
+        <h2>
+          Accounts{' '}
+          <Hint label="What this screen shows">
           Real money, as the bank sees it. Every transaction is here: search and filter below, and
-          pick an account to narrow it to one.
-        </p>
+            pick an account to narrow it to one. The CSV downloads exactly what the list is
+            showing.
+          </Hint>
+        </h2>
       </div>
 
       <AccountManager accounts={managed} selectedId={selected?.id ?? null} />

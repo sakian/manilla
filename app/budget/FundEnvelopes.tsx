@@ -1,24 +1,44 @@
 'use client';
 
 /**
- * Turning the plan into dated allocations (FR-29, FR-30).
+ * Moving money between Available and the envelopes (FR-29, FR-30).
  *
  * Its own component because the action belongs next to the envelopes it fills,
- * not on a separate planning screen: you decide to fund while looking at what
- * the envelopes hold. The preview is the important part - every row proposes
- * what is *left* of its plan for the month, so funding twice does not fill
- * twice, and every figure can be edited before anything is written.
+ * not on a separate planning screen: you decide while looking at what the
+ * envelopes hold.
  *
- * Every envelope is listed, including the ones with no plan. A plan is what
- * funding proposes, not what it is allowed to do, and "put whatever is left into
- * Savings" is an ordinary month. Rows left at zero write nothing.
+ * Four things shape it.
+ *
+ * **Nothing is written until Apply.** Every figure here is arithmetic in the
+ * browser, including what Available would be left with, so a whole month's
+ * split can be worked out and changed and worked out again without the books
+ * passing through a state nobody chose. One server call writes the lot.
+ *
+ * **Add, or set a target.** "Another fifty into Groceries" and "make Groceries
+ * two hundred" are both natural, and which one you reach for depends on whether
+ * you are topping up or deciding. Setting a target needs the current balance to
+ * subtract from, which is why a funding line carries it.
+ *
+ * **Amounts can be negative.** Taking a hundred out of Groceries and putting it
+ * into Savings is one decision, and it belongs in one sitting rather than split
+ * across two screens with the books half-changed in between.
+ *
+ * **Every envelope is listed, planned or not.** A plan is what funding proposes,
+ * not what it permits. Rows left alone write nothing.
+ *
+ * Applying with Available overdrawn is allowed - FR-24 lets a balance go
+ * negative, and refusing would strand someone who knows income arrives tomorrow.
+ * It says so plainly first, and the home screen keeps saying so afterwards.
  */
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { FundingPlan } from '../../src/budget/budget.ts';
-import { centsFromInput, inputFromCents } from '../amount.ts';
-import { fundEnvelopesAction, reverseMonthFundingAction } from './actions.ts';
+import { AmountError, centsFromInput, inputFromCents } from '../amount.ts';
+import { Hint } from '../Hint.tsx';
+import { fundEnvelopesAction } from './actions.ts';
+
+type Mode = 'add' | 'target';
 
 function money(cents: number): string {
   const sign = cents < 0 ? '-' : '';
@@ -26,77 +46,111 @@ function money(cents: number): string {
   return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
 }
 
+/**
+ * What a row's typed value means, in cents moved out of Available.
+ *
+ * An empty field is "leave this alone", in both modes. It matters most in target
+ * mode: read literally, a cleared box says "set this envelope to zero", which
+ * would empty it - and clearing a field is what anyone does before typing. So a
+ * blank moves nothing, and emptying an envelope deliberately means typing a 0.
+ */
+function moveFor(mode: Mode, typed: string, balanceCents: number): number {
+  if (typed.trim() === '') return 0;
+  const value = centsFromInput(typed);
+  return mode === 'add' ? value : value - balanceCents;
+}
+
 export default function FundEnvelopes({
   month,
   label,
   funding,
-  allocatedCents,
   onClose,
 }: {
   month: string;
   label: string;
   funding: FundingPlan;
-  /** Net allocated this month, so a month already funded can be sent back (FR-30). */
-  allocatedCents: number;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>('add');
 
-  /** The editable copy of the preview, keyed by envelope. */
-  const [amounts, setAmounts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      funding.lines.map((line) => [line.envelopeId, inputFromCents(line.proposedCents)]),
-    ),
+  const seed = useCallback(
+    (next: Mode) =>
+      Object.fromEntries(
+        funding.lines.map((line) => [
+          line.envelopeId,
+          inputFromCents(
+            next === 'add' ? line.proposedCents : line.balanceCents + line.proposedCents,
+          ),
+        ]),
+      ),
+    [funding.lines],
   );
 
-  const totalCents = useMemo(() => {
-    let total = 0;
-    for (const line of funding.lines) {
-      try {
-        total += centsFromInput(amounts[line.envelopeId] ?? '0');
-      } catch {
-        // A half-typed amount is not worth an error while they are still typing;
-        // the server refuses it if it is still nonsense when applied.
-      }
-    }
-    return total;
-  }, [amounts, funding.lines]);
+  const [amounts, setAmounts] = useState<Record<string, string>>(() => seed('add'));
 
-  const sendMonthBack = useCallback(() => {
-    if (
-      !window.confirm(
-        `Take back everything allocated to envelopes in ${label}, returning it to Available?\n\n` +
-          'Only this month\u2019s allocations are touched - spending, transfers you made by hand, ' +
-          'and other months are left alone. Each one is reversed by an opposite entry, so the ' +
-          'envelope\u2019s history still shows what happened rather than losing the record.',
-      )
-    ) {
-      return;
-    }
-    setError(null);
-    startTransition(async () => {
-      const result = await reverseMonthFundingAction(month);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+  /**
+   * Switching mode re-reads the same proposal in the other language rather than
+   * leaving the old numbers meaning something new: "50" as an addition is not
+   * "50" as a target.
+   */
+  const switchMode = useCallback(
+    (next: Mode) => {
+      if (next === mode) return;
+      setMode(next);
+      setAmounts(seed(next));
+    },
+    [mode, seed],
+  );
+
+  /** What each row would move, and what is unreadable, in one pass. */
+  const moves = useMemo(() => {
+    const byEnvelope = new Map<string, number>();
+    const bad: string[] = [];
+    let total = 0;
+
+    for (const line of funding.lines) {
+      const typed = amounts[line.envelopeId] ?? '';
+      try {
+        const cents = moveFor(mode, typed, line.balanceCents);
+        byEnvelope.set(line.envelopeId, cents);
+        total += cents;
+      } catch {
+        // Half-typed is not an error yet, but it must not be counted either.
+        bad.push(line.name);
       }
-      onClose();
-      router.refresh();
-    });
-  }, [label, month, onClose, router]);
+    }
+
+    return { byEnvelope, total, bad };
+  }, [amounts, funding.lines, mode]);
+
+  const availableAfter = funding.availableCents - moves.total;
+  const touched = [...moves.byEnvelope.values()].filter((cents) => cents !== 0).length;
 
   const apply = useCallback(() => {
     setError(null);
-    startTransition(async () => {
-      const result = await fundEnvelopesAction(
-        month,
-        funding.lines.map((line) => ({
-          envelopeId: line.envelopeId,
-          amount: amounts[line.envelopeId] ?? '0',
-        })),
+
+    let lines: { envelopeId: string; amount: string }[];
+    try {
+      lines = funding.lines.map((line) => ({
+        envelopeId: line.envelopeId,
+        // Sent as an amount to move whichever way it was typed, so the server
+        // never has to know which language the dialog was in.
+        amount: inputFromCents(moveFor(mode, amounts[line.envelopeId] ?? '0', line.balanceCents)),
+      }));
+    } catch (problem) {
+      setError(
+        problem instanceof AmountError
+          ? problem.message
+          : 'One of those amounts could not be read.',
       );
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await fundEnvelopesAction(month, lines);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -104,86 +158,146 @@ export default function FundEnvelopes({
       onClose();
       router.refresh();
     });
-  }, [amounts, funding.lines, month, onClose, router]);
+  }, [amounts, funding.lines, mode, month, onClose, router]);
 
   return (
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker dialog fund-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="picker-head">
-          <strong>Fund envelopes · {label}</strong>
+          <strong>Move money · {label}</strong>
+          <Hint label="How this screen works">
+            Every figure here is worked out in your browser — nothing moves until you press Apply.
+            Each row starts at whatever is left of its plan for {label}, so applying twice does not
+            fill twice. Envelopes with no plan are listed too; type into one to put something there.
+            A negative amount takes money back out of an envelope and returns it to Available.
+          </Hint>
+        </div>
+
+        <div className="fund-summary">
+          <span className="figure">
+            <span className="figure-label">Available now</span>
+            <span className="money">{money(funding.availableCents)}</span>
+          </span>
+          <span className="figure">
+            <span className="figure-label">Moving</span>
+            <span className="money">{money(moves.total)}</span>
+          </span>
+          <span className="figure strong">
+            <span className="figure-label">Available after</span>
+            <span className={`money${availableAfter < 0 ? ' neg' : ''}`}>
+              {money(availableAfter)}
+            </span>
+          </span>
+        </div>
+
+        <div className="segmented fund-mode">
+          <button
+            className={mode === 'add' ? 'active' : ''}
+            onClick={() => switchMode('add')}
+            disabled={pending}
+          >
+            Add to balance
+          </button>
+          <button
+            className={mode === 'target' ? 'active' : ''}
+            onClick={() => switchMode('target')}
+            disabled={pending}
+          >
+            Set balance to
+          </button>
         </div>
 
         <div className="dialog-body">
-          <p className="muted">
-            {funding.proposingCount === 0
-              ? 'Nothing has a planned amount left to fund this month. Type into any envelope to put something in it anyway.'
-              : `Proposing ${money(funding.totalCents)} across ${funding.proposingCount} ` +
-                `envelope${funding.proposingCount === 1 ? '' : 's'} with a plan left to fill. ` +
-                'Edit anything, including the envelopes proposing nothing.'}{' '}
-            Available holds {money(funding.availableCents)}.
-          </p>
+          {availableAfter < 0 && (
+            <p className="budget-warning">
+              That leaves Available {money(-availableAfter)} overdrawn — more allocated to envelopes
+              than has actually arrived. You can apply it, and the home screen will keep saying so
+              until income covers it.
+            </p>
+          )}
+
+          {moves.bad.length > 0 && (
+            <p className="budget-warning">
+              {moves.bad.length === 1
+                ? `The amount for ${moves.bad[0]} cannot be read, so it is not counted above.`
+                : `${moves.bad.length} amounts cannot be read, so they are not counted above.`}
+            </p>
+          )}
 
           <div className="budget-table">
             <div className="budget-row fund head">
               <span>Envelope</span>
               <span>Planned</span>
-              <span>Already</span>
-              <span>Move now</span>
+              <span>Balance</span>
+              <span>{mode === 'add' ? 'Add' : 'Set to'}</span>
+              <span>Moves</span>
             </div>
-            {funding.lines.map((line) => (
-              <div key={line.envelopeId} className="budget-row fund">
-                <span>
-                  <span className="muted">{line.groupName}</span> {line.name}
-                </span>
-                <span className="money" data-label="Planned">
-                  {money(line.plannedCents)}
-                </span>
-                <span className="money" data-label="Already">
-                  {money(line.alreadyAllocatedCents)}
-                </span>
-                <span>
-                  <input
-                    className="amount"
-                    inputMode="decimal"
-                    aria-label={`Move to ${line.name}`}
-                    value={amounts[line.envelopeId] ?? ''}
-                    onChange={(event) =>
-                      setAmounts((current) => ({
-                        ...current,
-                        [line.envelopeId]: event.target.value,
-                      }))
-                    }
-                  />
-                </span>
-              </div>
-            ))}
-            <div className="budget-row fund total">
-              <span>Total</span>
-              <span />
-              <span />
-              <span className="money">{money(totalCents)}</span>
-            </div>
-          </div>
 
-          {totalCents > funding.availableCents && (
-            <p className="budget-warning">
-              That is {money(totalCents - funding.availableCents)} more than Available holds.
-              Applying it anyway leaves Available overdrawn, which this screen will say.
-            </p>
-          )}
+            {funding.lines.map((line) => {
+              const moved = moves.byEnvelope.get(line.envelopeId) ?? 0;
+              return (
+                <div key={line.envelopeId} className="budget-row fund">
+                  <span className="plan-name">
+                    <span className="muted">{line.groupName}</span> {line.name}
+                  </span>
+
+                  <span className="figure">
+                    <span className="figure-label">planned</span>
+                    <span className="money">{money(line.plannedCents)}</span>
+                  </span>
+
+                  <span className="figure">
+                    <span className="figure-label">balance</span>
+                    <span className={`money${line.balanceCents < 0 ? ' neg' : ''}`}>
+                      {money(line.balanceCents)}
+                    </span>
+                  </span>
+
+                  <span className="figure">
+                    <span className="figure-label">{mode === 'add' ? 'add' : 'set to'}</span>
+                    <input
+                      className="amount"
+                      inputMode="decimal"
+                      aria-label={
+                        mode === 'add'
+                          ? `Amount to add to ${line.name}`
+                          : `Balance to set ${line.name} to`
+                      }
+                      value={amounts[line.envelopeId] ?? ''}
+                      disabled={pending}
+                      onChange={(event) =>
+                        setAmounts((current) => ({
+                          ...current,
+                          [line.envelopeId]: event.target.value,
+                        }))
+                      }
+                    />
+                  </span>
+
+                  {/* What this row will actually do, which in target mode is not
+                      the number typed into it. */}
+                  <span className="figure">
+                    <span className="figure-label">moves</span>
+                    <span className={`money${moved < 0 ? ' neg' : moved > 0 ? ' pos' : ' muted'}`}>
+                      {moved === 0 ? '–' : money(moved)}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
 
           {error && <p className="signin-error">{error}</p>}
         </div>
 
         <div className="picker-foot dialog-foot">
-          <button className="primary" onClick={apply} disabled={pending}>
-            {pending ? 'Moving…' : `Apply ${money(totalCents)}`}
+          <button className="primary" onClick={apply} disabled={pending || touched === 0}>
+            {pending
+              ? 'Moving…'
+              : touched === 0
+                ? 'Nothing to move'
+                : `Apply to ${touched} envelope${touched === 1 ? '' : 's'}`}
           </button>
-          {allocatedCents !== 0 && (
-            <button onClick={sendMonthBack} disabled={pending}>
-              Undo {label} funding
-            </button>
-          )}
           <button onClick={onClose} disabled={pending}>
             Cancel
           </button>

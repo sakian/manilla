@@ -338,6 +338,104 @@ describe(
       assert.equal(await balanceOf(env.gasId), 15000);
     });
 
+    test('a negative amount takes money back out, into the pool', async () => {
+      await receiveIncome(400000);
+      await setPlanned(db, env.gasId, 20000);
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 20000 }], {
+        today: '2026-09-19',
+      });
+      assert.equal(await balanceOf(env.gasId), 20000);
+      const poolAfterFunding = await balanceOf(env.unallocatedId);
+
+      // "A hundred less in Gas" - the same decision as funding, same sitting.
+      const applied = await fundEnvelopes(
+        db,
+        '2026-09',
+        [{ envelopeId: env.gasId, amountCents: -10000 }],
+        { today: '2026-09-19' },
+      );
+
+      assert.equal(applied.totalCents, -10000);
+      assert.equal(await balanceOf(env.gasId), 10000);
+      assert.equal(
+        await balanceOf(env.unallocatedId),
+        poolAfterFunding + 10000,
+        'and it is back in Available to spend elsewhere',
+      );
+      const { checkInvariant } = await import('../ledger/ledger.ts');
+      assert.ok((await checkInvariant(db)).ok);
+    });
+
+    test('adding and taking back in one run net off correctly', async () => {
+      await receiveIncome(400000);
+      await setPlanned(db, env.gasId, 30000);
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 30000 }], {
+        today: '2026-09-19',
+      });
+
+      const applied = await fundEnvelopes(
+        db,
+        '2026-09',
+        [
+          { envelopeId: env.gasId, amountCents: -10000 },
+          { envelopeId: env.groceriesId, amountCents: 10000 },
+        ],
+        { today: '2026-09-19' },
+      );
+
+      assert.equal(applied.moves, 2);
+      assert.equal(applied.totalCents, 0, 'nothing left the pool overall');
+      assert.equal(await balanceOf(env.gasId), 20000);
+      assert.equal(await balanceOf(env.groceriesId), 10000);
+    });
+
+    test("a taking-back shows in the envelope's history as money out", async () => {
+      const { envelopeHistory } = await import('../envelopes/manage.ts');
+      await receiveIncome(400000);
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 20000 }], {
+        today: '2026-09-19',
+      });
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: -5000 }], {
+        today: '2026-09-19',
+      });
+
+      const history = await envelopeHistory(db, env.gasId);
+      const amounts = history
+        .filter((event) => event.kind === 'allocation')
+        .map((event) => event.amountCents);
+
+      assert.deepEqual(
+        [...amounts].sort((left, right) => left - right),
+        [-5000, 20000],
+        'money in and money out, not two signed allocations',
+      );
+    });
+
+    test('the month nets out, so undoing the month does not double-count', async () => {
+      await receiveIncome(400000);
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 20000 }], {
+        today: '2026-09-19',
+      });
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: -5000 }], {
+        today: '2026-09-19',
+      });
+
+      const budget = await budgetMonth(db, '2026-09', { today: '2026-09-19' });
+      const gas = budget.rows.find((row) => row.envelopeId === env.gasId)!;
+      assert.equal(gas.allocatedCents, 15000, 'net of what was taken back');
+    });
+
+    test('a funding line carries the balance a target amount is measured against', async () => {
+      await receiveIncome(400000);
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 12500 }], {
+        today: '2026-09-19',
+      });
+
+      const plan = await planFunding(db, '2026-09', { today: '2026-09-19' });
+      const gas = plan.lines.find((line) => line.envelopeId === env.gasId)!;
+      assert.equal(gas.balanceCents, 12500, 'so "set it to $200" can work out the difference');
+    });
+
     test('funding a past month is dated inside that month', async () => {
       await receiveIncome(400000, '2026-08-01');
       const result = await fundEnvelopes(

@@ -22,6 +22,7 @@ import type {
   SpendingReport,
   TrendReport,
 } from '../../src/reports/reports.ts';
+import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
 
 const PRESETS: { key: string; label: string }[] = [
@@ -91,12 +92,14 @@ export default function ReportScreen({
   return (
     <>
       <div className="page-head">
-        <h2>Reports</h2>
-        <p className="muted">
+        <h2>
+          Reports{' '}
+          <Hint label="What counts as spending here">
           Spending only: transfers between your accounts and moves between envelopes are not
           spending and never appear here, and a split counts at each envelope&rsquo;s own share
-          (RP-5).
-        </p>
+            (RP-5).
+          </Hint>
+        </h2>
       </div>
 
       <div className="segmented periods">

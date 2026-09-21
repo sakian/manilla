@@ -1650,3 +1650,100 @@ details[open] > summary > .group-summary::before {
     justify-content: flex-start;
   }
 }
+
+/* --- Explanations you ask for -------------------------------------------- */
+
+.hint {
+  display: contents;
+}
+
+.hint-toggle {
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.hint-toggle:hover,
+.hint-toggle[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hint-body {
+  /* Block, so it reads as a paragraph, and reset out of whatever it is nested in:
+     these live inside an <h2> so the marker sits beside the heading. */
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+/* --- The move-money dialog ----------------------------------------------- */
+
+.fund-dialog {
+  width: min(760px, 100%);
+}
+
+/* Available, before and after, pinned above the scrolling rows: the whole point
+   of the preview is watching this number while you type. */
+.fund-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.fund-summary .figure {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.fund-summary .figure-label {
+  display: inline;
+}
+
+.fund-summary .figure.strong .money {
+  font-size: 16px;
+  font-weight: 620;
+}
+
+.fund-mode {
+  margin: 12px 14px 0;
+}
+
+.budget-row.fund {
+  grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(72px, 1fr));
+}
+
+@media (max-width: 720px) {
+  /* Two labelled figures per line, the name across the top. */
+  .budget-row.fund {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 6px;
+    padding: 9px 0;
+  }
+  .budget-row.fund > span:first-child {
+    grid-column: 1 / -1;
+  }
+  .budget-row.fund > span:not(:first-child) {
+    text-align: left;
+  }
+  .budget-row.fund .figure {
+    justify-content: space-between;
+  }
+}

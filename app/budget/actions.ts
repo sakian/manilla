@@ -13,7 +13,6 @@ import { db } from '../../db/client.ts';
 import {
   fundEnvelopes,
   reverseAllocation,
-  reverseMonthFunding,
   setExpectedIncome,
   setPlanned,
 } from '../../src/budget/budget.ts';
@@ -109,19 +108,3 @@ export async function reverseAllocationAction(moveId: string, month: string): Pr
   }
 }
 
-export async function reverseMonthFundingAction(month: string): Promise<ActionResult> {
-  try {
-    await requireUser();
-    const reversed = await reverseMonthFunding(db(), assertMonth(month));
-    refreshed(month);
-    return {
-      ok: true,
-      message:
-        reversed === 0
-          ? 'There was nothing left to send back.'
-          : `Sent ${reversed} ${reversed === 1 ? 'envelope' : 'envelopes'} back to Available.`,
-    };
-  } catch (error) {
-    return failed(error);
-  }
-}

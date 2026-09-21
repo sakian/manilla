@@ -486,6 +486,12 @@ export type FundingLine = {
   alreadyAllocatedCents: number;
   /** What this run would move: the remainder of the plan, never negative. */
   proposedCents: number;
+  /**
+   * What the envelope holds now, carry-over included. Needed because the funding
+   * dialog can be told a target balance rather than an amount to add, and the
+   * move is then the difference.
+   */
+  balanceCents: number;
 };
 
 export type FundingPlan = {
@@ -542,6 +548,7 @@ export function fundingFromBudget(budget: BudgetMonth): FundingPlan {
       plannedCents: row.plannedCents,
       alreadyAllocatedCents: row.allocatedCents,
       proposedCents: Math.max(0, row.plannedCents - row.allocatedCents),
+      balanceCents: row.balanceCents,
     }));
 
   const totalCents = lines.reduce((sum, line) => sum + line.proposedCents, 0);
@@ -574,6 +581,14 @@ export type FundingResult = {
  * preview to be editable before it is applied - the plan is a proposal, and what
  * the user adjusted is what gets written.
  *
+ * A negative amount takes money *out* of that envelope and returns it to the
+ * pool. Funding and un-funding are the same decision made in the same sitting -
+ * "a hundred less in Groceries, that hundred into Savings" - and splitting them
+ * across two screens would mean writing half of it, navigating, and writing the
+ * rest, with the books in a state nobody chose in between. The move is recorded
+ * in the direction the money went, so an envelope's history reads correctly and
+ * the monthly net is what it should be.
+ *
  * Over-funding the pool is allowed and reported, not blocked: FR-24 lets a
  * balance go negative and FR-31 asks for a warning, and refusing here would
  * strand someone who knows income is arriving tomorrow.
@@ -588,9 +603,9 @@ export async function fundEnvelopes(
 
   const lines = amounts.filter((line) => line.amountCents !== 0);
   for (const line of lines) {
-    if (!Number.isSafeInteger(line.amountCents) || line.amountCents < 0) {
+    if (!Number.isSafeInteger(line.amountCents)) {
       throw new BudgetError(
-        `Funding amount must be a whole number of cents and not negative, got ${line.amountCents}`,
+        `Funding amount must be a whole number of cents, got ${line.amountCents}`,
       );
     }
   }
@@ -602,6 +617,7 @@ export async function fundEnvelopes(
 
   const date = dateWithin(month, options.today ?? localToday());
   const note = options.note ?? `Monthly funding for ${month}`;
+  const takenBack = options.note ?? `Taken back out of monthly funding for ${month}`;
 
   if (lines.length === 0) {
     const balance = await envelopeBalance(db, pool.id);
@@ -623,15 +639,28 @@ export async function fundEnvelopes(
       }
     }
 
+    // Written in the direction the money actually went, so the envelope's own
+    // history reads as money in or money out rather than a signed allocation.
     await tx.insert(envelopeMoves).values(
-      lines.map((line) => ({
-        fromEnvelopeId: pool.id,
-        toEnvelopeId: line.envelopeId,
-        amountCents: line.amountCents,
-        date,
-        kind: 'allocation' as const,
-        note,
-      })),
+      lines.map((line) =>
+        line.amountCents > 0
+          ? {
+              fromEnvelopeId: pool.id,
+              toEnvelopeId: line.envelopeId,
+              amountCents: line.amountCents,
+              date,
+              kind: 'allocation' as const,
+              note,
+            }
+          : {
+              fromEnvelopeId: line.envelopeId,
+              toEnvelopeId: pool.id,
+              amountCents: -line.amountCents,
+              date,
+              kind: 'allocation' as const,
+              note: takenBack,
+            },
+      ),
     );
   });
 
@@ -740,7 +769,17 @@ export async function reverseAllocation(db: Database, moveId: string): Promise<s
   });
 }
 
-/** Undo a whole month's funding in one step. Returns the number of reversals. */
+/**
+ * Send a whole month's funding back to the pool (FR-30).
+ *
+ * No screen calls this today. The funding dialog can take money back out of any
+ * envelope by typing a negative amount, and an envelope's own history can send
+ * one allocation back, which between them cover what this did with the user in
+ * control of which envelopes are touched. It stays because "undo the month" is a
+ * real thing to want when a whole split was wrong, and because reversing by
+ * contra entry - never deleting - is the part that would be easy to get wrong if
+ * it had to be written again.
+ */
 export async function reverseMonthFunding(db: Database, month: MonthKey): Promise<number> {
   const records = await monthAllocations(db, month);
   const outstanding = netByEnvelope(records);

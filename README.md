@@ -48,10 +48,17 @@ The screens then went through a usability pass. The dashboard and the envelope
 list were one column of balances shown twice, so they are one screen: two lines
 per envelope (name with its balance, then plan and spend), the whole card a link
 into it, and renaming, archiving, regrouping and planned amounts behind an Edit
-button. Funding is a button beside the envelopes being filled. Envelopes are
-alphabetical inside their group and groups keep a manual order — dozens of one
-are scanned, a handful of the other are read as a shape. Accounts are their own
-tab.
+button. Envelopes are alphabetical inside their group and groups keep a manual
+order — dozens of one are scanned, a handful of the other are read as a shape.
+Accounts are their own tab.
+
+Moving money is one dialog, beside the envelopes being filled: every envelope is
+listed whether it has a plan or not, amounts can be added or given as a target
+balance, and they can be negative to take money back out. What Available would be
+left with is worked out as you type, and nothing is written until you apply —
+including, if you want, into an overdrawn pool, which the home screen then keeps
+saying out loud. Screen explanations sit behind a `?` beside each heading rather
+than a paragraph you read once and then read past for ever.
 The budget screen shows each envelope's plan next to what it actually cost -
 last month, and averaged over a year - with every figure labelled on every row,
 because a phone has scrolled the table header away by the time you reach

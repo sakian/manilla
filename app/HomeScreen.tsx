@@ -45,6 +45,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { FundingPlan } from '../src/budget/budget.ts';
 import type { ManagedGroup } from '../src/envelopes/manage.ts';
+import { Hint } from './Hint.tsx';
 import { Money } from './Money.tsx';
 import { inputFromCents } from './amount.ts';
 import {
@@ -104,7 +105,6 @@ export default function HomeScreen({
   monthLabel,
   month,
   funding,
-  allocatedCents,
   headline,
 }: {
   groups: ManagedGroup[];
@@ -112,8 +112,6 @@ export default function HomeScreen({
   monthLabel: string;
   month: string;
   funding: FundingPlan;
-  /** Net allocated this month, for the funding dialog's send-it-back path. */
-  allocatedCents: number;
   headline: Headline;
 }) {
   const router = useRouter();
@@ -214,7 +212,15 @@ export default function HomeScreen({
     <>
       <div className="page-head">
         <div className="month-head">
-          <h2>Envelopes</h2>
+          <h2>
+            Envelopes{' '}
+            <Hint label="What these figures mean">
+              Balances carry over month to month. Planned and spent are for {monthLabel}; the
+              balance is everything that has ever happened to the envelope. Edit lets you rename,
+              regroup, archive and set planned amounts; groups can be reordered there too, while
+              envelopes stay alphabetical.
+            </Hint>
+          </h2>
           <div className="head-actions">
             <button
               className="primary"
@@ -231,13 +237,9 @@ export default function HomeScreen({
             <button
               onClick={() => setFunded(true)}
               disabled={pending || funding.lines.length === 0}
-              title={
-                funding.totalCents === 0
-                  ? 'Put money into any envelope out of Available'
-                  : `Move ${money(funding.totalCents)} out of Available`
-              }
+              title="Move money between Available and the envelopes"
             >
-              {funding.totalCents === 0 ? 'Fund envelopes' : `Fund ${money(funding.totalCents)}`}
+              {funding.totalCents === 0 ? 'Move money in' : `Fund ${money(funding.totalCents)}`}
             </button>
             <button
               onClick={() => setEditing(!editing)}
@@ -249,10 +251,7 @@ export default function HomeScreen({
             </button>
           </div>
         </div>
-        <p className="muted">
-          Balances carry over month to month. Planned and spent are for {monthLabel}; the balance is
-          everything that has ever happened to the envelope.
-        </p>
+
       </div>
 
       <div className="callouts">
@@ -265,7 +264,7 @@ export default function HomeScreen({
           <strong>
             <Money cents={headline.unallocatedCents} />
           </strong>{' '}
-          unallocated
+          {headline.unallocatedCents < 0 ? 'overdrawn' : 'unallocated'}
         </div>
         {headline.overspentCount > 0 && (
           <div className="callout warn">
@@ -279,6 +278,18 @@ export default function HomeScreen({
           </div>
         )}
       </div>
+
+      {/* Overdrawing Available is allowed but is not a neutral state: more has
+          been given to envelopes than has arrived, so some envelope's balance is
+          money that is not there yet. It is said here every visit, not only in
+          the dialog that caused it. */}
+      {headline.unallocatedCents < 0 && (
+        <p className="budget-warning bad">
+          Available is <Money cents={-headline.unallocatedCents} plain /> overdrawn: the envelopes
+          hold more than has actually arrived. Take some back with Move money, or leave it until
+          income covers it — but until then the balances below are promising money you do not have.
+        </p>
+      )}
 
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
@@ -562,7 +573,6 @@ export default function HomeScreen({
           month={month}
           label={monthLabel}
           funding={funding}
-          allocatedCents={allocatedCents}
           onClose={() => setFunded(false)}
         />
       )}

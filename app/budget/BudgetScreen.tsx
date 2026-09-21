@@ -27,6 +27,7 @@ import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { BudgetMonth, BudgetRow } from '../../src/budget/budget.ts';
+import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
 import { inputFromCents } from '../amount.ts';
 import { setPlannedAction } from './actions.ts';
@@ -120,7 +121,15 @@ export default function BudgetScreen({
     <>
       <div className="page-head">
         <div className="month-head">
-          <h2>Budget · {label}</h2>
+          <h2>
+            Budget · {label}{' '}
+            <Hint label="What these columns mean">
+              What each envelope should receive each month, next to what it actually cost. Avg/mo is
+              its spending over the twelve months before {label} divided by twelve, so a bill that
+              arrives once a year still shows what it costs a month. Filling the envelopes happens
+              on the <Link href="/">home screen</Link>.
+            </Hint>
+          </h2>
           <div className="month-nav">
             <Link href={`/budget?month=${previousMonth}`}>← {previousMonth}</Link>
             {budget.month !== thisMonth && (
@@ -129,10 +138,7 @@ export default function BudgetScreen({
             <Link href={`/budget?month=${nextMonth}`}>{nextMonth} →</Link>
           </div>
         </div>
-        <p className="muted">
-          What each envelope should receive each month, next to what it actually cost. Filling the
-          envelopes happens on the <Link href="/">home screen</Link>.
-        </p>
+
       </div>
 
       <div className="callouts">
@@ -250,9 +256,8 @@ export default function BudgetScreen({
         </div>
 
         <p className="muted footnote">
-          Avg/mo is this envelope&rsquo;s spending over the twelve months before {label}, divided by
-          twelve — so a bill that arrives once a year still shows what it costs a month. An envelope
-          younger than a year reads low, because there is not a year of it to average.
+          An envelope younger than a year reads low in Avg/mo, because there is not a year of it to
+          average.
         </p>
       </section>
     </>

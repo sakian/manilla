@@ -65,7 +65,6 @@ export default async function Home() {
       month={month}
       monthLabel={monthLabel(month)}
       funding={fundingFromBudget(budget)}
-      allocatedCents={budget.allocatedTotalCents}
       headline={headline}
     />
   );
