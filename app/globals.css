@@ -2161,3 +2161,14 @@ details[open] > summary > .group-summary::before {
 .import-actions {
   margin-bottom: 20px;
 }
+
+/* The bank's own description under the cleaned name: its own line, in the
+   type used for things quoted rather than written. */
+.queue-raw {
+  flex-basis: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}

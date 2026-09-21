@@ -75,6 +75,12 @@ type Decision = {
   createRule: boolean;
 };
 
+/** Whether the bank's text carries anything the cleaned-up name dropped. */
+function saysMore(row: QueueRow): boolean {
+  const squeeze = (text: string) => text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return squeeze(row.payeeRaw) !== squeeze(row.payeeDisplay);
+}
+
 export default function ReviewQueue({
   rows,
   envelopes,
@@ -298,6 +304,11 @@ export default function ReviewQueue({
                 {confidence.label}
                 {confidence.detail && ` ${confidence.detail}`}
               </span>
+              {/* The bank's own words, whole. The cleaned name is right for
+                  matching and wrong for deciding: it drops everything after a
+                  "*" as a reference code, so GOOGLE*YOUTUBEPREMIUM and
+                  GOOGLE*CLOUD both read "Google". */}
+              {saysMore(row) && <span className="queue-raw">{row.payeeRaw}</span>}
               {transferFor.get(row.id) && <span className="band medium">transfer?</span>}
             </span>
 
