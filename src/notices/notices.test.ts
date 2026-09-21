@@ -147,6 +147,38 @@ describe(
       assert.equal(report.notices[0]!.severity, 'bad');
     });
 
+    test('rules worth suggesting are read from the count, not searched for', async () => {
+      const { refreshRuleSuggestionCount } = await import('../rules/rules.ts');
+
+      // Nothing cached: the notices say nothing about rules, and cost nothing
+      // finding that out.
+      assert.ok(!(await kinds()).includes('rules_to_suggest'));
+
+      for (let at = 0; at < 6; at += 1) {
+        await recordTransaction(db, {
+          accountId,
+          date: '2026-09-02',
+          amountCents: -1000 - at,
+          payeeRaw: 'NETFLIX.COM',
+          status: 'confirmed',
+          source: 'file_import',
+          lines: [{ envelopeId: env.gasId, amountCents: -1000 - at }],
+        });
+      }
+
+      // Still silent until something recounts - the search is too expensive to
+      // run on every screen, so it runs when the answer could have changed.
+      assert.ok(!(await kinds()).includes('rules_to_suggest'));
+
+      await refreshRuleSuggestionCount(db);
+
+      const report = await attention(db, '2026-09');
+      const notice = report.notices.find((item) => item.kind === 'rules_to_suggest');
+      assert.ok(notice);
+      assert.equal(notice.count, 1);
+      assert.equal(notice.severity, 'info');
+    });
+
     test('a settled month is quiet', async () => {
       await receiveIncome(30000);
       await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 30000 }], {

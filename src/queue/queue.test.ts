@@ -252,6 +252,62 @@ describe(
       assert.ok((await checkInvariant(db)).ok);
     });
 
+    test('saving records what was accepted, so accuracy stays measurable (CA-9)', async () => {
+      // This is what stopped happening when the queue moved from confirming each
+      // row to staging and saving: nothing wrote accepted_envelope_id any more,
+      // and the accuracy figure on the settings page went stale in silence.
+      const kept = await pending({
+        payee: 'SHELL',
+        amountCents: -4520,
+        envelopeId: env.gasId,
+        confidence: 0.97,
+      });
+      const overridden = await pending({
+        payee: 'SAFEWAY',
+        amountCents: -9000,
+        envelopeId: env.gasId,
+        confidence: 0.6,
+      });
+
+      await saveReview(db, [
+        { transactionId: kept, envelopeId: env.gasId },
+        { transactionId: overridden, envelopeId: env.groceriesId },
+      ]);
+
+      const rows = await db.select().from(suggestions);
+      const accepted = new Map(rows.map((row) => [row.transactionId, row.acceptedEnvelopeId]));
+
+      assert.equal(accepted.get(kept), env.gasId, 'kept: the suggestion was right');
+      assert.equal(
+        accepted.get(overridden),
+        env.groceriesId,
+        'overridden: what was kept, not what was proposed - that is the disagreement',
+      );
+    });
+
+    test('a row with no suggestion saves without one being invented', async () => {
+      const id = await pending({ payee: 'NEVER SEEN', amountCents: -1000 });
+      await saveReview(db, [{ transactionId: id, envelopeId: env.gasId }]);
+
+      assert.equal((await db.select().from(suggestions)).length, 0);
+      assert.equal(await balanceOf(env.gasId), -1000);
+    });
+
+    test('saving into an archived envelope is refused (FR-25)', async () => {
+      const { archiveEnvelope } = await import('../envelopes/manage.ts');
+      const id = await pending({ payee: 'SHELL', amountCents: -4520 });
+      await archiveEnvelope(db, env.gasId);
+
+      const result = await saveReview(db, [{ transactionId: id, envelopeId: env.gasId }]);
+
+      // An archived envelope holding money is the one thing FR-25 exists to
+      // prevent: a balance that is not on screen but is still in the totals.
+      assert.equal(result.confirmed, 0);
+      assert.match(result.failed[0]!.error, /archived/);
+      assert.equal(await balanceOf(env.gasId), 0);
+      assert.equal(await pendingCount(db), 1, 'and it is still waiting, not half-saved');
+    });
+
     test('saving nothing is allowed and writes nothing', async () => {
       await pending({ payee: 'SHELL', amountCents: -4520 });
       assert.deepEqual(await saveReview(db, []), { confirmed: 0, failed: [] });

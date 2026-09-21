@@ -14,13 +14,14 @@
  * unallocated envelope, so there is no special case to get wrong later.
  */
 
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import {
   accounts,
   envelopeGroups,
   envelopeMoves,
   envelopes,
+  suggestions,
   transactionExternalIds,
   transactions,
   txnLines,
@@ -404,6 +405,23 @@ export async function openAccount(db: Database, input: NewAccount): Promise<stri
  * Assign or reassign a transaction's envelopes, replacing any existing lines.
  * Used by the review queue for both confirming a suggestion and correcting it
  * (RQ-2, RQ-5).
+ *
+ * Two things happen here that used to live in the caller, and belong here because
+ * every caller has to get them right:
+ *
+ * **An archived envelope is refused.** FR-25 will not let an envelope be archived
+ * while it holds money, on the grounds that a balance you cannot see is a
+ * difference nobody can find. That guarantee was resting on every picker
+ * remembering to filter its list - true today, one stale page away from false,
+ * and the ledger is where the rule belongs.
+ *
+ * **Confirming records what was accepted.** `suggestions.accepted_envelope_id` is
+ * what makes the accuracy measure work (CA-9): it compares what was proposed
+ * against what was kept. It was written by `confirmTransactions`, which the
+ * review queue stopped calling when it moved to staging decisions and saving them
+ * in one go - so confirmations quietly stopped being counted, and the number on
+ * the settings page began going stale without saying so. Recording it alongside
+ * the write that confirms is the version that cannot come apart again.
  */
 export async function setTransactionEnvelopes(
   db: Database,
@@ -429,6 +447,25 @@ export async function setTransactionEnvelopes(
     );
   }
 
+  if (lines.length > 0) {
+    const wanted = [...new Set(lines.map((line) => line.envelopeId))];
+    const found = await db
+      .select({ id: envelopes.id, name: envelopes.name, archivedAt: envelopes.archivedAt })
+      .from(envelopes)
+      .where(inArray(envelopes.id, wanted));
+
+    for (const id of wanted) {
+      const envelope = found.find((row) => row.id === id);
+      if (!envelope) throw new LedgerError(`No such envelope: ${id}`);
+      if (envelope.archivedAt !== null) {
+        throw new LedgerError(
+          `${envelope.name} is archived, so money cannot be put into it. Restore it first, ` +
+            'or choose another envelope.',
+        );
+      }
+    }
+  }
+
   await db.transaction(async (tx) => {
     await tx.delete(txnLines).where(eq(txnLines.transactionId, transactionId));
     if (lines.length > 0) {
@@ -447,5 +484,15 @@ export async function setTransactionEnvelopes(
         updatedAt: new Date(),
       })
       .where(eq(transactions.id, transactionId));
+
+    if (options.confirm) {
+      // A suggestion only ever proposes one envelope, so the first line is what
+      // it is being compared against. A row with no suggestion has nothing to
+      // update and this does nothing, which is correct.
+      await tx
+        .update(suggestions)
+        .set({ acceptedEnvelopeId: lines[0]?.envelopeId ?? null })
+        .where(eq(suggestions.transactionId, transactionId));
+    }
   });
 }

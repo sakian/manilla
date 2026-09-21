@@ -343,6 +343,48 @@ export async function suggestedRules(
     }));
 }
 
+const SUGGESTION_COUNT_KEY = 'rule_suggestion_count';
+
+/**
+ * How many rules are worth suggesting, cached.
+ *
+ * `suggestedRules` scans every confirmed line and anti-joins the rules table on
+ * an unindexable `LIKE`, which is fine on the settings page and much too much on
+ * every screen - and the notice that says "3 rules Manilla could write" belongs
+ * on every screen or nowhere, because nobody visits settings to find out.
+ *
+ * So the count is written whenever it can change: a review saved, a suggestion
+ * accepted, a suggestion declined. Reading it is one indexed row. A count that
+ * drifts shows a notice leading to a page that says something slightly different,
+ * which is the cheapest kind of wrong to be.
+ */
+export async function ruleSuggestionCount(db: Database): Promise<number> {
+  const [row] = await db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, SUGGESTION_COUNT_KEY))
+    .limit(1);
+
+  const count = Number(row?.value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+}
+
+/** Recount and store it. Called from wherever the answer could have changed. */
+export async function refreshRuleSuggestionCount(db: Database): Promise<number> {
+  const found = await suggestedRules(db, { limit: 100 });
+  const value = String(found.length);
+
+  await db
+    .insert(appSettings)
+    .values({ key: SUGGESTION_COUNT_KEY, value })
+    .onConflictDoUpdate({
+      target: appSettings.key,
+      set: { value, updatedAt: new Date() },
+    });
+
+  return found.length;
+}
+
 /** Accept one suggestion, which is the only way a rule gets written (CA-2). */
 export async function createEnvelopeRule(
   db: Database,

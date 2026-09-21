@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '../db/client.ts';
+import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
 import {
   pairTransferHalves,
   recategorize,
@@ -23,7 +24,11 @@ import { requireUser } from './auth.ts';
  */
 export async function saveReviewAction(decisions: ReviewDecision[]) {
   await requireUser();
-  const result = await saveReview(db(), decisions);
+  const connection = db();
+  const result = await saveReview(connection, decisions);
+  // Confirming rows is how a payee becomes worth a rule, so the count is stale
+  // the moment this returns.
+  await refreshRuleSuggestionCount(connection);
   revalidatePath('/review');
   revalidatePath('/transactions');
   revalidatePath('/');

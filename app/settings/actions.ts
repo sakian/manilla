@@ -27,6 +27,7 @@ import {
   createEnvelopeRule,
   deleteRule,
   dismissRuleSuggestion,
+  refreshRuleSuggestionCount,
 } from '../../src/rules/rules.ts';
 import { eraseAllData } from '../../src/export/export.ts';
 import { clearAnswerCache, setAiSettings } from '../../src/ai/ai.ts';
@@ -102,7 +103,9 @@ export async function removeDeviceAction(
 export async function deleteRuleAction(ruleId: string): Promise<{ ok: true } | Failure> {
   try {
     await requireUser();
-    await deleteRule(db(), ruleId);
+    const connection = db();
+    await deleteRule(connection, ruleId);
+    await refreshRuleSuggestionCount(connection);
     revalidatePath('/settings');
     revalidatePath('/review');
     return { ok: true };
@@ -192,7 +195,9 @@ export async function signOutEverywhereAction(): Promise<void> {
 export async function acceptRuleAction(contains: string, envelopeId: string) {
   try {
     await requireUser();
-    await createEnvelopeRule(db(), { contains, envelopeId });
+    const connection = db();
+    await createEnvelopeRule(connection, { contains, envelopeId });
+    await refreshRuleSuggestionCount(connection);
     revalidatePath('/settings');
     revalidatePath('/');
     return { ok: true as const };
@@ -205,7 +210,9 @@ export async function acceptRuleAction(contains: string, envelopeId: string) {
 export async function dismissRuleAction(contains: string) {
   try {
     await requireUser();
-    await dismissRuleSuggestion(db(), contains);
+    const connection = db();
+    await dismissRuleSuggestion(connection, contains);
+    await refreshRuleSuggestionCount(connection);
     revalidatePath('/settings');
     revalidatePath('/');
     return { ok: true as const };
