@@ -71,6 +71,8 @@ export type BudgetRow = {
   defaultPlannedCents: number;
   /** Current balance, carry-over included (FR-23). */
   balanceCents: number;
+  /** The part of that balance still awaiting review, so a screen can say so (RQ-4). */
+  pendingCents: number;
   /** Net spending in this month, as a positive number. Refunds reduce it. */
   spentCents: number;
   /** Net allocated into this envelope during this month, reversals subtracted. */
@@ -173,6 +175,11 @@ export async function budgetMonth(
         + coalesce((select sum(m.amount_cents) from envelope_moves m where m.to_envelope_id = ${envelopes.id}), 0)
         - coalesce((select sum(m.amount_cents) from envelope_moves m where m.from_envelope_id = ${envelopes.id}), 0)
       )::bigint`,
+      pendingCents: sql<string>`coalesce((
+        select sum(l.amount_cents) from txn_lines l
+        join transactions t on t.id = l.transaction_id
+        where l.envelope_id = ${envelopes.id} and t.status = 'pending_review'
+      ), 0)::bigint`,
       spentCents: sql<string>`coalesce((
         select -sum(l.amount_cents) from txn_lines l
         join transactions t on t.id = l.transaction_id
@@ -232,6 +239,7 @@ export async function budgetMonth(
       plannedIsOverride: override !== null,
       defaultPlannedCents: fallback,
       balanceCents: Number(row.balanceCents),
+      pendingCents: Number(row.pendingCents),
       spentCents: Number(row.spentCents),
       allocatedCents: Number(row.allocatedCents),
       lastMonthSpentCents: Number(row.lastMonthSpentCents),

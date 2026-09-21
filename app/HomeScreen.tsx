@@ -77,6 +77,8 @@ export type MonthFigures = Record<
     allocatedCents: number;
     lastMonthSpentCents: number;
     averageSpentCents: number;
+    /** The share of the balance still awaiting review (RQ-4). */
+    pendingCents: number;
   }
 >;
 
@@ -381,6 +383,14 @@ export default function HomeScreen({
                   <Money cents={envelope.balanceCents} />
 
                   <span className="envelope-figures muted">
+                    {/* A balance that is part fact and part proposal has to say
+                        so, or it is a figure nobody can act on. */}
+                    {figure && figure.pendingCents !== 0 && (
+                      <span className="figure pending" title="From transactions not yet reviewed">
+                        <span className="figure-label">unreviewed</span>
+                        <Money cents={figure.pendingCents} plain />
+                      </span>
+                    )}
                     {editing && !envelope.isUnallocated ? (
                       <>
                         <label className="planned-edit">

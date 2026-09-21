@@ -2167,3 +2167,24 @@ details[open] > summary > .group-summary::before {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* --- Not reviewed yet ----------------------------------------------------- */
+
+/*
+ * A suggestion the pipeline was sure enough about is applied on import, so an
+ * envelope balance is useful before anything has been reviewed - and is then
+ * part fact and part proposal. Both halves say which they are: the card carries
+ * the unreviewed share beside its total, and a row that has not been agreed to
+ * is marked down its edge rather than by a word at the end of a line nobody
+ * reads.
+ */
+.txn.unreviewed {
+  border-left: 3px solid var(--medium);
+  padding-left: 8px;
+  background: linear-gradient(to right, var(--accent-soft), transparent 40%);
+}
+
+.figure.pending .figure-label,
+.figure.pending .money {
+  color: var(--medium);
+}

@@ -28,6 +28,7 @@ export default async function Home() {
       allocatedCents: row.allocatedCents,
       lastMonthSpentCents: row.lastMonthSpentCents,
       averageSpentCents: row.averageSpentCents,
+      pendingCents: row.pendingCents,
     };
   }
 

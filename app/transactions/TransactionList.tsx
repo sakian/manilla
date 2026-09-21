@@ -92,7 +92,7 @@ export default function TransactionList({
       {rows.map((row) => (
         <button
           key={row.id}
-          className="txn txn-button"
+          className={`txn txn-button${row.status === 'pending_review' ? ' unreviewed' : ''}`}
           onClick={() => overlay.open(row.id)}
           disabled={pending}
         >
@@ -114,7 +114,7 @@ export default function TransactionList({
                 : row.envelopeNames.length > 0
                   ? row.envelopeNames.join(', ')
                   : 'uncategorized'}
-              {row.status === 'pending_review' && ' · pending'}
+              {row.status === 'pending_review' && ' · not reviewed'}
               {showAccount && row.kind !== 'account_transfer' && ` · ${row.accountName}`}
             </span>
           </span>

@@ -23,6 +23,7 @@ import {
   suggestions as suggestionsTable,
 } from '../../db/schema.ts';
 import type { OfxStatement, OfxTransaction } from '../ofx/parse.ts';
+import { bandOf } from '../categorize/pipeline.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 import { buildCategorizer } from '../categorize/fromDb.ts';
 import { unallocatedEnvelope } from '../ledger/ledger.ts';
@@ -548,13 +549,26 @@ export async function commitImport(
           reason: suggestion.reason,
         });
 
-        // The suggested envelope is applied straight away so the dashboard is
-        // accurate mid-month (RQ-4); `pending_review` is what marks it unconfirmed.
-        await tx.insert(txnLines).values({
-          transactionId,
-          envelopeId: suggestion.envelope,
-          amountCents: row.transaction.amountCents,
-        });
+        /*
+         * A suggestion worth believing is applied straight away, so the envelope
+         * screen is useful before anything has been reviewed (RQ-4);
+         * `pending_review` is what marks it unconfirmed.
+         *
+         * Only from the medium band up. Below that the suggestion is a guess -
+         * "67 of 482 past e-transfers went to Elementry" is 23% sure and was
+         * moving $1,265 into an envelope on that basis. The proposal is still
+         * recorded and still offered in the queue; what it no longer does is
+         * quietly change a balance nobody has agreed to. Money on a row like
+         * that is unassigned, which is a state the ledger already understands
+         * and the dashboard already reports.
+         */
+        if (bandOf(suggestion.confidence) !== 'low') {
+          await tx.insert(txnLines).values({
+            transactionId,
+            envelopeId: suggestion.envelope,
+            amountCents: row.transaction.amountCents,
+          });
+        }
       }
 
       added += 1;

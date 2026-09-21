@@ -65,6 +65,8 @@ export type EnvelopeBalance = {
   groupName: string;
   isUnallocated: boolean;
   balanceCents: number;
+  /** The part of that balance still awaiting review (RQ-4). */
+  pendingCents: number;
 };
 
 /**
@@ -85,12 +87,30 @@ export async function envelopeBalances(db: Database): Promise<EnvelopeBalance[]>
         + coalesce((select sum(m.amount_cents) from envelope_moves m where m.to_envelope_id = ${envelopes.id}), 0)
         - coalesce((select sum(m.amount_cents) from envelope_moves m where m.from_envelope_id = ${envelopes.id}), 0)
       )::bigint`,
+      /*
+       * How much of that balance is not settled yet.
+       *
+       * A suggestion the pipeline is sure enough about is applied on import, so
+       * the envelope screen is worth reading before anything has been reviewed.
+       * The price is that a balance can be part fact and part proposal, and a
+       * figure that will not say which is a figure nobody can act on - so this
+       * is the proposal's share, and the screens show it beside the total.
+       */
+      pendingCents: sql<string>`coalesce((
+        select sum(l.amount_cents) from txn_lines l
+        join transactions t on t.id = l.transaction_id
+        where l.envelope_id = ${envelopes.id} and t.status = 'pending_review'
+      ), 0)::bigint`,
     })
     .from(envelopes)
     .innerJoin(envelopeGroups, eq(envelopes.groupId, envelopeGroups.id))
     .orderBy(envelopeGroups.position, envelopeGroups.name, envelopes.name);
 
-  return rows.map((row) => ({ ...row, balanceCents: Number(row.balanceCents) }));
+  return rows.map((row) => ({
+    ...row,
+    balanceCents: Number(row.balanceCents),
+    pendingCents: Number(row.pendingCents),
+  }));
 }
 
 export type InvariantReport = {

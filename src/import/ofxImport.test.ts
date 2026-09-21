@@ -26,7 +26,7 @@ import {
   truncateAll,
   type Fixture,
 } from '../ledger/testdb.ts';
-import { transactions } from '../../db/schema.ts';
+import { transactions, txnLines } from '../../db/schema.ts';
 
 const available = await databaseAvailable();
 
@@ -276,6 +276,121 @@ describe(
 
       assert.equal(preview.rows[0]!.suggestion?.envelope, env.groceriesId);
       assert.equal(preview.rows[0]!.suggestion?.layer, 'history');
+    });
+
+    test('a confident suggestion moves the money; an unsure one only offers to', async () => {
+      const { envelopeBalances } = await import('../ledger/ledger.ts');
+
+      // Ten past trips to one place: history is sure about the next one. The
+      // dates all precede the statement, because the history layer refuses to
+      // learn from decisions made after the transaction it is judging.
+      for (let at = 0; at < 10; at += 1) {
+        await recordTransaction(db, {
+          accountId,
+          date: `2025-07-0${(at % 9) + 1}`,
+          amountCents: -5000 - at,
+          payeeRaw: 'SAFEWAY #212',
+          status: 'confirmed',
+          lines: [{ envelopeId: env.groceriesId, amountCents: -5000 - at }],
+        });
+      }
+      // And one place the money has gone two ways from, in equal measure on the
+      // same day for the same amount - so neither the recency nor the amount
+      // signal can break the tie, and the top candidate sits at exactly half.
+      for (const envelopeId of [env.groceriesId, env.gasId, env.groceriesId, env.gasId]) {
+        await recordTransaction(db, {
+          accountId,
+          date: '2025-07-15',
+          amountCents: -3000,
+          payeeRaw: 'E-TRANSFER',
+          status: 'confirmed',
+          lines: [{ envelopeId, amountCents: -3000 }],
+        });
+      }
+
+      const statement = bankStatement();
+      const base = statement.transactions[1]!;
+      const preview = await previewImport(
+        db,
+        {
+          ...statement,
+          transactions: [
+            { ...base, fitId: 'sure-1', name: 'SAFEWAY #212', amountCents: -6000 },
+            { ...base, fitId: 'unsure-1', name: 'E-TRANSFER', amountCents: -9900 },
+          ],
+        },
+        accountId,
+        { useAi: false },
+      );
+
+      const before = await envelopeBalances(db);
+      const balanceOf = (rows: typeof before, id: string) =>
+        rows.find((row) => row.envelopeId === id)!.balanceCents;
+
+      await commitImport(db, preview, acceptAll);
+      const after = await envelopeBalances(db);
+
+      // The confident one is applied, so the envelope screen is worth reading
+      // before anything has been reviewed (RQ-4)...
+      assert.equal(
+        balanceOf(after, env.groceriesId),
+        balanceOf(before, env.groceriesId) - 6000,
+        'a suggestion worth believing moves the money',
+      );
+
+      // ...and the unsure one is offered without moving anything, because a
+      // guess should not quietly change a balance nobody has agreed to.
+      const row = (fitId: string) => preview.rows.find((r) => r.transaction.fitId === fitId)!;
+      assert.ok(row('sure-1').suggestion!.confidence >= 0.5);
+      assert.ok(row('unsure-1').suggestion!.confidence < 0.5, 'a coin flip is not a pattern');
+      assert.equal(
+        balanceOf(after, env.gasId),
+        balanceOf(before, env.gasId),
+        'the unsure guess moved nothing',
+      );
+
+      // Its money is unassigned, which the ledger already has a word for.
+      const invariant = await checkInvariant(db);
+      assert.ok(invariant.ok);
+      assert.equal(invariant.unassignedCents, -9900);
+    });
+
+    test('an unsure suggestion is still offered in the queue', async () => {
+      const { pendingTransactions } = await import('../queue/queue.ts');
+
+      for (const envelopeId of [env.groceriesId, env.gasId, env.groceriesId, env.gasId]) {
+        await recordTransaction(db, {
+          accountId,
+          date: '2025-07-15',
+          amountCents: -3000,
+          payeeRaw: 'E-TRANSFER',
+          status: 'confirmed',
+          lines: [{ envelopeId, amountCents: -3000 }],
+        });
+      }
+
+      const statement = bankStatement();
+      const preview = await previewImport(
+        db,
+        {
+          ...statement,
+          transactions: [
+            { ...statement.transactions[1]!, fitId: 'unsure-1', name: 'E-TRANSFER', amountCents: -9900 },
+          ],
+        },
+        accountId,
+        { useAi: false },
+      );
+      await commitImport(db, preview, acceptAll);
+
+      // Reading the proposal from the suggestion as well as from the ledger is
+      // what keeps this row from arriving with nothing to say for itself.
+      const [row] = await pendingTransactions(db);
+      assert.ok(row!.envelopeId, 'the guess is still there to accept or reject');
+      assert.equal(row!.band, 'low');
+
+      // It just has not moved any money.
+      assert.equal((await db.select().from(txnLines)).length, 4, 'only the seeded lines');
     });
 
     test('the import log says what each run did, and what survives of it', async () => {

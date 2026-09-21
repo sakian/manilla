@@ -153,7 +153,13 @@ export async function pendingTransactions(
       memo: transactions.memo,
       accountName: accounts.name,
       createdAt: transactions.createdAt,
-      envelopeId: txnLines.envelopeId,
+      // Whatever the row is currently proposing: the ledger's own line if it has
+      // one, and otherwise the suggestion. Below the medium band a suggestion is
+      // offered without being applied, so reading this from txn_lines alone would
+      // have shown "Choose an envelope" on a row that has a perfectly good guess
+      // attached to it - and reading it from the suggestion alone would have
+      // thrown away a choice the user made without confirming.
+      envelopeId: sql<string | null>`coalesce(${txnLines.envelopeId}, ${suggestions.envelopeId})`,
       envelopeName: envelopes.name,
       confidence: suggestions.confidence,
       reason: suggestions.reason,
@@ -162,8 +168,11 @@ export async function pendingTransactions(
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
     .leftJoin(txnLines, eq(txnLines.transactionId, transactions.id))
-    .leftJoin(envelopes, eq(txnLines.envelopeId, envelopes.id))
     .leftJoin(suggestions, eq(suggestions.transactionId, transactions.id))
+    .leftJoin(
+      envelopes,
+      sql`${envelopes.id} = coalesce(${txnLines.envelopeId}, ${suggestions.envelopeId})`,
+    )
     .where(
       and(
         eq(transactions.status, 'pending_review'),
