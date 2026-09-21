@@ -8,11 +8,19 @@
 # verifies that the file it just wrote can actually be read back, and prunes
 # anything older than the retention count.
 #
-# It also copies the Tailscale sidecar's state, which is small and load-bearing:
+# It also copies .env and the Tailscale sidecar's state, both small and both
+# load-bearing:
 # it is what makes this machine `manilla.<tailnet>.ts.net` rather than some other
 # name. Lose it and Tailscale issues a new one - and a passkey is bound to an
 # exact hostname, so every registered passkey would stop working at the same
 # moment. A ledger restored under a name nobody can sign in to is not a restore.
+#
+# .env is the other half of that: it is what says which hostname the passkeys are
+# bound to. Restoring onto a new machine without it means reconstructing the
+# deployment from memory. It also holds an API key, so the file this writes was
+# already the most sensitive thing on the disk - it holds the whole ledger - and
+# is now sensitive in one more way. Treat it accordingly, or set
+# MANILLA_BACKUP_ENV=0 to leave it out.
 #
 # The verification matters more than it looks. A dump that failed halfway is
 # still a file of plausible size sitting in the right directory, and the only
@@ -98,6 +106,21 @@ if docker compose ps --status running --services 2>/dev/null | grep -qx "$TS_CON
 
   mapfile -t OLD_TS < <(ls -1t "$DIR"/tailscale-state-*.tar.gz 2>/dev/null | tail -n "+$((KEEP + 1))")
   for stale in "${OLD_TS[@]:-}"; do
+    [[ -n "$stale" ]] || continue
+    rm -f "$stale"
+  done
+fi
+
+# The deployment's own configuration: four lines, and the difference between a
+# restore and an afternoon of guessing which hostname the passkeys were for.
+if [[ "${MANILLA_BACKUP_ENV:-1}" == "1" && -f .env ]]; then
+  ENV_FILE="$DIR/env-$STAMP.txt"
+  cp .env "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  echo "backup: $ENV_FILE (deployment config; holds your API key)"
+
+  mapfile -t OLD_ENV < <(ls -1t "$DIR"/env-*.txt 2>/dev/null | tail -n "+$((KEEP + 1))")
+  for stale in "${OLD_ENV[@]:-}"; do
     [[ -n "$stale" ]] || continue
     rm -f "$stale"
   done

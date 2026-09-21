@@ -1,9 +1,10 @@
 /**
  * Development seed: a starting chart of envelopes and one account.
  *
- * Envelope names and groups are an ordinary household's chart, at the size a real one
- * reaches, so the categorizer is exercised
- * against something shaped like the real thing rather than a toy.
+ * An ordinary household's chart, at the size a real one reaches - eight groups
+ * and two dozen envelopes - because the categorizer behaves differently against
+ * twenty-five envelopes than against three, and a toy chart hides that. Rename
+ * or replace all of it; nothing else depends on these names.
  *
  *   npm run seed                 create envelopes and an account
  *   npm run seed -- --reset      wipe everything first
@@ -16,7 +17,14 @@ import { openAccount } from '../src/ledger/ledger.ts';
 
 const GROUPS: Record<string, string[]> = {
   Income: ['Available'],
-  Living: ['Groceries and Supplies', 'Eating Out', 'Household Misc', 'Gifts', 'Clothing and Shoes', 'Banking Fees'],
+  Living: [
+    'Groceries and Supplies',
+    'Eating Out',
+    'Household Misc',
+    'Gifts',
+    'Clothing and Shoes',
+    'Banking Fees',
+  ],
   Vehicle: ['Gas', 'Insurance', 'Repairs'],
   Home: ['Mortgage', 'Upkeep and Upgrades', 'Insurance'],
   Utilities: ['Electricity', 'Phone', 'Internet', 'Water', 'Natural Gas'],

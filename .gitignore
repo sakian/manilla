@@ -20,3 +20,9 @@ certs/
 
 # Spike output
 out/
+
+# Your deployment, as opposed to the one in docker-compose.yml. Compose reads
+# this automatically and merges it over the base file, so anything that does not
+# fit an environment variable - an extra volume, a different image tag, a port
+# you do want published - goes here instead of into a tracked file.
+docker-compose.override.yml

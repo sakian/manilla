@@ -283,10 +283,10 @@ npm run seed                     # a starting chart of envelopes and one account
 npm run dev                      # http://localhost:3001
 ```
 
-Manilla uses port 3001 by default, set by `MANILLA_PORT`, because port 3000 on
-this machine is already taken. `MANILLA_ORIGIN` has to name the same port: a
-passkey is bound to an exact origin, port included, so a mismatch means every
-sign-in fails with nothing useful on screen.
+Manilla uses port 3001 by default, set by `MANILLA_PORT`, on the assumption that
+something already has 3000. `MANILLA_ORIGIN` has to name the same port: a passkey
+is bound to an exact origin, port included, so a mismatch means every sign-in
+fails with nothing useful on screen.
 
 The first visit asks you to create a passkey, and shows ten recovery codes once.
 Save them: they are stored hashed, and they are the only way in if the device
@@ -312,12 +312,13 @@ hostname over HTTPS fixes both, without Tailscale:
 ```bash
 npm run dev:cert                 # a dev CA and a certificate for manilla.lan
 npm run dev:https
-sudo ufw allow from 192.168.1.0/24 to any port 3001 proto tcp
+sudo ufw allow from <your LAN subnet> to any port 3001 proto tcp
 ```
 
-Then point the hostname at this machine in local DNS (Pi-hole's Local DNS
-records) and set `MANILLA_RP_ID` and `MANILLA_ORIGIN` to the hostname and
-`https://<hostname>:3001`.
+Then point the hostname at this machine in whatever answers DNS on your network -
+a Pi-hole's Local DNS records, your router's host table, or `/etc/hosts` on the
+one device if that is all you need - and set `MANILLA_RP_ID` and `MANILLA_ORIGIN`
+to the hostname and `https://<hostname>:3001`.
 
 Last, trust the CA on the phone: open `/api/dev-ca` there (a development-only
 route), accept the certificate warning once, and install what it offers. On iOS
@@ -377,6 +378,28 @@ ends up half-written, so both are fatal rather than warnings.
 for the whole machine, a reverse proxy in front of several services, and a
 systemd timer to re-run `tailscale cert` every 90 days. The sidecar exists so none
 of that is needed for this one service.
+
+### Where your own configuration lives
+
+Nothing about your deployment belongs in a tracked file, and nothing here needs
+it to be. Everything in `docker-compose.yml` that varies is an environment
+variable with a working default — `${MANILLA_TS_HOSTNAME:-manilla}`,
+`${MANILLA_RP_ID:-localhost}`, `${POSTGRES_PASSWORD:-manilla}` — and
+`deploy/tailscale-serve.json` uses Tailscale's own `${TS_CERT_DOMAIN}` rather
+than a name. So a clone gets defaults that work, and your `.env` (gitignored)
+gets your tailnet.
+
+For anything that is not a value — an extra volume, a different image tag, a
+published port you do want — write a `docker-compose.override.yml`. Compose reads
+it automatically and merges it over the base file, and it is gitignored, so you
+never have to edit a tracked file to run your own arrangement and never have to
+un-edit one to pull.
+
+`npm run backup` copies `.env` alongside the database dump, because it is what
+says which hostname your passkeys are bound to and a ledger restored under the
+wrong name is not a restore. It also means the backup holds your API key; the
+dump already held your entire financial history, so treat the directory as the
+secret it always was, or set `MANILLA_BACKUP_ENV=0` to leave the file out.
 
 ## Backups (NF-7)
 
