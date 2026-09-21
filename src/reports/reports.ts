@@ -90,7 +90,7 @@ export async function spendingByEnvelope(
       envelopeGroups.name,
       envelopeGroups.position,
     )
-    .orderBy(asc(envelopeGroups.position), asc(envelopes.position), asc(envelopes.name));
+    .orderBy(asc(envelopeGroups.position), asc(envelopes.name));
 
   const groups = new Map<string, GroupSpending>();
   let totalCents = 0;

@@ -13,9 +13,8 @@ import {
   editEnvelope,
   envelopeHistory,
   listEnvelopes,
-  nudgeEnvelope,
+  nudgeGroup,
   renameGroup,
-  reorderEnvelopes,
   unarchiveEnvelope,
 } from './manage.ts';
 import {
@@ -120,48 +119,56 @@ describe(
       assert.equal(groups.find((group) => group.id === vehicle)!.envelopes.length, 0);
     });
 
-    test('reordering sets positions from the order given', async () => {
+    test('envelopes are listed alphabetically, whatever order they were made in', async () => {
       const groupId = await createGroup(db, 'Utilities');
-      const water = await createEnvelope(db, { groupId, name: 'Water' });
-      const power = await createEnvelope(db, { groupId, name: 'Electricity' });
-      const phone = await createEnvelope(db, { groupId, name: 'Phone' });
-
-      await reorderEnvelopes(db, groupId, [phone, water, power]);
+      await createEnvelope(db, { groupId, name: 'Water' });
+      await createEnvelope(db, { groupId, name: 'Electricity' });
+      await createEnvelope(db, { groupId, name: 'Phone' });
 
       const groups = await listEnvelopes(db);
       assert.deepEqual(
         groups.find((group) => group.id === groupId)!.envelopes.map((envelope) => envelope.name),
-        ['Phone', 'Water', 'Electricity'],
+        ['Electricity', 'Phone', 'Water'],
+        'predictable to read down, rather than an order someone has to remember',
       );
     });
 
-    test('an envelope from another group cannot be reordered into this one', async () => {
+    test('an envelope moved to another group is alphabetical there too', async () => {
+      const utilities = await createGroup(db, 'Utilities');
+      const home = await createGroup(db, 'Home');
+      await createEnvelope(db, { groupId: home, name: 'Mortgage' });
+      await createEnvelope(db, { groupId: home, name: 'Repairs' });
+      const phone = await createEnvelope(db, { groupId: utilities, name: 'Phone' });
+
+      await editEnvelope(db, phone, { groupId: home });
+
+      const groups = await listEnvelopes(db);
+      assert.deepEqual(
+        groups.find((group) => group.id === home)!.envelopes.map((envelope) => envelope.name),
+        ['Mortgage', 'Phone', 'Repairs'],
+      );
+      assert.equal(groups.find((group) => group.id === utilities)!.envelopes.length, 0);
+    });
+
+    test('nudging swaps a group with its neighbour and stops at the ends', async () => {
+      // Groups keep a manual order: there are few of them, and "Income first,
+      // Archive last" is a real preference rather than a lookup.
       const first = await createGroup(db, 'Vehicle');
       const second = await createGroup(db, 'Home');
-      const gas = await createEnvelope(db, { groupId: first, name: 'Gas' });
-      await assert.rejects(() => reorderEnvelopes(db, second, [gas]), EnvelopeError);
-    });
 
-    test('nudging swaps an envelope with its neighbour and stops at the ends', async () => {
-      const groupId = await createGroup(db, 'Utilities');
-      const water = await createEnvelope(db, { groupId, name: 'Water' });
-      const power = await createEnvelope(db, { groupId, name: 'Electricity' });
+      await nudgeGroup(db, second, 'up');
+      let names = (await listEnvelopes(db)).map((group) => group.name);
+      assert.deepEqual(names.slice(0, 3), ['Living', 'Home', 'Vehicle']);
 
-      await nudgeEnvelope(db, power, 'up');
-      let groups = await listEnvelopes(db);
-      assert.deepEqual(
-        groups.find((group) => group.id === groupId)!.envelopes.map((envelope) => envelope.name),
-        ['Electricity', 'Water'],
-      );
+      // Already as high as it goes past the seeded group: a no-op, not an error.
+      await nudgeGroup(db, second, 'up');
+      names = (await listEnvelopes(db)).map((group) => group.name);
+      assert.deepEqual(names.slice(0, 3), ['Home', 'Living', 'Vehicle']);
 
-      // Already at the top: a no-op rather than an error.
-      await nudgeEnvelope(db, power, 'up');
-      groups = await listEnvelopes(db);
-      assert.deepEqual(
-        groups.find((group) => group.id === groupId)!.envelopes.map((envelope) => envelope.name),
-        ['Electricity', 'Water'],
-      );
-      assert.ok(water);
+      await nudgeGroup(db, second, 'up');
+      names = (await listEnvelopes(db)).map((group) => group.name);
+      assert.deepEqual(names.slice(0, 3), ['Home', 'Living', 'Vehicle']);
+      assert.ok(first);
     });
 
     // -- archiving (FR-25) --------------------------------------------------

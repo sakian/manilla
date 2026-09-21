@@ -87,7 +87,7 @@ export async function envelopeBalances(db: Database): Promise<EnvelopeBalance[]>
     })
     .from(envelopes)
     .innerJoin(envelopeGroups, eq(envelopes.groupId, envelopeGroups.id))
-    .orderBy(envelopeGroups.position, envelopeGroups.name, envelopes.position, envelopes.name);
+    .orderBy(envelopeGroups.position, envelopeGroups.name, envelopes.name);
 
   return rows.map((row) => ({ ...row, balanceCents: Number(row.balanceCents) }));
 }

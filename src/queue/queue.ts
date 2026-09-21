@@ -114,7 +114,7 @@ export async function envelopeOptions(db: Database): Promise<EnvelopeOption[]> {
     .from(envelopes)
     .innerJoin(envelopeGroups, eq(envelopes.groupId, envelopeGroups.id))
     .where(sql`${envelopes.archivedAt} is null`)
-    .orderBy(envelopeGroups.position, envelopeGroups.name, envelopes.position, envelopes.name);
+    .orderBy(envelopeGroups.position, envelopeGroups.name, envelopes.name);
 
   return rows;
 }

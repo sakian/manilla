@@ -820,8 +820,7 @@ input.amount {
 }
 
 .group-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
   gap: 12px;
   align-items: baseline;
 }
@@ -840,10 +839,6 @@ details[open] > summary > .group-summary::before {
   font-weight: 620;
 }
 
-.group-figures {
-  font-size: 13px;
-}
-
 .group-tools {
   display: flex;
   gap: 6px;
@@ -855,12 +850,21 @@ details[open] > summary > .group-summary::before {
   padding: 3px 8px;
 }
 
+/*
+ * Two lines, always: the name with its balance, then what it planned and spent.
+ * Four columns of numbers read as a spreadsheet; the thing anyone opens this
+ * screen for is "what is in it", so that sits on the same line as the name.
+ */
 .envelope-row {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 110px auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name balance'
+    'figures actions';
+  gap: 2px 12px;
   align-items: center;
-  padding: 6px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
 }
@@ -869,21 +873,56 @@ details[open] > summary > .group-summary::before {
   border-bottom: none;
 }
 
-.envelope-name a {
-  text-decoration: none;
+.envelope-name {
+  grid-area: name;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
-.envelope-name a:hover {
-  text-decoration: underline;
+.envelope-row > .money {
+  grid-area: balance;
+  text-align: right;
 }
 
 .envelope-figures {
+  grid-area: figures;
   font-size: 12px;
 }
 
+/*
+ * The card's click target. A real link, stretched over the whole row, so the
+ * whole card opens the envelope while staying middle-clickable, copyable and
+ * reachable by keyboard. Buttons raise themselves above it; while editing the
+ * stretch is off, so a stray click cannot leave a half-typed amount behind.
+ */
+.envelope-open {
+  text-decoration: none;
+}
+
+.envelope-open:hover {
+  text-decoration: underline;
+}
+
+.envelope-row:not(.editing) .envelope-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.envelope-row:not(.editing):hover {
+  background: var(--surface-2);
+}
+
 .envelope-actions {
+  grid-area: actions;
+  position: relative;
+  z-index: 1;
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  align-items: baseline;
   justify-content: flex-end;
   flex-wrap: wrap;
 }
@@ -935,22 +974,6 @@ details[open] > summary > .group-summary::before {
   }
   .budget-row.head {
     display: none;
-  }
-  .envelope-row {
-    grid-template-columns: minmax(0, 1fr) 100px;
-  }
-  .envelope-figures {
-    grid-column: 1 / -1;
-  }
-  .envelope-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-  .group-summary {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .group-figures {
-    grid-column: 1 / -1;
   }
 }
 
@@ -1580,4 +1603,50 @@ details[open] > summary > .group-summary::before {
 .inline-search button {
   font-size: 13px;
   padding: 5px 10px;
+}
+
+/* --- Editing an envelope in place ---------------------------------------- */
+
+/* Beside the name, because that is what is being renamed. */
+.rename-inline {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  padding: 2px 7px;
+}
+
+.group-move {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.group-move select {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  max-width: 150px;
+}
+
+.envelope-figures .planned-edit {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 720px) {
+  /* Edit-mode controls get the width; they wrap under the figures rather than
+     fighting them for a narrow right-hand column. */
+  .envelope-row.editing {
+    grid-template-areas:
+      'name balance'
+      'figures figures'
+      'actions actions';
+  }
+  .envelope-row.editing .envelope-actions {
+    justify-content: flex-start;
+  }
 }

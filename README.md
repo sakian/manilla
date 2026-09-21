@@ -45,9 +45,13 @@ on screen. It lives on the screens that list transactions rather than on a page
 of its own - the account view with no account picked is every transaction.
 
 The screens then went through a usability pass. The dashboard and the envelope
-list were one column of balances shown twice, so they are one screen, with
-renaming, reordering, archiving and planned amounts behind an Edit button and
-funding a button beside the envelopes being filled. Accounts are their own tab.
+list were one column of balances shown twice, so they are one screen: two lines
+per envelope (name with its balance, then plan and spend), the whole card a link
+into it, and renaming, archiving, regrouping and planned amounts behind an Edit
+button. Funding is a button beside the envelopes being filled. Envelopes are
+alphabetical inside their group and groups keep a manual order — dozens of one
+are scanned, a handful of the other are read as a shape. Accounts are their own
+tab.
 The budget screen shows each envelope's plan next to what it actually cost -
 last month, and averaged over a year - with every figure labelled on every row,
 because a phone has scrolled the table header away by the time you reach

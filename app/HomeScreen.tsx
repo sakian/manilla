@@ -10,15 +10,30 @@
  * envelope view - the one that answers "can I afford this".
  *
  * Reading and rearranging are separated by an Edit button rather than shown at
- * once. Renaming, reordering, archiving, adding and setting planned amounts are
- * all things you do occasionally and deliberately; showing their controls on
- * every row buries the balances, which is what you came for. Nothing is hidden
- * that changes money - Move and Cover stay visible, because those are answers to
- * what the screen is telling you.
+ * once. Renaming, archiving, adding, moving an envelope between groups and
+ * setting planned amounts are all things you do occasionally and deliberately;
+ * showing their controls on every row buries the balances, which is what you came
+ * for. Cover stays visible, because an overspend is something the screen is
+ * telling you about and the fix belongs next to it.
+ *
+ * Moving money is one button at the top rather than one per row. Per-row buttons
+ * made every card busier for an action that needs a dialog anyway, and that
+ * dialog asks which envelope regardless.
+ *
+ * A card is two lines: the name with its balance, then what it planned and spent.
+ * The balance is what anyone opens this screen for, so it shares the line with
+ * the name rather than sitting in a third column. Clicking anywhere on the card
+ * opens the envelope.
+ *
+ * Envelopes are alphabetical inside their group; groups keep a manual order.
+ * There are dozens of envelopes and a handful of groups, so one is scanned and
+ * the other is read as a shape - "Income first, Archive last" is a real
+ * preference, while a hand-made envelope order is just somewhere to lose things.
  *
  * Groups are `<details>` elements, so collapsing (FR-22) works without state,
- * without JavaScript, and with a keyboard. Every group shows its rolled-up
- * balance, plan and spending, because that roll-up is the reason groups exist.
+ * without JavaScript, and with a keyboard. A group heading is a name and nothing
+ * else: its rolled-up balance, plan and spending were three more figures to read
+ * past on the way to the envelope actually being looked for.
  *
  * Archiving is the interesting interaction: an envelope with money in it cannot
  * just disappear (FR-25), so the button asks where the balance should go and the
@@ -37,7 +52,8 @@ import {
   createEnvelopeAction,
   createGroupAction,
   editEnvelopeAction,
-  nudgeEnvelopeAction,
+  moveEnvelopeToGroupAction,
+  nudgeGroupAction,
   renameGroupAction,
   unarchiveEnvelopeAction,
   unarchiveGroupAction,
@@ -137,6 +153,12 @@ export default function HomeScreen({
   const live = useMemo(
     () => groups.filter((group) => group.archivedAt === null),
     [groups],
+  );
+
+  /** Where an envelope can be moved to. Archived groups are not a destination. */
+  const liveGroups = useMemo(
+    () => live.map((group) => ({ id: group.id, name: group.name })),
+    [live],
   );
 
   const choices: EnvelopeChoice[] = useMemo(
@@ -261,32 +283,36 @@ export default function HomeScreen({
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
 
-      {live.map((group) => {
+      {live.map((group, groupIndex) => {
         const envelopes = group.envelopes.filter((envelope) => envelope.archivedAt === null);
-        const balance = envelopes.reduce((sum, envelope) => sum + envelope.balanceCents, 0);
-        const planned = envelopes.reduce(
-          (sum, envelope) => sum + (figures[envelope.id]?.plannedCents ?? 0),
-          0,
-        );
-        const spent = envelopes.reduce(
-          (sum, envelope) => sum + (figures[envelope.id]?.spentCents ?? 0),
-          0,
-        );
 
         return (
           <details key={group.id} className="panel group-panel" open>
+            {/* A group is a heading, not a figure. Its rolled-up balance, plan
+                and spending were three more numbers to read past on the way to
+                the envelope you actually wanted. */}
             <summary>
               <span className="group-summary">
                 <span className="group-name">{group.name}</span>
-                <span className="group-figures muted">
-                  planned {money(planned)} · spent {money(spent)}
-                </span>
-                <Money cents={balance} />
               </span>
             </summary>
 
             {editing && (
             <div className="group-tools">
+              <button
+                onClick={() => run(() => nudgeGroupAction(group.id, 'up'))}
+                disabled={pending || groupIndex === 0}
+                title="Move this group up"
+              >
+                ↑
+              </button>
+              <button
+                onClick={() => run(() => nudgeGroupAction(group.id, 'down'))}
+                disabled={pending || groupIndex === live.length - 1}
+                title="Move this group down"
+              >
+                ↓
+              </button>
               <button
                 onClick={() => {
                   const next = window.prompt('Rename group', group.name);
@@ -304,24 +330,60 @@ export default function HomeScreen({
             </div>
             )}
 
-            {envelopes.map((envelope, index) => {
+            {envelopes.map((envelope) => {
               const figure = figures[envelope.id];
               const overspent = envelope.balanceCents < 0;
               return (
-                <div key={envelope.id} className="envelope-row">
+                <div
+                  key={envelope.id}
+                  className={`envelope-row${editing ? ' editing' : ''}`}
+                >
                   <span className="envelope-name">
-                    <Link href={`/envelopes/${envelope.id}`}>{envelope.name}</Link>
+                    {/* The whole card opens the envelope, done with a real link
+                        stretched over the card by CSS rather than an onClick on
+                        the div: a link can be middle-clicked, copied, tabbed to
+                        and read out. Buttons sit above it, and the stretch is
+                        switched off while editing so a stray click cannot
+                        navigate away from a half-typed amount. */}
+                    <Link href={`/envelopes/${envelope.id}`} className="envelope-open">
+                      {envelope.name}
+                    </Link>
                     {envelope.isUnallocated && <span className="tag">income pool</span>}
                     {overspent && <span className="tag warn">overspent</span>}
                     {!envelope.carryOver && <span className="tag">resets monthly</span>}
+                    {editing && (
+                      <button
+                        className="rename-inline"
+                        onClick={() => rename(envelope.id, envelope.name)}
+                        disabled={pending}
+                        title={`Rename ${envelope.name}`}
+                      >
+                        Rename
+                      </button>
+                    )}
                   </span>
 
+                  <Money cents={envelope.balanceCents} />
+
                   <span className="envelope-figures muted">
-                    {figure ? (
+                    {editing && !envelope.isUnallocated ? (
+                      <label className="planned-edit">
+                        <span className="figure-label">plan</span>
+                        <input
+                          className="amount"
+                          inputMode="decimal"
+                          aria-label={`Planned each month for ${envelope.name}`}
+                          defaultValue={inputFromCents(figure?.plannedCents ?? 0)}
+                          onBlur={(event) => savePlanned(envelope.id, figure, event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') event.currentTarget.blur();
+                          }}
+                        />
+                      </label>
+                    ) : figure ? (
                       <>
                         <span className="figure">
-                          <span className="figure-label">planned</span>{' '}
-                          {money(figure.plannedCents)}
+                          <span className="figure-label">planned</span> {money(figure.plannedCents)}
                         </span>
                         <span className="figure">
                           <span className="figure-label">spent</span> {money(figure.spentCents)}
@@ -332,10 +394,8 @@ export default function HomeScreen({
                     )}
                   </span>
 
-                  <Money cents={envelope.balanceCents} />
-
                   <span className="envelope-actions">
-                    {overspent && (
+                    {overspent && !editing && (
                       <button
                         onClick={() => setCovering({ id: envelope.id, name: envelope.name })}
                         disabled={pending}
@@ -343,66 +403,41 @@ export default function HomeScreen({
                         Cover
                       </button>
                     )}
-                    <button
-                      onClick={() => {
-                        setTransferFrom(envelope.id);
-                        setTransferOpen(true);
-                      }}
-                      disabled={pending}
-                    >
-                      Move
-                    </button>
-                    {editing && (
+                    {editing && !envelope.isUnallocated && (
                       <>
-                        {!envelope.isUnallocated && (
-                          <label className="planned-edit">
-                            <span className="figure-label">plan</span>
-                            <input
-                              className="amount"
-                              inputMode="decimal"
-                              aria-label={`Planned each month for ${envelope.name}`}
-                              defaultValue={inputFromCents(figure?.plannedCents ?? 0)}
-                              onBlur={(event) => savePlanned(envelope.id, figure, event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') event.currentTarget.blur();
-                              }}
-                            />
+                        {liveGroups.length > 1 && (
+                          <label className="group-move">
+                            <span className="figure-label">group</span>
+                            <select
+                              value={group.id}
+                              aria-label={`Group for ${envelope.name}`}
+                              disabled={pending}
+                              onChange={(event) =>
+                                run(() =>
+                                  moveEnvelopeToGroupAction(envelope.id, event.target.value),
+                                )
+                              }
+                            >
+                              {liveGroups.map((choice) => (
+                                <option key={choice.id} value={choice.id}>
+                                  {choice.name}
+                                </option>
+                              ))}
+                            </select>
                           </label>
                         )}
                         <button
-                          onClick={() => rename(envelope.id, envelope.name)}
+                          onClick={() =>
+                            setArchiving({
+                              id: envelope.id,
+                              name: envelope.name,
+                              balanceCents: envelope.balanceCents,
+                            })
+                          }
                           disabled={pending}
                         >
-                          Rename
+                          Archive
                         </button>
-                        <button
-                          onClick={() => run(() => nudgeEnvelopeAction(envelope.id, 'up'))}
-                          disabled={pending || index === 0}
-                          title="Move up"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          onClick={() => run(() => nudgeEnvelopeAction(envelope.id, 'down'))}
-                          disabled={pending || index === envelopes.length - 1}
-                          title="Move down"
-                        >
-                          ↓
-                        </button>
-                        {!envelope.isUnallocated && (
-                          <button
-                            onClick={() =>
-                              setArchiving({
-                                id: envelope.id,
-                                name: envelope.name,
-                                balanceCents: envelope.balanceCents,
-                              })
-                            }
-                            disabled={pending}
-                          >
-                            Archive
-                          </button>
-                        )}
                       </>
                     )}
                   </span>

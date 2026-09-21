@@ -79,7 +79,6 @@ export async function listEnvelopes(
     .orderBy(
       asc(envelopeGroups.position),
       asc(envelopeGroups.name),
-      asc(envelopes.position),
       asc(envelopes.name),
     );
 
@@ -503,53 +502,35 @@ export async function unarchiveEnvelope(db: Database, envelopeId: string): Promi
   await db.update(envelopes).set({ archivedAt: null }).where(eq(envelopes.id, envelopeId));
 }
 
-/** Set the order within a group from the order of the array (FR-21). */
-export async function reorderEnvelopes(
+/**
+ * Envelopes are listed alphabetically inside their group, so there is nothing to
+ * reorder here (FR-21 as built asked for manual ordering; in use, hunting for an
+ * envelope in a hand-made order is worse than reading down a list you can
+ * predict). `position` is still written when one is created or moved, because it
+ * is a cheap tiebreaker and a column nobody has to migrate away.
+ *
+ * Groups keep their manual order - there are few of them, they are read as a
+ * shape rather than scanned, and "Income first, Archive last" is a real
+ * preference. {@link nudgeGroup} is what moves one.
+ */
+
+/** Move one group up or down among its live siblings, for an arrow button. */
+export async function nudgeGroup(
   db: Database,
   groupId: string,
-  orderedIds: string[],
-): Promise<void> {
-  const inGroup = await db
-    .select({ id: envelopes.id })
-    .from(envelopes)
-    .where(eq(envelopes.groupId, groupId));
-  const known = new Set(inGroup.map((row) => row.id));
-
-  for (const id of orderedIds) {
-    if (!known.has(id)) throw new EnvelopeError(`Envelope ${id} is not in that group`);
-  }
-
-  await db.transaction(async (tx) => {
-    for (const [index, id] of orderedIds.entries()) {
-      await tx.update(envelopes).set({ position: index }).where(eq(envelopes.id, id));
-    }
-  });
-}
-
-/** Move one envelope up or down among its live siblings, for an arrow button. */
-export async function nudgeEnvelope(
-  db: Database,
-  envelopeId: string,
   direction: 'up' | 'down',
 ): Promise<void> {
-  const [envelope] = await db
-    .select({ groupId: envelopes.groupId })
-    .from(envelopes)
-    .where(eq(envelopes.id, envelopeId))
-    .limit(1);
-  if (!envelope) throw new EnvelopeError(`No such envelope: ${envelopeId}`);
-
   const siblings = await db
-    .select({ id: envelopes.id })
-    .from(envelopes)
-    .where(and(eq(envelopes.groupId, envelope.groupId), isNull(envelopes.archivedAt)))
-    .orderBy(asc(envelopes.position), asc(envelopes.name));
+    .select({ id: envelopeGroups.id })
+    .from(envelopeGroups)
+    .where(isNull(envelopeGroups.archivedAt))
+    .orderBy(asc(envelopeGroups.position), asc(envelopeGroups.name));
 
   const order = siblings.map((row) => row.id);
-  const at = order.indexOf(envelopeId);
+  const at = order.indexOf(groupId);
   const to = direction === 'up' ? at - 1 : at + 1;
   if (at === -1 || to < 0 || to >= order.length) return;
 
   [order[at], order[to]] = [order[to]!, order[at]!];
-  await reorderEnvelopes(db, envelope.groupId, order);
+  await reorderGroups(db, order);
 }

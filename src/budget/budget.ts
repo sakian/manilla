@@ -217,7 +217,7 @@ export async function budgetMonth(
     .from(envelopes)
     .innerJoin(envelopeGroups, eq(envelopes.groupId, envelopeGroups.id))
     .where(isNull(envelopes.archivedAt))
-    .orderBy(envelopeGroups.position, envelopeGroups.name, envelopes.position, envelopes.name);
+    .orderBy(envelopeGroups.position, envelopeGroups.name, envelopes.name);
 
   const budgetRows: BudgetRow[] = rows.map((row) => {
     const override = row.plannedForMonth === null ? null : Number(row.plannedForMonth);

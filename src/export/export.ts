@@ -80,7 +80,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
   ] = await Promise.all([
     db.select().from(accounts).orderBy(asc(accounts.position), asc(accounts.name)),
     db.select().from(envelopeGroups).orderBy(asc(envelopeGroups.position)),
-    db.select().from(envelopes).orderBy(asc(envelopes.position)),
+    db.select().from(envelopes).orderBy(asc(envelopes.name)),
     db.select().from(transactions).orderBy(asc(transactions.date), asc(transactions.createdAt)),
     db.select().from(txnLines),
     db.select().from(transactionExternalIds),

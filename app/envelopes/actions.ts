@@ -13,7 +13,7 @@ import {
   createEnvelope,
   createGroup,
   editEnvelope,
-  nudgeEnvelope,
+  nudgeGroup,
   renameGroup,
   unarchiveEnvelope,
   unarchiveGroup,
@@ -116,13 +116,32 @@ export async function editEnvelopeAction(
   }
 }
 
-export async function nudgeEnvelopeAction(
-  envelopeId: string,
+/**
+ * Groups are ordered by hand; envelopes are alphabetical inside them, so only
+ * this one exists.
+ */
+export async function nudgeGroupAction(
+  groupId: string,
   direction: 'up' | 'down',
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await nudgeEnvelope(db(), envelopeId, direction);
+    await nudgeGroup(db(), groupId, direction);
+    refreshed();
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** Move an envelope into another group (FR-21). */
+export async function moveEnvelopeToGroupAction(
+  envelopeId: string,
+  groupId: string,
+): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await editEnvelope(db(), envelopeId, { groupId });
     refreshed();
     return { ok: true };
   } catch (error) {

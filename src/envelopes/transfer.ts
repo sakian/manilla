@@ -110,7 +110,7 @@ export async function coverPlan(db: Database, envelopeId: string): Promise<Cover
     .from(envelopes)
     .innerJoin(envelopeGroups, eq(envelopes.groupId, envelopeGroups.id))
     .where(isNull(envelopes.archivedAt))
-    .orderBy(asc(envelopeGroups.position), asc(envelopes.position));
+    .orderBy(asc(envelopeGroups.position), asc(envelopes.name));
 
   const target = rows.find((row) => row.envelopeId === envelopeId);
   if (!target) throw new TransferError(`No such envelope: ${envelopeId}`);
@@ -219,7 +219,7 @@ export async function transferOptions(
         ? and(isNull(envelopes.archivedAt), ne(envelopes.id, exceptEnvelopeId))
         : isNull(envelopes.archivedAt),
     )
-    .orderBy(asc(envelopeGroups.position), asc(envelopes.position), asc(envelopes.name));
+    .orderBy(asc(envelopeGroups.position), asc(envelopes.name));
 
   return rows.map((row) => ({ ...row, balanceCents: Number(row.balanceCents) }));
 }

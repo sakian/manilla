@@ -294,7 +294,7 @@ export async function filterChoices(db: Database): Promise<FilterChoices> {
     })
     .from(envelopes)
     .where(isNull(envelopes.archivedAt))
-    .orderBy(asc(envelopes.position), asc(envelopes.name));
+    .orderBy(asc(envelopes.name));
 
   return {
     accounts: accountRows.map((row) => ({
