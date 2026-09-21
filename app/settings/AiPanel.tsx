@@ -131,7 +131,7 @@ export default function AiPanel({
         </span>
       </div>
 
-      <div className="row">
+      <div className="row ai-budget">
         <span>Budget</span>
         <span className="allocation-actions">
           <input

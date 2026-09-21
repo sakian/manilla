@@ -433,6 +433,17 @@ a.callout:hover {
   font-size: 14px;
 }
 
+/* A count of calls needs a few digits, not the row's width; left to stretch
+   it pushed its own units onto a third line on a phone. */
+.row.ai-budget {
+  align-items: center;
+}
+
+.row.ai-budget input.amount {
+  width: 5em;
+  min-width: 0;
+}
+
 .row.total {
   border-top: 1px solid var(--border);
   margin-top: 6px;
@@ -453,6 +464,11 @@ a.callout:hover {
 .footnote {
   font-size: 13px;
   margin-top: -6px;
+}
+
+/* The pull-up suits text under text, not under a row of controls (#19). */
+:is(.add-device, .export-links) + .footnote {
+  margin-top: 10px;
 }
 
 code {
@@ -487,6 +503,11 @@ input.amount {
   text-align: right;
   width: 100%;
   min-width: 78px;
+}
+
+/* A file picker's intrinsic width ignores its container on a phone. */
+input[type='file'] {
+  max-width: 100%;
 }
 
 .field {
@@ -542,10 +563,20 @@ input.amount {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  /* The heading's top margin, moved out to the row so a button beside the
+     heading centres on it rather than riding above it. Padding, because a
+     margin here would collapse into whatever is above and close the gap. */
+  padding-top: 14px;
 }
 
 .panel-head h3 {
-  margin-bottom: 0;
+  margin: 0;
+}
+
+/* A button beside a panel heading matches the link-buttons there. */
+.panel-head button {
+  font-size: 13px;
+  padding: 6px 11px;
 }
 
 /* --- Sign in ------------------------------------------------------------- */
