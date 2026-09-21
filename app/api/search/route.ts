@@ -42,9 +42,10 @@ export async function GET(request: Request): Promise<Response> {
       status: row.status,
       kind: row.kind,
       memo: row.memo ?? '',
+      note: row.note ?? '',
       checkNumber: row.checkNumber ?? '',
     })),
-    ['date', 'payee', 'amount', 'account', 'envelopes', 'status', 'kind', 'memo', 'checkNumber'],
+    ['date', 'payee', 'amount', 'account', 'envelopes', 'status', 'kind', 'memo', 'note', 'checkNumber'],
   );
 
   return new Response(csv, {

@@ -234,7 +234,10 @@ export type NewTransaction = {
   date: string;
   amountCents: number;
   payeeRaw: string;
+  /** What the bank wrote beside the payee. */
   memo?: string;
+  /** The user's own words (see the column). */
+  note?: string;
   checkNumber?: string;
   source?: 'manual' | 'file_import' | 'bank_sync' | 'goodbudget' | 'opening_balance';
   status?: 'pending_review' | 'confirmed';
@@ -281,6 +284,7 @@ export async function recordTransaction(db: Database, input: NewTransaction): Pr
         payeeRaw: input.payeeRaw,
         payeeKey: normalizePayee(input.payeeRaw).key,
         memo: input.memo ?? null,
+        note: input.note ?? null,
         checkNumber: input.checkNumber ?? null,
         kind: 'spending',
         status: input.status ?? 'pending_review',

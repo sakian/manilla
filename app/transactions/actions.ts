@@ -18,6 +18,7 @@ import {
   deleteTransfer,
   sendBackToReview,
   transactionDetail,
+  setTransactionNote,
   updateTransaction,
   updateTransfer,
 } from '../../src/transactions/manage.ts';
@@ -50,7 +51,9 @@ export async function transactionDetailAction(transactionId: string): Promise<
         date: string;
         amountCents: number;
         payeeRaw: string;
+        /** The bank's, shown and never edited. */
         memo: string | null;
+        note: string | null;
         kind: 'spending' | 'account_transfer';
         status: 'pending_review' | 'confirmed';
         transferPairId: string | null;
@@ -74,6 +77,7 @@ export async function transactionDetailAction(transactionId: string): Promise<
         amountCents: detail.amountCents,
         payeeRaw: detail.payeeRaw,
         memo: detail.memo,
+        note: detail.note,
         kind: detail.kind,
         status: detail.status,
         transferPairId: detail.transferPairId,
@@ -106,7 +110,7 @@ export type TransactionFields = {
   direction: Direction;
   amount: string;
   payeeRaw: string;
-  memo?: string;
+  note?: string;
   /** Empty for "leave it to the review queue"; several rows for a split (FR-4). */
   lines: { envelopeId: string; amount: string }[];
 };
@@ -133,7 +137,7 @@ export async function createTransactionAction(
       date: fields.date,
       amountCents: signed(fields.amount, fields.direction),
       payeeRaw: fields.payeeRaw,
-      ...(fields.memo ? { memo: fields.memo } : {}),
+      ...(fields.note ? { note: fields.note } : {}),
       ...(lines.length > 0 ? { lines } : {}),
     });
 
@@ -163,7 +167,7 @@ export async function updateTransactionAction(
       date: fields.date,
       amountCents: signed(fields.amount, fields.direction),
       payeeRaw: fields.payeeRaw,
-      memo: fields.memo ?? null,
+      note: fields.note ?? null,
       lines,
       // Giving it an envelope by hand is the same statement confirming makes.
       ...(lines.length > 0 ? { status: 'confirmed' as const } : {}),
@@ -171,6 +175,24 @@ export async function updateTransactionAction(
 
     refreshed();
     return { ok: true, message: 'Saved.' };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/**
+ * Write or clear a note on its own - from the review queue, where it must not
+ * wait for (or disturb) the envelope decisions saved together at the end.
+ */
+export async function setTransactionNoteAction(
+  transactionId: string,
+  note: string,
+): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await setTransactionNote(db(), transactionId, note);
+    revalidatePath('/transactions');
+    return { ok: true, message: note.trim() ? 'Note saved.' : 'Note removed.' };
   } catch (error) {
     return failed(error);
   }

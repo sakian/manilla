@@ -110,7 +110,8 @@ export default function AiPanel({
           <li>Your envelope names, and a few merchants each already contains</li>
         </ul>
         <p className="muted">
-          Never a balance, never an account, and nothing from outside the transaction itself. Worth
+          Never a balance, never an account, never a note you wrote, and nothing from outside the
+          transaction itself. Worth
           knowing about the memo: it is whatever your bank wrote there, and banks write names into
           it &mdash; <em>E-TRANSFER FROM</em> someone, or the tail of an account number on a
           transfer. It is sent because it is often the only thing that says what a purchase was.

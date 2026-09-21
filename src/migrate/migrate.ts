@@ -85,7 +85,8 @@ export type PlannedTransaction = {
   row: number;
   date: string;
   payeeRaw: string;
-  memo?: string;
+  /** The export's Notes column: typed by the user in the old app, so a note here. */
+  note?: string;
   account?: string;
   amountCents: number;
   lines: PlannedLine[];
@@ -402,7 +403,7 @@ export function planMigration(
         row,
         date,
         payeeRaw: payeeRaw || '(no description)',
-        ...(memo ? { memo } : {}),
+        ...(memo ? { note: memo } : {}),
         ...(account ? { account } : {}),
         amountCents,
       };
@@ -908,7 +909,7 @@ export async function commitMigration(
           amountCents: planned.amountCents,
           payeeRaw: planned.payeeRaw,
           payeeKey: normalizePayee(planned.payeeRaw).key,
-          memo: planned.memo ?? null,
+          note: planned.note ?? null,
           kind: 'spending',
           status: 'confirmed',
           source: 'goodbudget',

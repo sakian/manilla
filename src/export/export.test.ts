@@ -57,6 +57,7 @@ describe(
         amountCents: -10000,
         payeeRaw: 'SOBEYS #123, CALGARY',
         memo: 'weekly shop',
+        note: 'for the barbecue',
         status: 'confirmed',
         lines: [
           { envelopeId: env.groceriesId, amountCents: -6000 },
@@ -111,6 +112,7 @@ describe(
       assert.equal(rows[0]!.payee, 'SOBEYS #123, CALGARY', 'the comma came back intact');
       assert.equal(rows[0]!.amount, '-100.00', 'the transaction total, on both rows');
       assert.equal(rows[1]!.amount, '-100.00');
+      assert.equal(rows[0]!.note, 'for the barbecue', 'your notes leave with your data');
       assert.deepEqual(
         rows.map((row) => [row.envelope, row.envelopeAmount]).sort(),
         [

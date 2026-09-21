@@ -64,11 +64,11 @@ export type SortField = (typeof SORT_FIELDS)[number];
 export type Direction = 'in' | 'out';
 
 export type TransactionQuery = {
-  /** Matched against the payee as the bank wrote it, its normalized key, the memo and the cheque number. */
+  /** Matched against the payee as the bank wrote it, its normalized key, the memo, the note and the cheque number. */
   text?: string;
   /** Just the payee, for when a word appears in both a name and a note. */
   payee?: string;
-  /** Just the memo - the description a person or a bank added. */
+  /** Just the words beside the payee: the bank's memo, or a note of your own. */
   memo?: string;
   accountIds?: string[];
   /** Whole categories of account, so "everything in Day to day" is one filter. */
@@ -99,6 +99,7 @@ export type FoundTransaction = {
   status: string;
   kind: string;
   memo: string | null;
+  note: string | null;
   checkNumber: string | null;
   accountId: string;
   accountName: string;
@@ -147,6 +148,7 @@ function conditions(query: TransactionQuery): SQL[] {
         sql`${transactions.payeeRaw} ilike ${like}`,
         sql`${transactions.payeeKey} ilike ${like}`,
         sql`${transactions.memo} ilike ${like}`,
+        sql`${transactions.note} ilike ${like}`,
         sql`${transactions.checkNumber} ilike ${like}`,
       )!,
     );
@@ -165,7 +167,16 @@ function conditions(query: TransactionQuery): SQL[] {
   }
 
   const memo = query.memo?.trim();
-  if (memo) where.push(sql`${transactions.memo} ilike ${like(memo)}`);
+  // The bank's memo or your own note: which one said it is not the question
+  // someone searching for "birthday" is asking.
+  if (memo) {
+    where.push(
+      or(
+        sql`${transactions.memo} ilike ${like(memo)}`,
+        sql`${transactions.note} ilike ${like(memo)}`,
+      )!,
+    );
+  }
 
   if (query.accountIds && query.accountIds.length > 0) {
     where.push(inArray(transactions.accountId, query.accountIds));
@@ -272,6 +283,7 @@ export async function searchTransactions(
       status: transactions.status,
       kind: transactions.kind,
       memo: transactions.memo,
+      note: transactions.note,
       checkNumber: transactions.checkNumber,
       transferPairId: transactions.transferPairId,
       accountId: transactions.accountId,

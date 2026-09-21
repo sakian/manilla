@@ -35,6 +35,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
 import { markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
+import { setTransactionNoteAction } from '../transactions/actions.ts';
 import { formatMoney } from '../../src/money.ts';
 import { useOverlay } from '../useOverlay.ts';
 
@@ -135,6 +136,31 @@ export default function ReviewQueue({
     () => new Map(transfers.map((candidate) => [candidate.transactionId, candidate])),
     [transfers],
   );
+
+  /**
+   * Notes save on their own, straight away: they are not part of the envelope
+   * decisions saved together at the bottom, and should not wait for them. What
+   * was saved here is kept locally rather than refetched, so writing a note
+   * never disturbs a decision still being made further down.
+   */
+  const [notes, setNotes] = useState<Record<string, string | null>>({});
+  const [noteDraft, setNoteDraft] = useState<{ id: string; text: string } | null>(null);
+  const [savingNote, startNoteSave] = useTransition();
+  const noteOf = (row: QueueRow) => (row.id in notes ? notes[row.id]! : row.note);
+
+  const saveNote = useCallback(() => {
+    if (!noteDraft) return;
+    const { id, text } = noteDraft;
+    startNoteSave(async () => {
+      const result = await setTransactionNoteAction(id, text);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setNotes((current) => ({ ...current, [id]: text.trim() || null }));
+      setNoteDraft(null);
+    });
+  }, [noteDraft]);
 
   /** How many are waiting in each account, for its heading. */
   const perAccount = useMemo(() => {
@@ -380,7 +406,37 @@ export default function ReviewQueue({
                     {decision.confirmed ? 'Unconfirm' : 'Confirm'}
                   </button>
                 )}
+                <button
+                  className="link-button"
+                  onClick={() => setNoteDraft({ id: row.id, text: noteOf(row) ?? '' })}
+                  disabled={savingNote}
+                >
+                  {noteOf(row) ? 'Edit note' : 'Add a note'}
+                </button>
               </span>
+
+              {noteDraft?.id === row.id ? (
+                <span className="queue-row-note editing">
+                  <textarea
+                    rows={2}
+                    maxLength={500}
+                    autoFocus
+                    value={noteDraft.text}
+                    placeholder="Anything you want to remember about this one"
+                    onChange={(event) => setNoteDraft({ id: row.id, text: event.target.value })}
+                  />
+                  <span className="allocation-actions">
+                    <button className="primary" onClick={saveNote} disabled={savingNote}>
+                      {savingNote ? 'Saving…' : 'Save note'}
+                    </button>
+                    <button onClick={() => setNoteDraft(null)} disabled={savingNote}>
+                      Cancel
+                    </button>
+                  </span>
+                </span>
+              ) : (
+                noteOf(row) && <span className="queue-row-note">{noteOf(row)}</span>
+              )}
             </div>
           </Fragment>
         );

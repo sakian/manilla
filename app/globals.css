@@ -226,7 +226,8 @@ kbd {
   grid-template-areas:
     'payee amount'
     'meta  meta'
-    'choice choice';
+    'choice choice'
+    'note  note';
   gap: 4px 12px;
   align-items: baseline;
   padding: 10px 14px;
@@ -490,8 +491,13 @@ code {
 
 /* --- Forms --------------------------------------------------------------- */
 
+textarea {
+  resize: vertical;
+}
+
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: var(--text);
   background: var(--surface);
@@ -501,7 +507,8 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -2190,4 +2197,42 @@ details[open] > summary > .group-summary::before {
 
 .queue-account:first-child {
   padding-top: 4px;
+}
+
+/* A note of your own on a review row: quoted, so it reads as yours rather
+   than as something the bank or the app said. */
+.queue-row-note {
+  grid-area: note;
+  font-size: 13px;
+  color: var(--text-dim);
+  border-left: 2px solid var(--border);
+  padding: 2px 0 2px 8px;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.queue-row-note.editing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: none;
+  padding-left: 0;
+}
+
+.queue-row-note.editing textarea {
+  width: 100%;
+}
+
+/* Your note on a transaction, under the rest of the row and only when there
+   is one: the same quoted look as in the review queue. */
+.txn-note {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--text-dim);
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

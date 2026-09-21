@@ -258,7 +258,13 @@ export const transactions = pgTable(
     payeeRaw: text('payee_raw').notNull(),
     /** Normalized merchant key (CA-1); recomputed if normalization improves. */
     payeeKey: text('payee_key').notNull(),
+    /** What the bank or the old app wrote alongside the payee. Sent to the model. */
     memo: text('memo'),
+    /**
+     * The user's own words about the transaction. Apart from `memo` so writing
+     * one never overwrites what the bank said, and never sent to the model.
+     */
+    note: text('note'),
     checkNumber: text('check_number'),
     kind: transactionKind('kind').notNull().default('spending'),
     status: transactionStatus('status').notNull().default('pending_review'),

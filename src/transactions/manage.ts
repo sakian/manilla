@@ -76,7 +76,9 @@ export type TransactionDetail = {
   date: string;
   amountCents: number;
   payeeRaw: string;
+  /** The bank's, read-only here. */
   memo: string | null;
+  note: string | null;
   checkNumber: string | null;
   kind: 'spending' | 'account_transfer';
   status: 'pending_review' | 'confirmed';
@@ -100,6 +102,7 @@ export async function transactionDetail(
       amountCents: transactions.amountCents,
       payeeRaw: transactions.payeeRaw,
       memo: transactions.memo,
+      note: transactions.note,
       checkNumber: transactions.checkNumber,
       kind: transactions.kind,
       status: transactions.status,
@@ -142,7 +145,7 @@ export type NewManualTransaction = {
   /** Negative for money out, positive for money in. */
   amountCents: number;
   payeeRaw: string;
-  memo?: string;
+  note?: string;
   checkNumber?: string;
   /** One line, or several for a split (FR-4). Omit to leave it for the queue. */
   lines?: { envelopeId: string; amountCents: number }[];
@@ -172,7 +175,7 @@ export async function createManualTransaction(
     date: assertDate(input.date ?? localToday()),
     amountCents: input.amountCents,
     payeeRaw: assertPayee(input.payeeRaw),
-    ...(input.memo?.trim() ? { memo: input.memo.trim() } : {}),
+    ...(input.note?.trim() ? { note: input.note.trim() } : {}),
     ...(input.checkNumber?.trim() ? { checkNumber: input.checkNumber.trim() } : {}),
     source: 'manual',
     status: lines.length > 0 ? 'confirmed' : 'pending_review',
@@ -223,12 +226,44 @@ async function assertLinesBalance(
 // Editing
 // ---------------------------------------------------------------------------
 
+/** Blank is no note; anything else is kept as typed, less the edges. */
+function cleanNote(note: string | null): string | null {
+  const trimmed = note?.trim() ?? '';
+  if (trimmed.length > NOTE_LIMIT) {
+    throw new TransactionError(`A note can be up to ${NOTE_LIMIT} characters.`);
+  }
+  return trimmed === '' ? null : trimmed;
+}
+
+/** Room for a sentence or two, not a document. */
+export const NOTE_LIMIT = 500;
+
+/**
+ * Write or clear a transaction's note, touching nothing else.
+ *
+ * Apart from `updateTransaction` because a note is not an edit to the money: it
+ * is allowed on either half of an account transfer, which that refuses, and in
+ * the review queue it must not disturb a decision still being made.
+ */
+export async function setTransactionNote(
+  db: Database,
+  transactionId: string,
+  note: string | null,
+): Promise<void> {
+  const updated = await db
+    .update(transactions)
+    .set({ note: cleanNote(note), updatedAt: new Date() })
+    .where(eq(transactions.id, transactionId))
+    .returning({ id: transactions.id });
+  if (updated.length === 0) throw new TransactionError(`No such transaction: ${transactionId}`);
+}
+
 export type TransactionEdit = {
   accountId?: string;
   date?: string;
   amountCents?: number;
   payeeRaw?: string;
-  memo?: string | null;
+  note?: string | null;
   checkNumber?: string | null;
   /** Replaces the envelope split outright. Pass [] to make it uncategorized. */
   lines?: { envelopeId: string; amountCents: number }[];
@@ -304,7 +339,7 @@ export async function updateTransaction(
       // recomputed rather than left describing the old description (CA-1).
       changes.payeeKey = normalizePayee(payeeRaw).key;
     }
-    if (edit.memo !== undefined) changes.memo = edit.memo?.trim() ? edit.memo.trim() : null;
+    if (edit.note !== undefined) changes.note = cleanNote(edit.note);
     if (edit.checkNumber !== undefined) {
       changes.checkNumber = edit.checkNumber?.trim() ? edit.checkNumber.trim() : null;
     }

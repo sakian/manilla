@@ -273,7 +273,7 @@ export default function TransactionFilters({
             <input
               type="search"
               value={form.memo}
-              placeholder="just the memo"
+              placeholder="the memo or your note"
               onChange={(event) => set('memo', event.target.value)}
             />
           </label>

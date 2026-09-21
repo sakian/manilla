@@ -34,6 +34,8 @@ export type QueueRow = {
   accountId: string;
   accountName: string;
   memo: string | null;
+  /** Yours, written here or on the transactions screen. */
+  note: string | null;
   envelopeId: string | null;
   envelopeName: string | null;
   confidence: number | null;
@@ -153,6 +155,7 @@ export async function pendingTransactions(
       payeeRaw: transactions.payeeRaw,
       amountCents: transactions.amountCents,
       memo: transactions.memo,
+      note: transactions.note,
       accountId: accounts.id,
       accountName: accounts.name,
       accountGroupPosition: accountGroups.position,
@@ -223,6 +226,7 @@ export async function pendingTransactions(
     accountId: row.accountId,
     accountName: row.accountName,
     memo: row.memo,
+    note: row.note,
     envelopeId: row.envelopeId,
     envelopeName: row.envelopeName,
     confidence: row.confidence,

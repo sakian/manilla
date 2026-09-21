@@ -393,6 +393,13 @@ describe(
       assert.ok(rows.every((row) => row.source === 'goodbudget'));
     });
 
+    test('the export’s Notes arrive as notes, not as a bank memo', async () => {
+      await commitMigration(db, planMigration([EXPORT]), mappingFor());
+      const [zehrs] = await db.select().from(transactions).where(eq(transactions.payeeRaw, 'ZEHRS'));
+      assert.equal(zehrs!.note, 'weekly shop', 'typed by the user in the old app');
+      assert.equal(zehrs!.memo, null);
+    });
+
     test('the rule suggestions a migration earns are counted, not left stale', async () => {
       const {
         RULE_SUGGESTION_MINIMUM,

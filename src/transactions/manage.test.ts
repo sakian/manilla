@@ -10,6 +10,7 @@ import {
   recordTransaction,
 } from '../ledger/ledger.ts';
 import {
+  NOTE_LIMIT,
   TransactionError,
   convertToTransfer,
   createManualTransaction,
@@ -17,6 +18,7 @@ import {
   deleteTransaction,
   deleteTransfer,
   sendBackToReview,
+  setTransactionNote,
   transactionDetail,
   transferDetail,
   undoTransferPairing,
@@ -808,6 +810,72 @@ describe(
           }),
         TransactionError,
       );
+    });
+
+    // -- notes ---------------------------------------------------------------
+
+    test('a note typed with a transaction is its own, apart from any memo', async () => {
+      const id = await createManualTransaction(db, {
+        accountId: chequing,
+        amountCents: -2500,
+        payeeRaw: 'Farmers market',
+        note: '  for the birthday dinner  ',
+      });
+      const detail = await transactionDetail(db, id);
+      assert.equal(detail!.note, 'for the birthday dinner');
+      assert.equal(detail!.memo, null);
+    });
+
+    test('a note can be written and cleared without touching anything else', async () => {
+      const id = await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-09-01',
+        amountCents: -4520,
+        payeeRaw: 'SHELL 4471',
+        memo: 'POS PURCHASE',
+        source: 'file_import',
+        lines: [{ envelopeId: env.gasId, amountCents: -4520 }],
+      });
+
+      await setTransactionNote(db, id, 'the rental car, not ours');
+      let detail = await transactionDetail(db, id);
+      assert.equal(detail!.note, 'the rental car, not ours');
+      assert.equal(detail!.memo, 'POS PURCHASE', 'what the bank said is kept as it came');
+      assert.equal(detail!.status, 'pending_review', 'a note is not a review decision');
+      assert.equal(detail!.lines.length, 1);
+
+      await setTransactionNote(db, id, '   ');
+      detail = await transactionDetail(db, id);
+      assert.equal(detail!.note, null, 'blank clears it');
+    });
+
+    test('a note can go on a transfer, which an edit would refuse', async () => {
+      const pairId = await createTransfer(db, {
+        fromAccountId: chequing,
+        toAccountId: savings,
+        amountCents: 40000,
+        date: '2026-09-19',
+      });
+      const [half] = await db
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(eq(transactions.transferPairId, pairId))
+        .limit(1);
+
+      await setTransactionNote(db, half!.id, 'emergency fund top-up');
+      assert.equal((await transactionDetail(db, half!.id))!.note, 'emergency fund top-up');
+    });
+
+    test('a note is edited along with the rest, and a long one is refused', async () => {
+      const id = await createManualTransaction(db, {
+        accountId: chequing,
+        amountCents: -2500,
+        payeeRaw: 'Farmers market',
+      });
+      await updateTransaction(db, id, { note: 'eggs and honey' });
+      assert.equal((await transactionDetail(db, id))!.note, 'eggs and honey');
+
+      await assert.rejects(setTransactionNote(db, id, 'x'.repeat(NOTE_LIMIT + 1)), TransactionError);
     });
   },
 );

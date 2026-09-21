@@ -231,6 +231,21 @@ describe(
       assert.ok(found.rows.every((row) => row.accountName === 'Visa'));
     });
 
+    test('a note is found by the quick search and by the note box', async () => {
+      await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-04-03',
+        amountCents: -3000,
+        payeeRaw: 'AMZN MKTP',
+        note: "Grandma's birthday present",
+        source: 'file_import',
+      });
+      assert.equal((await searchTransactions(db, { text: 'birthday' })).total, 1);
+      const byNote = await searchTransactions(db, { memo: 'birthday' });
+      assert.equal(byNote.total, 1);
+      assert.equal(byNote.rows[0]!.note, "Grandma's birthday present");
+    });
+
     test('payee and memo can be searched apart from each other', async () => {
       await recordTransaction(db, {
         accountId: chequing,

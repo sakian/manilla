@@ -39,6 +39,7 @@ export type ExportedTransaction = {
   payee: string;
   payeeRaw: string;
   memo: string | null;
+  note: string | null;
   checkNumber: string | null;
   amountCents: number;
   kind: string;
@@ -123,6 +124,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
     payee: row.payeeKey,
     payeeRaw: row.payeeRaw,
     memo: row.memo,
+    note: row.note,
     checkNumber: row.checkNumber,
     amountCents: Number(row.amountCents),
     kind: row.kind,
@@ -212,6 +214,7 @@ export async function exportCsv(db: Database, table: CsvTableName): Promise<stri
           account: transaction.account,
           payee: transaction.payeeRaw,
           memo: transaction.memo ?? '',
+          note: transaction.note ?? '',
           amount: amount(transaction.amountCents),
           kind: transaction.kind,
           status: transaction.status,
@@ -236,6 +239,7 @@ export async function exportCsv(db: Database, table: CsvTableName): Promise<stri
         'account',
         'payee',
         'memo',
+        'note',
         'amount',
         'envelope',
         'group',

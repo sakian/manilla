@@ -410,6 +410,13 @@ describe(
       assert.deepEqual(rows.map((row) => row.date).sort(), ['2026-01-01', '2026-01-10']);
     });
 
+    test('a note comes with its row', async () => {
+      const id = await pending({ payee: 'SHELL', amountCents: -4520 });
+      const { setTransactionNote } = await import('../transactions/manage.ts');
+      await setTransactionNote(db, id, 'rental car');
+      assert.equal((await pendingTransactions(db))[0]!.note, 'rental car');
+    });
+
     test('confirmed transactions leave the queue', async () => {
       const id = await pending({
         payee: 'SHELL',

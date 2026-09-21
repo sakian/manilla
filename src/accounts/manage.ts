@@ -282,6 +282,7 @@ export type AccountTransaction = {
   status: string;
   kind: string;
   memo: string | null;
+  note: string | null;
   accountId: string;
   accountName: string;
   envelopeNames: string[];

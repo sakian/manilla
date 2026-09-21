@@ -118,6 +118,7 @@ export default function TransactionList({
               {showAccount && row.kind !== 'account_transfer' && ` · ${row.accountName}`}
             </span>
           </span>
+          {row.note && <span className="txn-note">{row.note}</span>}
         </button>
       ))}
 

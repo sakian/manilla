@@ -25,6 +25,7 @@ import {
   updateTransactionAction,
   updateTransferAction,
   type Direction,
+  type TransactionFields,
 } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';
 
@@ -38,6 +39,7 @@ export type EditingTransaction = {
   amountCents: number;
   payeeRaw: string;
   memo: string | null;
+  note: string | null;
   kind: 'spending' | 'account_transfer';
   status: 'pending_review' | 'confirmed';
   transferPairId: string | null;
@@ -91,7 +93,7 @@ export default function TransactionForm({
     editing ? inputFromCents(Math.abs(editing.amountCents)) : '',
   );
   const [payeeRaw, setPayeeRaw] = useState(editing?.payeeRaw ?? '');
-  const [memo, setMemo] = useState(editing?.memo ?? '');
+  const [note, setNote] = useState(editing?.note ?? '');
   const [lines, setLines] = useState<LineDraft[]>(
     editing && editing.lines.length > 0
       ? editing.lines.map((line) => ({
@@ -168,9 +170,9 @@ export default function TransactionForm({
       direction,
       amount,
       payeeRaw,
-      memo,
+      note,
       lines: usable,
-    };
+    } satisfies TransactionFields;
     run(() =>
       editing ? updateTransactionAction(editing.id, fields) : createTransactionAction(fields),
     );
@@ -180,7 +182,7 @@ export default function TransactionForm({
     date,
     direction,
     editing,
-    memo,
+    note,
     mode,
     payeeRaw,
     run,
@@ -315,11 +317,18 @@ export default function TransactionForm({
             <>
               <label className="field">
                 <span>Note</span>
-                <input
-                  value={memo}
+                <textarea
+                  rows={2}
+                  maxLength={500}
+                  value={note}
                   placeholder="Optional"
-                  onChange={(event) => setMemo(event.target.value)}
+                  onChange={(event) => setNote(event.target.value)}
                 />
+                {/* What the bank wrote is kept as it came, and shown so a note
+                    can be read against it; a note never replaces it. */}
+                {editing?.memo && (
+                  <small className="muted">The bank&rsquo;s memo: {editing.memo}</small>
+                )}
               </label>
 
               <div className="field">
