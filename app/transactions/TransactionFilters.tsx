@@ -17,7 +17,7 @@
  * merchant name is typed is slower to use than one that waits for Enter.
  */
 
-import { useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { UNCATEGORIZED } from '../../src/transactions/search.ts';
 import { writeQuery, type FormValues } from '../search/urlQuery.ts';
@@ -67,16 +67,81 @@ export default function TransactionFilters({
   const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
+  const go = useCallback(
+    (next: FormValues) => {
+      const query = writeQuery({
+        ...next,
+        // The pinned account travels as the same `account` param, so a link from
+        // here to the full search keeps the account filter it was showing.
+        accounts: pinnedAccountId ? [pinnedAccountId] : next.accounts,
+      });
+      // Applying is the end of choosing, so the panel folds away and leaves the
+      // chips to say what was chosen.
+      setOpen(false);
+      router.push(query ? `${path}?${query}` : path);
+    },
+    [path, pinnedAccountId, router],
+  );
+
   const apply = (event: FormEvent) => {
     event.preventDefault();
-    const query = writeQuery({
-      ...form,
-      // The pinned account travels as the same `account` param, so a link from
-      // here to the full search keeps the account filter it was showing.
-      accounts: pinnedAccountId ? [pinnedAccountId] : form.accounts,
-    });
-    router.push(query ? `${path}?${query}` : path);
+    go(form);
   };
+
+  /**
+   * What is currently filtered, as one removable chip each.
+   *
+   * Built from the same `FormValues` the controls write, so a chip cannot
+   * describe something the panel would not show - and removing one is just the
+   * form with that field emptied, applied.
+   */
+  const chips: { key: string; label: string; without: FormValues }[] = [];
+  const chip = (key: string, label: string, patch: Partial<FormValues>) =>
+    chips.push({ key, label, without: { ...form, ...patch } });
+
+  const nameOf = (list: { id: string; name: string }[], id: string, fallback: string) =>
+    list.find((item) => item.id === id)?.name ?? fallback;
+
+  if (form.q) chip('q', `“${form.q}”`, { q: '' });
+  if (form.payee) chip('payee', `paid to “${form.payee}”`, { payee: '' });
+  if (form.memo) chip('memo', `noted “${form.memo}”`, { memo: '' });
+  if (form.envelopes[0]) {
+    chip(
+      'env',
+      form.envelopes[0] === UNCATEGORIZED
+        ? 'no envelope yet'
+        : nameOf(envelopes, form.envelopes[0], 'an envelope'),
+      { envelopes: [] },
+    );
+  }
+  if (form.envelopeGroups[0]) {
+    chip('envgroup', nameOf(envelopeGroups ?? [], form.envelopeGroups[0], 'a group'), {
+      envelopeGroups: [],
+    });
+  }
+  if (!pinnedAccountId && form.accounts[0] && form.accounts[0] !== everyAccountValue) {
+    chip('account', nameOf(accounts, form.accounts[0], 'an account'), { accounts: [] });
+  }
+  if (form.accountGroups[0]) {
+    chip('acctgroup', nameOf(accountGroups ?? [], form.accountGroups[0], 'a category'), {
+      accountGroups: [],
+    });
+  }
+  if (form.from) chip('from', `from ${form.from}`, { from: '' });
+  if (form.to) chip('to', `to ${form.to}`, { to: '' });
+  if (form.min) chip('min', `at least $${form.min}`, { min: '' });
+  if (form.max) chip('max', `at most $${form.max}`, { max: '' });
+  if (form.dir) chip('dir', form.dir === 'in' ? 'money in' : 'money out', { dir: '' });
+  if (form.status) {
+    chip('status', form.status === 'pending_review' ? 'awaiting review' : 'confirmed', {
+      status: '',
+    });
+  }
+  if (form.kind) {
+    chip('kind', form.kind === 'account_transfer' ? 'transfers' : 'spending and income', {
+      kind: '',
+    });
+  }
 
   const clear = () => {
     const blank: FormValues = {
@@ -124,10 +189,30 @@ export default function TransactionFilters({
         </button>
         {active && (
           <button type="button" className="link-button" onClick={clear}>
-            Clear
+            Clear all
           </button>
         )}
       </div>
+
+      {chips.length > 0 && (
+        <div className="filter-chips">
+          {chips.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className="chip"
+              onClick={() => {
+                setForm(item.without);
+                go(item.without);
+              }}
+              title={`Remove: ${item.label}`}
+            >
+              {item.label}
+              <span aria-hidden="true">×</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {open && (
         <div className="filter-grid">

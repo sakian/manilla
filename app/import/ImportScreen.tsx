@@ -16,6 +16,7 @@
 
 import { useCallback, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { Hint } from '../Hint.tsx';
 import Link from 'next/link';
 import {
   commitImportAction,
@@ -231,11 +232,16 @@ export default function ImportScreen({
       {notices}
 
       <div className="page-head">
-        <h2>Import a statement</h2>
-        <p className="muted">
-          OFX or QFX, as your bank exports it. Nothing is written until you have seen what it would
-          do.
-        </p>
+        <h2>
+          Import a statement{' '}
+          <Hint label="How importing works">
+            OFX or QFX, as your bank exports it. The account is recognised from the file where it
+            can be, and remembered when you pick one. Every row is matched against what is already
+            here, so importing a statement twice adds nothing — anything that looks like a repeat is
+            shown as one and can be kept anyway. Nothing is written until you have seen what it
+            would do, and a whole import can be undone in one step afterwards.
+          </Hint>
+        </h2>
       </div>
 
       {error && <p className="signin-error">{error}</p>}

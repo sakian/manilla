@@ -2,11 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '../db/client.ts';
-import {
-  confirmTransactions,
-  highConfidenceIds,
-  recategorize,
-} from '../src/queue/queue.ts';
+import { recategorize, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
 import { createTransferRule } from '../src/rules/rules.ts';
 import { requireUser } from './auth.ts';
@@ -14,21 +10,19 @@ import { requireUser } from './auth.ts';
 // A server action is a POST endpoint, reachable without going through the page
 // that renders the button, so each one checks the session itself (NF-3).
 
-export async function confirmAction(ids: string[]) {
+/**
+ * Save a sitting's worth of decisions at once (RQ-2).
+ *
+ * The queue stages everything in the browser and posts it here in one go, so a
+ * half-finished sitting leaves the ledger exactly as it was.
+ */
+export async function saveReviewAction(decisions: ReviewDecision[]) {
   await requireUser();
-  const count = await confirmTransactions(db(), ids);
+  const result = await saveReview(db(), decisions);
   revalidatePath('/review');
+  revalidatePath('/transactions');
   revalidatePath('/');
-  return { confirmed: count };
-}
-
-export async function confirmHighConfidenceAction() {
-  await requireUser();
-  const ids = await highConfidenceIds(db());
-  const count = await confirmTransactions(db(), ids);
-  revalidatePath('/review');
-  revalidatePath('/');
-  return { confirmed: count };
+  return result;
 }
 
 export async function recategorizeAction(

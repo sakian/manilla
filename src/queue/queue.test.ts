@@ -10,6 +10,7 @@ import {
   pendingCount,
   pendingTransactions,
   recategorize,
+  saveReview,
   splitTransaction,
 } from './queue.ts';
 import {
@@ -46,6 +47,11 @@ describe(
       await closeDb(db);
     });
 
+    const balanceOf = async (envelopeId: string) => {
+      const { envelopeBalances } = await import('../ledger/ledger.ts');
+      return (await envelopeBalances(db)).find((row) => row.envelopeId === envelopeId)!.balanceCents;
+    };
+
     /** A pending transaction, optionally with a suggestion already applied. */
     async function pending(options: {
       payee: string;
@@ -77,6 +83,81 @@ describe(
       }
       return id;
     }
+
+    // -- saving a sitting's decisions ---------------------------------------
+
+    test('saving writes only the rows decided, and leaves the rest waiting', async () => {
+      const shell = await pending({ payee: 'SHELL', amountCents: -4520 });
+      const safeway = await pending({ payee: 'SAFEWAY', amountCents: -9000 });
+      const mystery = await pending({ payee: 'WHO KNOWS', amountCents: -1000 });
+
+      const result = await saveReview(db, [
+        { transactionId: shell, envelopeId: env.gasId },
+        { transactionId: safeway, envelopeId: env.groceriesId },
+      ]);
+
+      assert.deepEqual(result, { confirmed: 2, failed: [] });
+
+      const waiting = await pendingTransactions(db);
+      assert.deepEqual(
+        waiting.map((row) => row.id),
+        [mystery],
+        'an undecided row is untouched, not confirmed and not emptied',
+      );
+
+      const [row] = await db.select().from(transactions).where(eq(transactions.id, shell));
+      assert.equal(row!.status, 'confirmed');
+      assert.ok((await checkInvariant(db)).ok);
+    });
+
+    test('saving nothing is allowed and writes nothing', async () => {
+      await pending({ payee: 'SHELL', amountCents: -4520 });
+      assert.deepEqual(await saveReview(db, []), { confirmed: 0, failed: [] });
+      assert.equal(await pendingCount(db), 1);
+    });
+
+    test('a decision can change the envelope the suggestion proposed', async () => {
+      const id = await pending({
+        payee: 'SHELL',
+        amountCents: -4520,
+        envelopeId: env.gasId,
+        confidence: 0.98,
+      });
+
+      await saveReview(db, [{ transactionId: id, envelopeId: env.groceriesId }]);
+
+      assert.equal(await balanceOf(env.gasId), 0, 'the proposed line is replaced, not added to');
+      assert.equal(await balanceOf(env.groceriesId), -4520);
+    });
+
+    test('one bad decision is reported and the good ones still save', async () => {
+      const good = await pending({ payee: 'SHELL', amountCents: -4520 });
+
+      const result = await saveReview(db, [
+        { transactionId: good, envelopeId: env.gasId },
+        {
+          transactionId: '00000000-0000-0000-0000-000000000000',
+          envelopeId: env.gasId,
+        },
+      ]);
+
+      assert.equal(result.confirmed, 1, 'twelve good decisions are not thrown away by one bad row');
+      assert.equal(result.failed.length, 1);
+      assert.match(result.failed[0]!.error, /No such transaction/);
+      assert.equal(await pendingCount(db), 0);
+    });
+
+    test('a decision can lay down a rule for next time (CA-2)', async () => {
+      const id = await pending({ payee: 'SHELL 4471 CALGARY', amountCents: -4520 });
+
+      await saveReview(db, [
+        { transactionId: id, envelopeId: env.gasId, createRule: true },
+      ]);
+
+      const [rule] = await db.select().from(rules).where(eq(rules.envelopeId, env.gasId));
+      assert.ok(rule, 'the correction becomes a standing rule');
+      assert.equal(rule!.contains, 'SHELL');
+    });
 
     test('the queue lists what is waiting, newest first', async () => {
       await pending({ payee: 'SHELL', amountCents: -4520, date: '2026-01-10' });

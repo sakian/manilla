@@ -157,10 +157,71 @@ export async function confirmTransactions(db: Database, ids: string[]): Promise<
   return confirmable.length;
 }
 
-/** Every pending row whose suggestion is in the auto-confirmable band. */
+/**
+ * Every pending row whose suggestion is in the auto-confirmable band.
+ *
+ * No screen calls this: the queue asks you to look at each row rather than
+ * offering to settle a batch unseen, which is what the measurement actually
+ * supports - 0.95 auto-confirms about 16% of transactions, so a bulk button was
+ * always going to leave most of the work still to do. It stays because "which of
+ * these would a machine bet on" is a question the accuracy report may want.
+ */
 export async function highConfidenceIds(db: Database): Promise<string[]> {
   const rows = await pendingTransactions(db, { limit: 1000 });
   return rows.filter((row) => row.band === 'high' && row.envelopeId).map((row) => row.id);
+}
+
+export type ReviewDecision = {
+  transactionId: string;
+  envelopeId: string;
+  /** CA-2: turn this decision into a standing rule for the payee. */
+  createRule?: boolean;
+};
+
+export type ReviewResult = {
+  confirmed: number;
+  /** Rows that could not be saved, so a partial save is reported rather than hidden. */
+  failed: { transactionId: string; error: string }[];
+};
+
+/**
+ * Save a sitting's worth of decisions (RQ-2, RQ-3, RQ-5).
+ *
+ * The queue is a staging area: you go down the list marking rows, and nothing is
+ * written until you save. That is a different bargain from confirming each row as
+ * you touch it - you can change your mind about the fourth one after seeing the
+ * ninth, and a half-finished sitting leaves the ledger exactly as it was.
+ *
+ * Each decision is applied on its own rather than inside one transaction, and
+ * whatever fails is named. One row failing - an envelope archived in another tab,
+ * say - should not throw away twelve good decisions, and silently succeeding at
+ * eleven of twelve would be worse than either.
+ */
+export async function saveReview(
+  db: Database,
+  decisions: ReviewDecision[],
+): Promise<ReviewResult> {
+  const failed: ReviewResult['failed'] = [];
+  let confirmed = 0;
+
+  for (const decision of decisions) {
+    try {
+      await recategorize(db, {
+        transactionId: decision.transactionId,
+        envelopeId: decision.envelopeId,
+        confirm: true,
+        ...(decision.createRule ? { createRule: true } : {}),
+      });
+      confirmed += 1;
+    } catch (error) {
+      failed.push({
+        transactionId: decision.transactionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return { confirmed, failed };
 }
 
 export type Recategorization = {

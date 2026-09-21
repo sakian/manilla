@@ -95,11 +95,6 @@ export default async function TransactionsPage(props: {
               and New used to be a link buried in a sentence and a button inside
               the list; they are things you do to this screen, so they are here. */}
           <div className="head-actions">
-            {!empty && (
-              <Link href="/transactions" className="button-link head-button">
-                Everything
-              </Link>
-            )}
             <Link href="/import" className="button-link head-button">
               Import
             </Link>

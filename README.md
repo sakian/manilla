@@ -13,6 +13,11 @@ envelopes and groups, OFX/QFX import with deduplication, the review queue, the
 monthly budget with income allocation, envelope transfers, manual entry, and
 passkey sign-in so it is safe to reach from a phone.
 
+The review queue stages rather than commits: you work down the list marking rows,
+a suggestion is filled in only where the pipeline would bet on it, and nothing is
+written until you save — so a sitting abandoned halfway leaves the ledger exactly
+as it was.
+
 Phase 2 is complete bar CSV import: a multi-year export from another envelope
 budgeting app comes across with its envelopes, splits, income and transfers;
 spending reports run over any period; the data exports as JSON or CSV; and the
@@ -151,7 +156,7 @@ app/                    the web app (Next.js App Router)
   HomeScreen.tsx        the merged dashboard and envelope list, view and edit modes
   Notices.tsx           one ranked list of what is wrong or worth knowing
   Hint.tsx              screen explanations, behind a marker rather than always on
-  review/               the review queue, keyboard-driven (RQ-1 to RQ-5)
+  review/               the review queue: decide, then save in one go (RQ-1 to RQ-5)
   budget/               funding envelopes out of Available, and the plan's writes (FR-27 to FR-31)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
   migrate/              the migration wizard (MG-1 to MG-7)

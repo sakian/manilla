@@ -1,14 +1,34 @@
 'use client';
 
+/**
+ * The review queue (RQ-1 to RQ-6).
+ *
+ * Phase 0 measured that only about 16% of transactions can be auto-confirmed
+ * safely and roughly 28% of suggestions need correcting, so nearly everything
+ * passes under your eye. This screen is therefore the most important one in the
+ * app, and going down a list quickly is what it is for.
+ *
+ * It stages rather than commits. You work down the list marking rows, nothing is
+ * written until Save, and a sitting you abandon halfway leaves the ledger exactly
+ * as it was. The previous version confirmed each row the moment you touched it,
+ * which meant changing your mind about the fourth after seeing the ninth was an
+ * edit rather than a decision.
+ *
+ * A suggestion is only *pre-filled* when the pipeline is confident enough to bet
+ * on it (0.95, where measurement put the line). Below that the row starts empty
+ * and the suggestion is offered as something to tap - a pre-filled guess reads as
+ * an answer, and an unsure guess should not.
+ *
+ * The bulk "confirm the confident ones" button is gone. It settled about a sixth
+ * of a queue without anybody looking, which is a strange thing to offer on a
+ * screen whose whole purpose is looking.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { EnvelopeOption, QueueRow } from '../../src/queue/queue.ts';
-import {
-  confirmAction,
-  confirmHighConfidenceAction,
-  markAsTransferAction,
-  recategorizeAction,
-} from '../actions.ts';
+import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
+import { markAsTransferAction, saveReviewAction } from '../actions.ts';
 
 function formatMoney(cents: number): string {
   const sign = cents < 0 ? '-' : '';
@@ -16,311 +36,308 @@ function formatMoney(cents: number): string {
   return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
 }
 
-function formatDate(date: string): string {
-  const [, month, day] = date.split('-');
+function longDate(date: string): string {
   const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${names[Number(month) - 1]} ${Number(day)}`;
+  const [year, month, day] = date.split('-');
+  return `${names[Number(month) - 1]} ${Number(day)}, ${year}`;
 }
+
+/**
+ * How sure the pipeline is, in words rather than a bare number.
+ *
+ * The percentage is kept beside the word because the two say different things: the
+ * word is whether to trust it at a glance, the number is how close to the line it
+ * sits. "Likely 62%" and "likely 94%" both mean look, but not equally hard.
+ */
+function confidenceOf(row: QueueRow): { label: string; tone: string; detail: string } | null {
+  if (row.confidence === null || !row.envelopeId) {
+    return { label: 'no idea', tone: 'none', detail: 'nothing to suggest' };
+  }
+  const percent = `${Math.round(row.confidence * 100)}%`;
+  if (row.confidence >= BAND_THRESHOLDS.high) {
+    return { label: 'sure', tone: 'high', detail: percent };
+  }
+  if (row.confidence >= BAND_THRESHOLDS.medium) {
+    return { label: 'likely', tone: 'medium', detail: percent };
+  }
+  return { label: 'a guess', tone: 'low', detail: percent };
+}
+
+type Decision = {
+  /** Null means undecided; a row cannot be confirmed without one. */
+  envelopeId: string | null;
+  confirmed: boolean;
+  createRule: boolean;
+};
 
 export default function ReviewQueue({
   rows,
   envelopes,
-  highCount,
   accounts,
 }: {
   rows: QueueRow[];
   envelopes: EnvelopeOption[];
-  highCount: number;
   accounts: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [cursor, setCursor] = useState(0);
-  const [picking, setPicking] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  /** Everything decided this sitting, held here until Save. */
+  const [decisions, setDecisions] = useState<Record<string, Decision>>(() =>
+    Object.fromEntries(
+      rows.map((row) => [
+        row.id,
+        {
+          // Pre-filled only where the pipeline would bet on it.
+          envelopeId: row.band === 'high' && row.envelopeId ? row.envelopeId : null,
+          confirmed: false,
+          createRule: false,
+        },
+      ]),
+    ),
+  );
+
+  const [picking, setPicking] = useState<QueueRow | null>(null);
   const [filter, setFilter] = useState('');
   const [pickCursor, setPickCursor] = useState(0);
-  const [note, setNote] = useState<string | null>(null);
-  /** CA-2 from a touch screen, where there is no shift key to hold. */
-  const [makeRule, setMakeRule] = useState(false);
-  /** The row being marked as a transfer between the user's own accounts (FR-5). */
   const [transferring, setTransferring] = useState<QueueRow | null>(null);
-  /** CA-2 for transfers: remember this payee so the next statement knows too. */
   const [transferRule, setTransferRule] = useState(true);
-  /**
-   * Touch-first devices get a different gesture: there are no keyboard shortcuts
-   * to reach for, so tapping a row opens the envelope picker rather than only
-   * moving the cursor to it.
-   */
-  const [touch, setTouch] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  useEffect(() => {
-    setTouch(window.matchMedia('(pointer: coarse)').matches);
+  const envelopeName = useMemo(
+    () => new Map(envelopes.map((envelope) => [envelope.id, envelope.name])),
+    [envelopes],
+  );
+
+  const decisionFor = useCallback(
+    (id: string): Decision =>
+      decisions[id] ?? { envelopeId: null, confirmed: false, createRule: false },
+    [decisions],
+  );
+
+  const set = useCallback((id: string, patch: Partial<Decision>) => {
+    setDecisions((current) => ({
+      ...current,
+      [id]: {
+        ...(current[id] ?? { envelopeId: null, confirmed: false, createRule: false }),
+        ...patch,
+      },
+    }));
   }, []);
 
-  const current = rows[cursor];
+  /** Choosing an envelope is a decision, so it confirms the row as well. */
+  const choose = useCallback(
+    (id: string, envelopeId: string, createRule = false) => {
+      set(id, { envelopeId, confirmed: true, createRule });
+      setPicking(null);
+      setFilter('');
+    },
+    [set],
+  );
+
+  const ready = useMemo(
+    () =>
+      rows.filter((row) => {
+        const decision = decisionFor(row.id);
+        return decision.confirmed && decision.envelopeId !== null;
+      }),
+    [decisionFor, rows],
+  );
+
+  const save = useCallback(() => {
+    setError(null);
+    setNote(null);
+    startTransition(async () => {
+      const result = await saveReviewAction(
+        ready.map((row) => {
+          const decision = decisionFor(row.id);
+          return {
+            transactionId: row.id,
+            envelopeId: decision.envelopeId!,
+            ...(decision.createRule ? { createRule: true } : {}),
+          };
+        }),
+      );
+
+      if (result.failed.length > 0) {
+        setError(
+          `${result.failed.length} could not be saved: ${result.failed[0]!.error}` +
+            (result.failed.length > 1 ? ' (and others)' : ''),
+        );
+      }
+      setNote(
+        result.confirmed === 0
+          ? 'Nothing was ready to save.'
+          : `Saved ${result.confirmed}. ${rows.length - result.confirmed} still waiting.`,
+      );
+      router.refresh();
+    });
+  }, [decisionFor, ready, router, rows.length]);
+
+  const markTransfer = useCallback(
+    (row: QueueRow, toAccountId: string, createRule: boolean) => {
+      setError(null);
+      startTransition(async () => {
+        const result = await markAsTransferAction(row.id, toAccountId, { createRule });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setTransferring(null);
+        setNote('Recorded as a transfer between your accounts.');
+        router.refresh();
+      });
+    },
+    [router],
+  );
+
+  // Escape closes whichever overlay is open. These are not routed, so the
+  // history hook the dialogs use would be overkill for a list picker.
+  useEffect(() => {
+    if (!picking && !transferring) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setPicking(null);
+      setTransferring(null);
+      setFilter('');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [picking, transferring]);
 
   const matches = useMemo(() => {
     const needle = filter.trim().toLowerCase();
     if (!needle) return envelopes;
-    // Match on the envelope name first, then the group, so typing "gas" finds
-    // Vehicle:Gas without having to remember the group.
     return envelopes.filter(
-      (option) =>
-        option.name.toLowerCase().includes(needle) ||
-        option.groupName.toLowerCase().includes(needle),
+      (envelope) =>
+        envelope.name.toLowerCase().includes(needle) ||
+        envelope.groupName.toLowerCase().includes(needle),
     );
   }, [envelopes, filter]);
 
-  const closePicker = useCallback(() => {
-    setPicking(false);
-    setFilter('');
-    setPickCursor(0);
-    setMakeRule(false);
-  }, []);
-
-  const confirmOne = useCallback(
-    (row: QueueRow) => {
-      if (!row.envelopeId) {
-        setNote('That row has no envelope yet - choose one first.');
-        return;
-      }
-      startTransition(async () => {
-        await confirmAction([row.id]);
-        setNote(null);
-        router.refresh();
-      });
-    },
-    [router],
-  );
-
-  const choose = useCallback(
-    (row: QueueRow, envelopeId: string, createRule: boolean) => {
-      startTransition(async () => {
-        await recategorizeAction(row.id, envelopeId, { createRule });
-        closePicker();
-        setNote(null);
-        router.refresh();
-      });
-    },
-    [router, closePicker],
-  );
-
-  const markTransfer = useCallback(
-    (row: QueueRow, toAccountId: string, createRule: boolean) => {
-      startTransition(async () => {
-        const result = await markAsTransferAction(row.id, toAccountId, { createRule });
-        setTransferring(null);
-        setNote(
-          result.ok
-            ? 'Recorded as a transfer. No envelope moved, and the other account shows it too.' +
-                (result.ruleMade
-                  ? ' Statements with that description will be recognised from now on.'
-                  : '')
-            : result.error,
-        );
-        router.refresh();
-      });
-    },
-    [router],
-  );
-
-  const confirmHigh = useCallback(() => {
-    startTransition(async () => {
-      const { confirmed } = await confirmHighConfidenceAction();
-      setNote(
-        confirmed === 0
-          ? 'Nothing was confident enough to confirm automatically.'
-          : `Confirmed ${confirmed} high-confidence ${confirmed === 1 ? 'row' : 'rows'}.`,
-      );
-      router.refresh();
-    });
-  }, [router]);
-
-  // Keyboard driving. The queue is the screen the user spends most time in, so
-  // the whole loop is reachable without the mouse (RQ-3).
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (picking) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          closePicker();
-        } else if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          setPickCursor((index) => Math.min(index + 1, matches.length - 1));
-        } else if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          setPickCursor((index) => Math.max(index - 1, 0));
-        } else if (event.key === 'Enter') {
-          event.preventDefault();
-          const option = matches[pickCursor];
-          if (option && current) choose(current, option.id, event.shiftKey || makeRule);
-        }
-        return;
-      }
-
-      // Ignore typing in any other field.
-      const target = event.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-
-      switch (event.key) {
-        case 'j':
-        case 'ArrowDown':
-          event.preventDefault();
-          setCursor((index) => Math.min(index + 1, rows.length - 1));
-          break;
-        case 'k':
-        case 'ArrowUp':
-          event.preventDefault();
-          setCursor((index) => Math.max(index - 1, 0));
-          break;
-        case 'Enter':
-          event.preventDefault();
-          if (current) confirmOne(current);
-          break;
-        case 'e':
-          event.preventDefault();
-          if (current) {
-            setPicking(true);
-            setPickCursor(0);
-          }
-          break;
-        case 'a':
-          event.preventDefault();
-          confirmHigh();
-          break;
-        default:
-          break;
-      }
+  // Rows come back newest first; the headings make the run of dates legible.
+  const byDate = useMemo(() => {
+    const groups: { date: string; rows: QueueRow[] }[] = [];
+    for (const row of rows) {
+      const last = groups.at(-1);
+      if (last && last.date === row.date) last.rows.push(row);
+      else groups.push({ date: row.date, rows: [row] });
     }
-
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [
-    picking,
-    matches,
-    pickCursor,
-    current,
-    rows.length,
-    makeRule,
-    choose,
-    confirmOne,
-    confirmHigh,
-    closePicker,
-  ]);
-
-  useEffect(() => {
-    // Not on a phone: focusing the filter throws up the on-screen keyboard and
-    // hides the list of envelopes the tap was aiming for.
-    if (picking && !touch) filterRef.current?.focus();
-  }, [picking, touch]);
-
-  useEffect(() => {
-    rowRefs.current[cursor]?.scrollIntoView({ block: 'nearest' });
-  }, [cursor]);
+    return groups;
+  }, [rows]);
 
   if (rows.length === 0) {
     return (
       <div className="empty">
-        <p style={{ margin: 0, fontSize: 17 }}>Nothing waiting for review.</p>
+        <p style={{ margin: 0, fontSize: 17 }}>Nothing to review.</p>
         <p className="muted" style={{ margin: '8px 0 0' }}>
-          Import a statement and anything new will appear here.
+          Everything imported has an envelope.
         </p>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="queue-toolbar">
-        <div className="muted">
-          {rows.length} awaiting review
-          {highCount > 0 && <> · {highCount} confident enough to confirm in one go</>}
-        </div>
-        <div className="queue-actions">
-          <button onClick={confirmHigh} disabled={pending || highCount === 0}>
-            Confirm {highCount} confident <kbd>a</kbd>
-          </button>
-          <button
-            className="primary"
-            onClick={() => current && confirmOne(current)}
-            disabled={pending || !current}
-          >
-            Confirm <kbd>↵</kbd>
-          </button>
-        </div>
-      </div>
-
+    <div className="queue">
+      {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
 
-      <div className="queue" role="list">
-        {rows.map((row, index) => {
-          const active = index === cursor;
-          return (
-            <div
-              key={row.id}
-              role="listitem"
-              ref={(element) => {
-                rowRefs.current[index] = element;
-              }}
-              className={`queue-row${active ? ' active' : ''}`}
-              onClick={() => {
-                setCursor(index);
-                if (touch) {
-                  setPicking(true);
-                  setPickCursor(0);
-                }
-              }}
-            >
-              <div className="queue-date muted">{formatDate(row.date)}</div>
+      {byDate.map((group) => (
+        <div key={group.date} className="queue-day">
+          <h3 className="queue-date-head">{longDate(group.date)}</h3>
 
-              <div className="queue-payee">
-                <div className="queue-name">{row.payeeDisplay}</div>
-                <div className="queue-sub muted">
+          {group.rows.map((row) => {
+            const decision = decisionFor(row.id);
+            const confidence = confidenceOf(row);
+            const chosen = decision.envelopeId;
+            const suggestion =
+              row.envelopeId && row.envelopeId !== chosen ? row.envelopeId : null;
+
+            return (
+              <div
+                key={row.id}
+                className={`queue-row${decision.confirmed ? ' decided' : ''}`}
+              >
+                <span className="queue-payee">
+                  {row.payeeDisplay}
+                  {row.memo && <span className="muted"> · {row.memo}</span>}
+                </span>
+
+                <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
+                  {formatMoney(row.amountCents)}
+                </span>
+
+                <span className="muted queue-meta">
                   {row.accountName}
-                  {row.ageDays >= 7 && <> · waiting {row.ageDays} days</>}
-                </div>
-              </div>
+                  {confidence && (
+                    <span className={`band ${confidence.tone}`}>
+                      {confidence.label} {confidence.detail}
+                    </span>
+                  )}
+                  {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
+                </span>
 
-              <div className={`money queue-amount ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
-                {formatMoney(row.amountCents)}
-              </div>
+                <span className="queue-choice">
+                  <button
+                    className={`envelope-pick${chosen ? ' chosen' : ''}`}
+                    onClick={() => {
+                      setPicking(row);
+                      setFilter('');
+                      setPickCursor(0);
+                      setTimeout(() => filterRef.current?.focus(), 0);
+                    }}
+                    disabled={pending}
+                  >
+                    {chosen ? envelopeName.get(chosen) : 'Choose an envelope'}
+                  </button>
 
-              <div className="queue-envelope">
-                {row.envelopeName ? (
-                  <span className={`chip band-${row.band ?? 'low'}`}>{row.envelopeName}</span>
-                ) : (
-                  <span className="chip none">Uncategorized</span>
-                )}
-                {row.reason && <div className="queue-sub muted">{row.reason}</div>}
-              </div>
+                  {/* The suggestion, when it was not sure enough to fill in. */}
+                  {suggestion && !decision.confirmed && (
+                    <button
+                      className="link-button"
+                      onClick={() => choose(row.id, suggestion)}
+                      disabled={pending}
+                      title={row.reason ?? undefined}
+                    >
+                      use {envelopeName.get(suggestion)}
+                    </button>
+                  )}
 
-              <div className="queue-row-actions">
-                <button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setCursor(index);
-                    setPicking(true);
-                    setPickCursor(0);
-                  }}
-                >
-                  Change <kbd>e</kbd>
-                </button>
-                <button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setCursor(index);
-                    setTransferring(row);
-                  }}
-                  title="Money moved between your own accounts, so no envelope should change"
-                >
-                  Transfer
-                </button>
+                  <label className="queue-confirm">
+                    <input
+                      type="checkbox"
+                      checked={decision.confirmed}
+                      disabled={pending || chosen === null}
+                      onChange={(event) => set(row.id, { confirmed: event.target.checked })}
+                    />
+                    <span>{decision.confirmed ? 'Confirmed' : 'Confirm'}</span>
+                  </label>
+
+                  <button
+                    className="link-button"
+                    onClick={() => setTransferring(row)}
+                    disabled={pending}
+                  >
+                    not spending
+                  </button>
+                </span>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      ))}
+
+      {/* Sticky, because the list is long and the decision to stop is made at the
+          bottom of it as often as the top. */}
+      <div className="queue-save">
+        <span className="muted">
+          {ready.length} of {rows.length} ready
+        </span>
+        <button className="primary" onClick={save} disabled={pending || ready.length === 0}>
+          {pending ? 'Saving…' : `Save ${ready.length}`}
+        </button>
       </div>
 
       {transferring && (
@@ -334,10 +351,12 @@ export default function ReviewQueue({
             </div>
             <div className="dialog-body">
               <p className="muted">
-                {transferring.amountCents < 0 ? 'Which account did it go to?' : 'Which account did it come from?'}{' '}
+                {transferring.amountCents < 0
+                  ? 'Which account did it go to?'
+                  : 'Which account did it come from?'}{' '}
                 Money moving between your own accounts is neither spending nor income, so no
-                envelope changes. The other account gets the matching entry, and when its statement
-                is imported that row is recognised rather than recorded twice.
+                envelope changes. This one is written straight away rather than waiting for Save,
+                because it writes both halves.
               </p>
               <div className="picker-list">
                 {accounts
@@ -365,7 +384,6 @@ export default function ReviewQueue({
                 {transferring.accountName} as a transfer
               </span>
             </label>
-
             <div className="picker-foot dialog-foot">
               <button onClick={() => setTransferring(null)} disabled={pending}>
                 Cancel
@@ -375,59 +393,66 @@ export default function ReviewQueue({
         </div>
       )}
 
-      {picking && current && (
-        <div className="picker-backdrop" onClick={closePicker}>
+      {picking && (
+        <div
+          className="picker-backdrop"
+          onClick={() => {
+            setPicking(null);
+            setFilter('');
+          }}
+        >
           <div className="picker" onClick={(event) => event.stopPropagation()}>
             <div className="picker-head">
-              <strong>{current.payeeDisplay}</strong>
-              <span className={`money ${current.amountCents < 0 ? 'neg' : 'pos'}`}>
-                {formatMoney(current.amountCents)}
+              <strong>{picking.payeeDisplay}</strong>
+              <span className={`money ${picking.amountCents < 0 ? 'neg' : 'pos'}`}>
+                {formatMoney(picking.amountCents)}
               </span>
             </div>
+
             <input
               ref={filterRef}
               value={filter}
-              placeholder="Type to filter envelopes"
+              placeholder="Type to narrow"
               onChange={(event) => {
                 setFilter(event.target.value);
                 setPickCursor(0);
               }}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setPickCursor((at) => Math.min(at + 1, matches.length - 1));
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setPickCursor((at) => Math.max(at - 1, 0));
+                } else if (event.key === 'Enter') {
+                  event.preventDefault();
+                  const picked = matches[pickCursor];
+                  if (picked) choose(picking.id, picked.id, event.shiftKey);
+                }
+              }}
             />
+
             <div className="picker-list">
-              {matches.length === 0 && <div className="muted picker-empty">No envelope matches.</div>}
-              {matches.map((option, index) => (
+              {matches.length === 0 && (
+                <div className="muted picker-empty">No envelope matches.</div>
+              )}
+              {matches.map((envelope, index) => (
                 <button
-                  key={option.id}
+                  key={envelope.id}
                   className={`picker-option${index === pickCursor ? ' active' : ''}`}
+                  onClick={(event) => choose(picking.id, envelope.id, event.shiftKey)}
                   onMouseEnter={() => setPickCursor(index)}
-                  onClick={(event) => choose(current, option.id, event.shiftKey || makeRule)}
                 >
-                  <span className="muted">{option.groupName}</span>
-                  <span>{option.name}</span>
+                  <span>{envelope.name}</span>
+                  <span className="muted">{envelope.groupName}</span>
                 </button>
               ))}
             </div>
-            <label className="picker-rule">
-              <input
-                type="checkbox"
-                checked={makeRule}
-                onChange={(event) => setMakeRule(event.target.checked)}
-              />
-              <span>
-                Always use this envelope for <strong>{current.payeeDisplay}</strong>
-              </span>
-            </label>
 
             <div className="picker-foot muted">
-              {touch ? (
-                <>Tap an envelope to assign it.</>
-              ) : (
-                <>
-                  <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>↵</kbd> choose ·{' '}
-                  <kbd>shift</kbd>+<kbd>↵</kbd> choose and always use it for this payee ·{' '}
-                  <kbd>esc</kbd> cancel
-                </>
-              )}
+              <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>↵</kbd> choose ·{' '}
+              <kbd>shift</kbd>+<kbd>↵</kbd> choose and always use it for this payee ·{' '}
+              <kbd>esc</kbd> cancel
             </div>
           </div>
         </div>
