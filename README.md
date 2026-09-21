@@ -30,7 +30,7 @@ database is backed up nightly with a restore that has been exercised.
 | Decision | Answer |
 | --- | --- |
 | Stack | TypeScript, Next.js + Postgres, self-hosted in Docker |
-| Banking | Canada (OFX/QFX import; aggregator choice deferred to Phase 5) |
+| Banking | Canada (OFX/QFX import; waiting for consumer-driven banking, see below) |
 | AI | Hosted Claude API (`claude-opus-5`), minimal payload, off switch |
 | Users | Single user for now; multi-user deferred |
 | Sign-in | Passkeys (WebAuthn), with single-use recovery codes |
@@ -106,6 +106,31 @@ because a phone has scrolled the table header away by the time you reach
 Groceries. Expected income is measured over six months rather than typed. A
 confirmed transaction can be sent back to the review queue, and a transfer
 pairing undone, without deleting anything.
+
+Automatic bank feeds are deliberately not being built yet. Direct OFX is a dead
+end in Canada — there is no Direct Connect with Canadian institutions, and
+Quicken Canada's "Express Web Connect" is aggregator-backed scraping in an OFX
+costume. That leaves the aggregators (Plaid, Flinks, Mastercard Open Banking),
+which mostly work by holding your online banking credentials and signing in as
+you where no real API exists. That breaches the banks' own agreements and moves
+liability for fraud onto the customer, which is a poor trade for saving a monthly
+download.
+
+The alternative has a date. The Consumer-Driven Banking Act passed in June 2024;
+the Bank of Canada is lead regulator; draft regulations were published on 27 June
+2026 with comments closing 26 August 2026, and the framework comes into force
+within a year of final publication. The large banks must participate from the
+outset, and phase one is read access. So the decision is to wait for it rather
+than integrate an aggregator in the meantime.
+
+One wrinkle worth remembering: phase one phases data in *by account type* —
+deposit and payment accounts first, then lending, and registered and
+non-registered investment accounts last. Chequing and credit cards will arrive
+well before an RRSP does, and RRSPs may stay a manual download for a while after
+the rest is automatic.
+
+The schema is already shaped for it: `bank_sync` is a transaction source and
+`aggregator` an external-id kind, so a feed is additive rather than a rewrite.
 
 Still outstanding: CSV import with a column-mapping step (FR-8), period
 comparisons and income-against-spending (RP-3, RP-4), progress bars and a pace
