@@ -18,7 +18,17 @@ import { useRouter } from 'next/navigation';
 import type { SuggestedRule } from '../../src/rules/rules.ts';
 import { acceptRuleAction, dismissRuleAction } from './actions.ts';
 
-export default function RuleSuggestions({ suggestions }: { suggestions: SuggestedRule[] }) {
+export default function RuleSuggestions({
+  suggestions,
+  total,
+  capped,
+}: {
+  suggestions: SuggestedRule[];
+  /** Every suggestion waiting, of which `suggestions` is the first page. */
+  total: number;
+  /** The total stops counting at a ceiling, so it may be more. */
+  capped: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -44,12 +54,21 @@ export default function RuleSuggestions({ suggestions }: { suggestions: Suggeste
 
   const left = suggestions.filter((rule) => !answered.includes(rule.contains));
   if (left.length === 0) return null;
+  // Answers hidden here but not yet refreshed are still in the stored total.
+  const waiting = Math.max(total - (suggestions.length - left.length), left.length);
 
   return (
     <section className="panel" id="rules">
       <div className="panel-head">
         <h3>Rules Manilla could write</h3>
-        <span className="muted">{left.length} noticed</span>
+        {/* The list is the top twenty, and answering one brings the next up from
+            below - which looks like a glitch unless the screen says more are
+            waiting. */}
+        <span className="muted">
+          {waiting > left.length
+            ? `${left.length} shown of ${waiting}${capped ? '+' : ''} noticed`
+            : `${left.length} noticed`}
+        </span>
       </div>
 
       <p className="muted">

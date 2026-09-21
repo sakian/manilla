@@ -295,6 +295,7 @@ export async function suggestedRules(
   options: { minimum?: number; limit?: number } = {},
 ): Promise<SuggestedRule[]> {
   const minimum = options.minimum ?? RULE_SUGGESTION_MINIMUM;
+  const limit = options.limit ?? 20;
   const dismissed = new Set(await dismissedRuleSuggestions(db));
 
   // Raw rather than built up in Drizzle: this groups by a normalized key, counts
@@ -328,12 +329,17 @@ export async function suggestedRules(
       )
     group by t.payee_key
     having count(distinct l.envelope_id) = 1 and count(*) >= ${minimum}
-    order by count(*) desc
-    limit ${options.limit ?? 20}
+    -- The payee breaks ties. Counts tie all the time, and without it the order
+    -- among them was whatever the plan produced - which changes when a rule is
+    -- added, so answering one suggestion reshuffled the rest.
+    order by count(*) desc, t.payee_key
+    -- Room for the declined ones, which are dropped below rather than here.
+    limit ${limit + dismissed.size}
   `);
 
   return rows
     .filter((row) => !dismissed.has(row.payee_key))
+    .slice(0, limit)
     .map((row) => ({
       contains: row.payee_key,
       display: normalizePayee(row.display).display,
@@ -344,6 +350,9 @@ export async function suggestedRules(
 }
 
 const SUGGESTION_COUNT_KEY = 'rule_suggestion_count';
+
+/** Where the stored count stops counting; past it, the screen says "100+". */
+export const SUGGESTION_COUNT_CAP = 100;
 
 /**
  * How many rules are worth suggesting, cached.
@@ -371,7 +380,7 @@ export async function ruleSuggestionCount(db: Database): Promise<number> {
 
 /** Recount and store it. Called from wherever the answer could have changed. */
 export async function refreshRuleSuggestionCount(db: Database): Promise<number> {
-  const found = await suggestedRules(db, { limit: 100 });
+  const found = await suggestedRules(db, { limit: SUGGESTION_COUNT_CAP });
   const value = String(found.length);
 
   await db

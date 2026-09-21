@@ -232,6 +232,41 @@ describe(
       ]);
     });
 
+    test('suggestions keep their order, ties included, as you answer them', async () => {
+      // Equal counts are common - every payee at the minimum ties with every
+      // other - and with only the count to go on, Postgres was free to hand the
+      // ties back in any order. Adding a rule changes the query's plan, so the
+      // list came back reshuffled after every "Add it".
+      await history('ZULU HARDWARE', env.gasId, 6);
+      await history('ALPHA BAKERY', env.gasId, 6);
+      await history('MIKE GARAGE', env.gasId, 9);
+      await history('BRAVO BOOKS', env.gasId, 6);
+
+      const names = async () => (await suggestedRules(db)).map((rule) => rule.contains);
+      const key = (payee: string) => normalizePayee(payee).key;
+      assert.deepEqual(await names(), [
+        key('MIKE GARAGE'),
+        key('ALPHA BAKERY'),
+        key('BRAVO BOOKS'),
+        key('ZULU HARDWARE'),
+      ]);
+
+      await createEnvelopeRule(db, { contains: key('MIKE GARAGE'), envelopeId: env.gasId });
+      assert.deepEqual(await names(), [key('ALPHA BAKERY'), key('BRAVO BOOKS'), key('ZULU HARDWARE')]);
+    });
+
+    test('a declined suggestion does not take a place in the list', async () => {
+      await history('FIRST PLACE', env.gasId, 9);
+      await history('SECOND PLACE', env.gasId, 8);
+      await history('THIRD PLACE', env.gasId, 7);
+
+      await dismissRuleSuggestion(db, normalizePayee('FIRST PLACE').key);
+      assert.deepEqual(
+        (await suggestedRules(db, { limit: 2 })).map((rule) => rule.contains),
+        [normalizePayee('SECOND PLACE').key, normalizePayee('THIRD PLACE').key],
+      );
+    });
+
     test('unconfirmed history is not evidence of a habit', async () => {
       const { recordTransaction } = await import('../ledger/ledger.ts');
       for (let at = 0; at < 8; at += 1) {

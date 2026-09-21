@@ -2,7 +2,12 @@ import Link from 'next/link';
 import { db } from '../../db/client.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
-import { listRules, suggestedRules } from '../../src/rules/rules.ts';
+import {
+  SUGGESTION_COUNT_CAP,
+  listRules,
+  ruleSuggestionCount,
+  suggestedRules,
+} from '../../src/rules/rules.ts';
 import { exportLedger } from '../../src/export/export.ts';
 import { accuracy, aiSettings, aiUsage, unknownMerchantEstimate } from '../../src/ai/ai.ts';
 import { requireUser } from '../auth.ts';
@@ -24,6 +29,7 @@ export default async function SettingsPage() {
     unusedRecoveryCodes,
     rules,
     suggestions,
+    suggestionTotal,
     ledger,
     ai,
     usage,
@@ -34,6 +40,7 @@ export default async function SettingsPage() {
     countUnusedRecoveryCodes(connection, session.userId),
     listRules(connection),
     suggestedRules(connection),
+    ruleSuggestionCount(connection),
     exportLedger(connection),
     aiSettings(connection),
     aiUsage(connection),
@@ -63,7 +70,11 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <RuleSuggestions suggestions={suggestions} />
+      <RuleSuggestions
+        suggestions={suggestions}
+        total={suggestionTotal}
+        capped={suggestionTotal >= SUGGESTION_COUNT_CAP}
+      />
 
       {/* Migration happens once, so it does not need a place in the navigation -
           but it does need to be findable a second time, which is what a settings
