@@ -9,9 +9,9 @@
  * They are the two halves of the same ledger and learning one should teach the
  * other.
  *
- * What is *not* here is transactions. They belong to an account, so they are on
- * the account's own page - the same way an envelope's history is on the
- * envelope's. This screen answers "what have I got and what is in it".
+ * What is *not* here is transactions. Every list of transactions is the one
+ * transactions screen with something filtered, so a card leads there with this
+ * account applied. This screen answers "what have I got and what is in it".
  *
  * The opening balance is part of creating an account rather than an afterthought,
  * because it is an ordinary transaction landing in the income pool: get it wrong
@@ -133,7 +133,7 @@ export default function AccountManager({
           <h2>
             Accounts{' '}
             <Hint label="What this screen shows">
-              Real money, as the bank sees it, under categories you choose. Open an account for its
+              Real money, as the bank sees it, under categories you choose. Tap an account for its
               transactions. Edit lets you rename categories, reorder them, move accounts between them
               and archive what you no longer use — an account has to be emptied before it can be
               archived, because a hidden balance is a difference nobody can find.
@@ -166,6 +166,15 @@ export default function AccountManager({
             <summary>
               <span className="group-summary">
                 <span className="group-name">{category.name}</span>
+                {category.id !== null && (
+                  <Link
+                  className="group-open"
+                  href={`/transactions?acctgroup=${category.id}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                    transactions
+                  </Link>
+                )}
               </span>
             </summary>
 
@@ -219,7 +228,10 @@ export default function AccountManager({
                 className={`envelope-row${editing ? ' editing' : ''}`}
               >
                 <span className="envelope-name">
-                  <Link href={`/accounts/${account.id}`} className="envelope-open">
+                  <Link
+                    href={`/transactions?account=${account.id}`}
+                    className="envelope-open"
+                  >
                     {account.name}
                   </Link>
                   <span className="tag">{accountKindLabel(account.kind)}</span>

@@ -38,7 +38,22 @@ import {
   type SQLWrapper,
 } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
-import { accounts, envelopes, transactions, txnLines } from '../../db/schema.ts';
+import {
+  accountGroups,
+  accounts,
+  envelopeGroups,
+  envelopes,
+  transactions,
+  txnLines,
+} from '../../db/schema.ts';
+
+/** A parenthesised, cast list, so an `in (...)` never has to be built by hand. */
+function uuidList(ids: string[]): SQL {
+  return sql`(${sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )})`;
+}
 
 /** The pseudo-envelope meaning "no envelope at all": transfers, and unreviewed rows. */
 export const UNCATEGORIZED = 'none';
@@ -51,9 +66,17 @@ export type Direction = 'in' | 'out';
 export type TransactionQuery = {
   /** Matched against the payee as the bank wrote it, its normalized key, the memo and the cheque number. */
   text?: string;
+  /** Just the payee, for when a word appears in both a name and a note. */
+  payee?: string;
+  /** Just the memo - the description a person or a bank added. */
+  memo?: string;
   accountIds?: string[];
+  /** Whole categories of account, so "everything in Day to day" is one filter. */
+  accountGroupIds?: string[];
   /** Envelope ids, and/or {@link UNCATEGORIZED} for rows with no envelope. */
   envelopeIds?: string[];
+  /** Whole groups of envelope, matched through any line's envelope. */
+  envelopeGroupIds?: string[];
   status?: 'pending_review' | 'confirmed';
   kind?: 'spending' | 'account_transfer';
   from?: string;
@@ -129,8 +152,49 @@ function conditions(query: TransactionQuery): SQL[] {
     );
   }
 
+  const like = (value: string) => `%${value.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+
+  const payee = query.payee?.trim();
+  if (payee) {
+    where.push(
+      or(
+        sql`${transactions.payeeRaw} ilike ${like(payee)}`,
+        sql`${transactions.payeeKey} ilike ${like(payee)}`,
+      )!,
+    );
+  }
+
+  const memo = query.memo?.trim();
+  if (memo) where.push(sql`${transactions.memo} ilike ${like(memo)}`);
+
   if (query.accountIds && query.accountIds.length > 0) {
     where.push(inArray(transactions.accountId, query.accountIds));
+  }
+
+  // A whole category of account. Not correlated, so there is no unqualified
+  // column to bind to the wrong table.
+  if (query.accountGroupIds && query.accountGroupIds.length > 0) {
+    where.push(
+      sql`${transactions.accountId} in (select a.id from accounts a where a.group_id in ${uuidList(
+        query.accountGroupIds,
+      )})`,
+    );
+  }
+
+  // A whole group of envelope, through any of a split's lines. `transactions` is
+  // named literally rather than interpolated: Drizzle renders a column reference
+  // unqualified in a single-table query, and an unqualified name that also exists
+  // inside the subquery binds there instead - a query that runs and lies.
+  if (query.envelopeGroupIds && query.envelopeGroupIds.length > 0) {
+    where.push(
+      sql`exists (
+        select 1 from txn_lines l
+        join envelopes e on e.id = l.envelope_id
+        where l.transaction_id = transactions.id and e.group_id in ${uuidList(
+          query.envelopeGroupIds,
+        )}
+      )`,
+    );
   }
 
   if (query.envelopeIds && query.envelopeIds.length > 0) {
@@ -140,10 +204,10 @@ function conditions(query: TransactionQuery): SQL[] {
     const clauses: SQL[] = [];
     if (named.length > 0) {
       clauses.push(
-        sql`exists (select 1 from txn_lines l where l.transaction_id = transactions.id and l.envelope_id in ${sql`(${sql.join(
-          named.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )})`})`,
+        sql`exists (
+          select 1 from txn_lines l
+          where l.transaction_id = transactions.id and l.envelope_id in ${uuidList(named)}
+        )`,
       );
     }
     if (wantsUncategorized) {
@@ -276,7 +340,9 @@ async function namesForPage(db: Database, ids: string[]): Promise<Map<string, st
 
 export type FilterChoices = {
   accounts: { id: string; name: string; archived: boolean }[];
+  accountGroups: { id: string; name: string }[];
   envelopes: { id: string; name: string; groupName: string }[];
+  envelopeGroups: { id: string; name: string }[];
 };
 
 /** What the filter controls can offer. Archived accounts are listed but marked. */
@@ -296,13 +362,27 @@ export async function filterChoices(db: Database): Promise<FilterChoices> {
     .where(isNull(envelopes.archivedAt))
     .orderBy(asc(envelopes.name));
 
+  const accountGroupRows = await db
+    .select({ id: accountGroups.id, name: accountGroups.name })
+    .from(accountGroups)
+    .where(isNull(accountGroups.archivedAt))
+    .orderBy(asc(accountGroups.position), asc(accountGroups.name));
+
+  const envelopeGroupRows = await db
+    .select({ id: envelopeGroups.id, name: envelopeGroups.name })
+    .from(envelopeGroups)
+    .where(isNull(envelopeGroups.archivedAt))
+    .orderBy(asc(envelopeGroups.position), asc(envelopeGroups.name));
+
   return {
     accounts: accountRows.map((row) => ({
       id: row.id,
       name: row.name,
       archived: row.archivedAt !== null,
     })),
+    accountGroups: accountGroupRows,
     envelopes: envelopeRows,
+    envelopeGroups: envelopeGroupRows,
   };
 }
 
@@ -315,11 +395,18 @@ export async function filterChoices(db: Database): Promise<FilterChoices> {
  */
 export function describeQuery(
   query: TransactionQuery,
-  names: { accounts?: Map<string, string>; envelopes?: Map<string, string> } = {},
+  names: {
+    accounts?: Map<string, string>;
+    accountGroups?: Map<string, string>;
+    envelopes?: Map<string, string>;
+    envelopeGroups?: Map<string, string>;
+  } = {},
 ): string {
   const parts: string[] = [];
 
   if (query.text) parts.push(`matching “${query.text}”`);
+  if (query.payee) parts.push(`paid to “${query.payee}”`);
+  if (query.memo) parts.push(`noted “${query.memo}”`);
   if (query.direction === 'in') parts.push('money in');
   if (query.direction === 'out') parts.push('money out');
   if (query.kind === 'account_transfer') parts.push('transfers between accounts');
@@ -330,9 +417,21 @@ export function describeQuery(
     const labels = query.accountIds.map((id) => names.accounts?.get(id) ?? 'an account');
     parts.push(`in ${labels.join(' or ')}`);
   }
+  if (query.accountGroupIds?.length) {
+    const labels = query.accountGroupIds.map(
+      (id) => names.accountGroups?.get(id) ?? 'a category of account',
+    );
+    parts.push(`in ${labels.join(' or ')}`);
+  }
   if (query.envelopeIds?.length) {
     const labels = query.envelopeIds.map((id) =>
       id === UNCATEGORIZED ? 'no envelope' : (names.envelopes?.get(id) ?? 'an envelope'),
+    );
+    parts.push(`from ${labels.join(' or ')}`);
+  }
+  if (query.envelopeGroupIds?.length) {
+    const labels = query.envelopeGroupIds.map(
+      (id) => names.envelopeGroups?.get(id) ?? 'a group of envelope',
     );
     parts.push(`from ${labels.join(' or ')}`);
   }
@@ -361,8 +460,12 @@ function dollars(cents: number): string {
 export function isEmptyQuery(query: TransactionQuery): boolean {
   return (
     !query.text?.trim() &&
+    !query.payee?.trim() &&
+    !query.memo?.trim() &&
     !query.accountIds?.length &&
+    !query.accountGroupIds?.length &&
     !query.envelopeIds?.length &&
+    !query.envelopeGroupIds?.length &&
     !query.status &&
     !query.kind &&
     !query.from &&

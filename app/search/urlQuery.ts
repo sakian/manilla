@@ -60,6 +60,20 @@ function day(value: string | undefined): string | undefined {
   return value && DAY.test(value) ? value : undefined;
 }
 
+/**
+ * Like {@link many}, but keeps the `all` sentinel.
+ *
+ * The form needs to know the account control is showing "every account"; the query
+ * must never see that word as an id.
+ */
+function manyRaw(value: string | string[] | undefined): string[] {
+  const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  return values
+    .flatMap((item) => item.split(','))
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export const PAGE_SIZE = 50;
 
 /**
@@ -80,8 +94,12 @@ export function readQuery(params: Params, options: { pageSize?: number } = {}): 
 
   return {
     ...(one(params.q) ? { text: one(params.q)! } : {}),
+    ...(one(params.payee) ? { payee: one(params.payee)! } : {}),
+    ...(one(params.memo) ? { memo: one(params.memo)! } : {}),
     ...(many(params.account).length > 0 ? { accountIds: many(params.account) } : {}),
+    ...(many(params.acctgroup).length > 0 ? { accountGroupIds: many(params.acctgroup) } : {}),
     ...(many(params.env).length > 0 ? { envelopeIds: many(params.env) } : {}),
+    ...(many(params.envgroup).length > 0 ? { envelopeGroupIds: many(params.envgroup) } : {}),
     ...(status === 'pending_review' || status === 'confirmed' ? { status } : {}),
     ...(kind === 'spending' || kind === 'account_transfer' ? { kind } : {}),
     ...(day(one(params.from)) ? { from: day(one(params.from))! } : {}),
@@ -112,6 +130,8 @@ export function readPage(params: Params): number {
  */
 export type FormValues = {
   q: string;
+  payee: string;
+  memo: string;
   from: string;
   to: string;
   min: string;
@@ -120,7 +140,9 @@ export type FormValues = {
   status: string;
   kind: string;
   accounts: string[];
+  accountGroups: string[];
   envelopes: string[];
+  envelopeGroups: string[];
   sort: string;
   order: string;
 };
@@ -128,6 +150,8 @@ export type FormValues = {
 export function readForm(params: Params): FormValues {
   return {
     q: one(params.q) ?? '',
+    payee: one(params.payee) ?? '',
+    memo: one(params.memo) ?? '',
     from: one(params.from) ?? '',
     to: one(params.to) ?? '',
     min: one(params.min) ?? '',
@@ -135,8 +159,10 @@ export function readForm(params: Params): FormValues {
     dir: one(params.dir) ?? '',
     status: one(params.status) ?? '',
     kind: one(params.kind) ?? '',
-    accounts: many(params.account),
+    accounts: manyRaw(params.account),
+    accountGroups: many(params.acctgroup),
     envelopes: many(params.env),
+    envelopeGroups: many(params.envgroup),
     sort: one(params.sort) ?? 'date',
     order: one(params.order) ?? 'desc',
   };
@@ -157,8 +183,12 @@ export function writeQuery(values: Partial<FormValues>, extra: Params = {}): str
   };
 
   put('q', values.q);
+  put('payee', values.payee);
+  put('memo', values.memo);
   for (const id of values.accounts ?? []) params.append('account', id);
+  for (const id of values.accountGroups ?? []) params.append('acctgroup', id);
   for (const id of values.envelopes ?? []) params.append('env', id);
+  for (const id of values.envelopeGroups ?? []) params.append('envgroup', id);
   put('from', values.from);
   put('to', values.to);
   put('min', values.min);

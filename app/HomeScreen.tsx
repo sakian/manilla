@@ -288,6 +288,15 @@ export default function HomeScreen({
             <summary>
               <span className="group-summary">
                 <span className="group-name">{group.name}</span>
+                {/* The heading is a way in too: a whole group's spending is a
+                    question people ask more often than one envelope's. */}
+                <Link
+                  className="group-open"
+                  href={`/transactions?envgroup=${group.id}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  transactions
+                </Link>
               </span>
             </summary>
 
@@ -339,7 +348,10 @@ export default function HomeScreen({
                         and read out. Buttons sit above it, and the stretch is
                         switched off while editing so a stray click cannot
                         navigate away from a half-typed amount. */}
-                    <Link href={`/envelopes/${envelope.id}`} className="envelope-open">
+                    <Link
+                      href={`/transactions?env=${envelope.id}`}
+                      className="envelope-open"
+                    >
                       {envelope.name}
                     </Link>
                     {envelope.isUnallocated && <span className="tag">income pool</span>}

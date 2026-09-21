@@ -24,21 +24,26 @@ import { writeQuery, type FormValues } from '../search/urlQuery.ts';
 
 export type FilterChoice = { id: string; name: string; archived?: boolean };
 export type EnvelopeFilterChoice = { id: string; name: string; groupName: string };
+export type GroupFilterChoice = { id: string; name: string };
 
 export default function TransactionFilters({
   path,
   values,
   accounts,
+  accountGroups,
   envelopes,
+  envelopeGroups,
   pinnedAccountId,
   everyAccountValue,
   active,
 }: {
-  /** Where to navigate: `/search`, or the account view. */
+  /** Where to navigate: the transactions page, or an account's own view. */
   path: string;
   values: FormValues;
   accounts: FilterChoice[];
+  accountGroups?: GroupFilterChoice[];
   envelopes: EnvelopeFilterChoice[];
+  envelopeGroups?: GroupFilterChoice[];
   /** Set on the account view, where the account is the page rather than a filter. */
   pinnedAccountId?: string;
   /**
@@ -71,6 +76,8 @@ export default function TransactionFilters({
   const clear = () => {
     const blank: FormValues = {
       q: '',
+      payee: '',
+      memo: '',
       from: '',
       to: '',
       min: '',
@@ -79,7 +86,9 @@ export default function TransactionFilters({
       status: '',
       kind: '',
       accounts: [],
+      accountGroups: [],
       envelopes: [],
+      envelopeGroups: [],
       sort: 'date',
       order: 'desc',
     };
@@ -161,6 +170,44 @@ export default function TransactionFilters({
           </label>
 
           <label className="field">
+            <span>Paid to</span>
+            <input
+              type="search"
+              value={form.payee}
+              placeholder="just the payee"
+              onChange={(event) => set('payee', event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Note says</span>
+            <input
+              type="search"
+              value={form.memo}
+              placeholder="just the memo"
+              onChange={(event) => set('memo', event.target.value)}
+            />
+          </label>
+
+          {envelopeGroups && envelopeGroups.length > 0 && (
+            <label className="field">
+              <span>Envelope group</span>
+              <select
+                value={form.envelopeGroups[0] ?? ''}
+                onChange={(event) =>
+                  set('envelopeGroups', event.target.value ? [event.target.value] : [])
+                }
+              >
+                <option value="">Any group</option>
+                {envelopeGroups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <label className="field">
             <span>Envelope</span>
             <select
               value={form.envelopes[0] ?? ''}
@@ -183,6 +230,25 @@ export default function TransactionFilters({
               ))}
             </select>
           </label>
+
+          {!pinnedAccountId && accountGroups && accountGroups.length > 0 && (
+            <label className="field">
+              <span>Account category</span>
+              <select
+                value={form.accountGroups[0] ?? ''}
+                onChange={(event) =>
+                  set('accountGroups', event.target.value ? [event.target.value] : [])
+                }
+              >
+                <option value="">Any category</option>
+                {accountGroups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {!pinnedAccountId && (
             <label className="field">

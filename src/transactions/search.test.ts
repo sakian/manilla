@@ -203,6 +203,63 @@ describe(
       assert.equal(found.total, 4, 'the split, plus the three rows with no envelope');
     });
 
+    test('a whole group of envelopes can be filtered at once', async () => {
+      await seedHistory();
+      const { createGroup, createEnvelope, editEnvelope } = await import('../envelopes/manage.ts');
+
+      // Move Gas into its own group; Groceries stays in the seeded one.
+      const vehicle = await createGroup(db, 'Vehicle');
+      await editEnvelope(db, env.gasId, { groupId: vehicle });
+
+      const byGroup = await searchTransactions(db, { envelopeGroupIds: [vehicle] });
+      assert.equal(byGroup.total, 3, 'the fuel charge, its refund, and the split with a fuel share');
+
+      const spare = await createEnvelope(db, { groupId: vehicle, name: 'Parking' });
+      assert.ok(spare, 'an envelope with nothing in it adds nothing to the group');
+      assert.equal((await searchTransactions(db, { envelopeGroupIds: [vehicle] })).total, 3);
+    });
+
+    test('a whole category of accounts can be filtered at once', async () => {
+      await seedHistory();
+      const { createAccountGroup, moveAccountToGroup } = await import('../accounts/groups.ts');
+
+      const cards = await createAccountGroup(db, 'Cards');
+      await moveAccountToGroup(db, visa, cards);
+
+      const found = await searchTransactions(db, { accountGroupIds: [cards] });
+      assert.equal(found.total, 2, 'everything in the Visa, and nothing from the chequing account');
+      assert.ok(found.rows.every((row) => row.accountName === 'Visa'));
+    });
+
+    test('payee and memo can be searched apart from each other', async () => {
+      await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-04-01',
+        amountCents: -1000,
+        payeeRaw: 'WINDJAMMERS CAFE',
+        source: 'manual',
+      });
+      await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-04-02',
+        amountCents: -2000,
+        payeeRaw: 'COSTCO WHOLESALE',
+        memo: 'Windjammers',
+        source: 'manual',
+      });
+
+      // The combined box finds both, which is what a quick search is for.
+      assert.equal((await searchTransactions(db, { text: 'windjammers' })).total, 2);
+
+      const byPayee = await searchTransactions(db, { payee: 'windjammers' });
+      assert.equal(byPayee.total, 1);
+      assert.equal(byPayee.rows[0]!.payeeRaw, 'WINDJAMMERS CAFE');
+
+      const byMemo = await searchTransactions(db, { memo: 'windjammers' });
+      assert.equal(byMemo.total, 1);
+      assert.equal(byMemo.rows[0]!.payeeRaw, 'COSTCO WHOLESALE');
+    });
+
     test('an account filter is what the account view runs (VW-5)', async () => {
       await seedHistory();
       const found = await searchTransactions(db, { accountIds: [visa] });
@@ -314,6 +371,11 @@ describe(
       );
       assert.ok(choices.envelopes.some((envelope) => envelope.name === 'Groceries'));
       assert.ok(choices.envelopes.every((envelope) => envelope.groupName === 'Living'));
+      assert.deepEqual(
+        choices.envelopeGroups.map((group) => group.name),
+        ['Living'],
+      );
+      assert.deepEqual(choices.accountGroups, [], 'no categories of account made yet');
     });
   },
 );
@@ -323,6 +385,10 @@ describe('describing a query', () => {
     assert.equal(describeQuery({}), 'Everything, newest first');
     assert.ok(isEmptyQuery({}));
     assert.ok(isEmptyQuery({ text: '   ' }));
+    assert.ok(isEmptyQuery({ payee: '', memo: '   ', envelopeGroupIds: [], accountGroupIds: [] }));
+    assert.ok(!isEmptyQuery({ envelopeGroupIds: ['g1'] }));
+    assert.ok(!isEmptyQuery({ accountGroupIds: ['g1'] }));
+    assert.ok(!isEmptyQuery({ memo: 'blender' }));
   });
 
   test('a filled query reads as a sentence', () => {
