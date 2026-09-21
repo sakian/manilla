@@ -74,23 +74,26 @@ for (const [groupName, names] of Object.entries(GROUPS)) {
 const envelopeCount = await db.select({ id: envelopes.id }).from(envelopes);
 console.log(`created ${Object.keys(GROUPS).length} groups, ${envelopeCount.length} envelopes`);
 
-// The external id is the account number as the bank's export states it, which
-// is how an imported statement finds its account (FR-7). It is a real financial
-// identifier, so it comes from the environment rather than living in the repo:
-// set SEED_ACCOUNT_EXTERNAL_ID in .env to the ACCTID in your own export.
+// A placeholder account number, on purpose.
+//
+// The real one is how an imported statement finds its account (FR-7), but it
+// does not have to be known up front: the first import matches nothing, so the
+// import screen asks which account the statement belongs to and writes the real
+// ACCTID in when you answer. Everything after that maps itself. Asking for it
+// here would mean a real financial identifier in a config file to save one
+// dropdown, once.
 const accountId = await openAccount(db, {
   name: process.env.SEED_ACCOUNT_NAME ?? 'Main Chequing',
   kind: 'chequing',
-  externalAccountId: process.env.SEED_ACCOUNT_EXTERNAL_ID ?? '000000000',
+  externalAccountId: '000000000',
   openingBalanceCents: 0,
 });
 
-if (!process.env.SEED_ACCOUNT_EXTERNAL_ID) {
-  console.log(
-    'note: SEED_ACCOUNT_EXTERNAL_ID is unset, so the account uses a placeholder\n' +
-      '      number and no statement will map to it. Set it in .env to import.',
-  );
-}
-console.log(`created account Main Chequing (${accountId})`);
+const accountName = process.env.SEED_ACCOUNT_NAME ?? 'Main Chequing';
+console.log(`created account ${accountName} (${accountId})`);
+console.log(
+  'note: it has a placeholder account number, so your first import will ask\n' +
+    '      which account the statement belongs to. It remembers the answer.',
+);
 
 await (db as unknown as { $client: { end: () => Promise<void> } }).$client.end();
