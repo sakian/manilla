@@ -233,7 +233,7 @@ src/
     ai.ts               Claude layer for unknown merchants (CA-5, CA-8)
     pipeline.ts         rules -> history -> AI, with confidence bands (CA-7)
 spikes/                 runnable Phase 0 investigations
-deploy/                 Nginx example for the home server
+deploy/                 the Tailscale serve config, and an Nginx example as a fallback
 data/samples/           synthetic fixtures, safe to commit
 data/private/           your real exports - gitignored
 ```
@@ -298,19 +298,50 @@ would accept a certificate for any name.
 
 ## Deploying to the home server
 
+Manilla runs as **its own node on your tailnet**, next to Postgres and a Tailscale
+sidecar. A tailnet node gets exactly one DNS name, so a machine running several
+services either routes them by port and path behind a reverse proxy, or gives each
+service a node of its own — and a node is not a machine, it is a container. So
+Manilla is `manilla.<your-tailnet>.ts.net`, with a real browser-trusted
+certificate renewed by the thing that issued it, and whatever else the box runs
+carries on exactly as it did.
+
+The app shares the sidecar's network namespace, so it has no address of its own:
+not on the LAN, not on the host, not on loopback. The only way in is through its
+Tailscale node, and the only people there are the ones on your tailnet.
+
 ```bash
-tailscale cert manilla.your-tailnet.ts.net    # a browser-trusted certificate
-cp deploy/nginx.conf.example /etc/nginx/sites-available/manilla   # then edit the hostname
-docker compose up -d
-docker compose exec app node node_modules/drizzle-kit/bin.cjs migrate
+# 1. A reusable auth key from login.tailscale.com/admin/settings/keys
+cp .env.example .env            # then fill in TS_AUTHKEY and the two below
+#    MANILLA_RP_ID=manilla.your-tailnet.ts.net
+#    MANILLA_ORIGIN=https://manilla.your-tailnet.ts.net
+
+# 2. In the admin console, turn on MagicDNS and HTTPS certificates.
+
+# 3. Up it goes. The app migrates the database itself on start.
+docker compose up -d --build
+docker compose logs -f app      # "database is up to schema", then the origin
+
+# 4. Clear TS_AUTHKEY from .env - the node keeps its identity in a volume.
 ```
 
-Set `MANILLA_RP_ID` and `MANILLA_ORIGIN` to that hostname before starting. A
-passkey is bound to an exact host, and browsers only allow one over HTTPS or on
-localhost - so in production the boot check rejects the localhost defaults and
-the app serves nothing until they are right, with the reason in
-`docker compose logs app`. Both the app and Postgres bind to loopback only; Nginx
-and Tailscale are the only ways in.
+Then open `https://manilla.your-tailnet.ts.net` from any device on the tailnet.
+
+**Your existing passkey will not work there.** A passkey is bound to an exact
+host, so moving off `manilla.lan` invalidates it — which is the intended
+behaviour, not a bug. Sign in with one of your recovery codes and register a
+passkey for the new origin from Settings. Worth doing early, while there is one
+passkey to replace rather than four.
+
+In production the boot check refuses to start on a localhost relying-party ID or
+a schema it could not bring up to date, with the reason in
+`docker compose logs app`. Serving against a half-migrated schema is how a ledger
+ends up half-written, so both are fatal rather than warnings.
+
+`deploy/nginx.conf.example` is still there for the other arrangement — one node
+for the whole machine, a reverse proxy in front of several services, and a
+systemd timer to re-run `tailscale cert` every 90 days. The sidecar exists so none
+of that is needed for this one service.
 
 ## Backups (NF-7)
 

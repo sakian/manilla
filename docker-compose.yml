@@ -1,14 +1,24 @@
 # Manilla on the home server.
 #
-# The app listens on 127.0.0.1 only: your existing Nginx terminates TLS and
-# proxies to it, and the whole thing is reachable over Tailscale rather than the
-# public internet. Nothing here publishes a port to the outside world.
+# Three containers: Postgres, the app, and a Tailscale node of its own.
+#
+# The Tailscale sidecar is why there is no Nginx here and no published port for
+# the app. A tailnet node gets exactly one DNS name, so a machine running several
+# services either routes them by port and path behind a reverse proxy, or gives
+# each service its own node. A node is not a machine, and a container can be one -
+# so Manilla is `manilla.<your-tailnet>.ts.net`, with its own certificate, renewed
+# by the thing that issued it, and anything else on this box carries on exactly as
+# it did.
+#
+# The app shares the sidecar's network namespace (`network_mode`), which means it
+# has no address of its own: not on the LAN, not on the host, not on 127.0.0.1.
+# The only way to it is through its Tailscale node, and the only people on that
+# are the ones you have added to your tailnet.
 #
 #   docker compose up -d
 #
-# For local development on Windows, `docker compose up -d db` is enough - it
-# brings up only Postgres, on port 5433 to avoid clashing with anything already
-# using 5432.
+# For local development, `docker compose up -d db` is enough - it brings up only
+# Postgres, on port 5433 to avoid clashing with anything already using 5432.
 
 services:
   db:
@@ -31,14 +41,46 @@ services:
       timeout: 5s
       retries: 10
 
+  # Manilla's own node on your tailnet. First boot needs TS_AUTHKEY; after that
+  # the node's identity lives in the volume and the key is never read again.
+  tailscale:
+    image: tailscale/tailscale:stable
+    restart: unless-stopped
+    hostname: ${MANILLA_TS_HOSTNAME:-manilla}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      # Terminates TLS with a real certificate for this node's name and proxies
+      # to the app, which is in this same network namespace on port 3000.
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: 'false'
+    volumes:
+      - manilla-tailscale:/var/lib/tailscale
+      - ./deploy/tailscale-serve.json:/config/serve.json:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    healthcheck:
+      test: ['CMD-SHELL', 'tailscale status --peers=false >/dev/null 2>&1']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # No network of its own: the app is reachable only through its Tailscale
+    # node. `db` still resolves, because the sidecar is on the compose network.
+    network_mode: service:tailscale
     depends_on:
       db:
         condition: service_healthy
+      tailscale:
+        condition: service_started
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-manilla}:${POSTGRES_PASSWORD:-manilla}@db:5432/${POSTGRES_DB:-manilla}
       NODE_ENV: production
@@ -51,11 +93,6 @@ services:
       MANILLA_RP_ID: ${MANILLA_RP_ID:-localhost}
       MANILLA_ORIGIN: ${MANILLA_ORIGIN:-http://localhost:3000}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    ports:
-      # Loopback only. Nginx proxies to this; nothing else can reach it. The host
-      # side defaults to 3001 because this machine already has something on 3000;
-      # the container side is always 3000 and needs no thought.
-      - '127.0.0.1:${MANILLA_PORT:-3001}:3000'
     healthcheck:
       test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
       interval: 30s
@@ -65,3 +102,7 @@ services:
 
 volumes:
   manilla-db:
+  # The node's identity. Losing this means re-authenticating and Tailscale
+  # issuing a new name, which would break every registered passkey - so it is a
+  # named volume, not a bind mount into a directory someone might tidy up.
+  manilla-tailscale:

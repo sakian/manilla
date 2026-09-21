@@ -1,4 +1,14 @@
-# Manilla behind your existing Nginx.
+# Manilla behind your existing Nginx - the fallback arrangement, not the default.
+#
+# docker-compose.yml gives Manilla its own Tailscale node, which terminates TLS
+# with its own certificate and renews it without being asked. That needs no Nginx
+# and no port on this machine, so prefer it.
+#
+# This file is for the other shape: one tailnet node for the whole machine, a
+# reverse proxy routing several services behind it, and a systemd timer to re-run
+# `tailscale cert` before the certificate expires at 90 days. Taking this route
+# means putting the app's port back in docker-compose.yml and dropping the
+# `network_mode` line, since the app needs an address for Nginx to proxy to.
 #
 # Assumes the app is reachable only over Tailscale, so there is no public
 # hostname and no Let's Encrypt challenge to serve. Two workable setups:
