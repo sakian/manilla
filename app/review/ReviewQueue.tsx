@@ -301,6 +301,14 @@ export default function ReviewQueue({
             <span className="queue-payee">
               {row.payeeDisplay}
               {row.memo && <span className="muted"> · {row.memo}</span>}
+              {/* Beside what the transaction says it is, because that is what the
+                  confidence is *about* - down in the meta line it read as one
+                  more fact about the row rather than a judgement of the guess. */}
+              <span className={`band ${confidence.tone}`} title={row.reason ?? undefined}>
+                {confidence.label}
+                {confidence.detail && ` ${confidence.detail}`}
+              </span>
+              {transferFor.get(row.id) && <span className="band medium">transfer?</span>}
             </span>
 
             <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
@@ -310,13 +318,6 @@ export default function ReviewQueue({
             <span className="muted queue-meta">
               <span>{longDate(row.date)}</span>
               <span>{row.accountName}</span>
-              <span className={`band ${confidence.tone}`} title={row.reason ?? undefined}>
-                {confidence.label}
-                {confidence.detail && ` ${confidence.detail}`}
-              </span>
-              {transferFor.get(row.id) && (
-                <span className="band medium">looks like a transfer</span>
-              )}
               {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
             </span>
 
@@ -341,7 +342,7 @@ export default function ReviewQueue({
                     set(
                       row.id,
                       decision.confirmed
-                        ? { confirmed: false, envelopeId: null, createRule: false }
+                        ? { confirmed: false, envelopeId: row.envelopeId, createRule: false }
                         : { confirmed: true },
                     )
                   }
