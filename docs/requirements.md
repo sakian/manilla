@@ -5,7 +5,7 @@ check; `git grep CA-3` finds the history layer. That traceability is the point o
 this file: a comment saying "(FR-37)" should lead somewhere.
 
 The **Status** column is what the code actually does today, not what was planned.
-Anything not built has an issue.
+Anything not built links to its issue.
 
 Priority as originally set: **M** = must have for the first usable release, **S** =
 should have soon after, **C** = could have.
@@ -38,14 +38,14 @@ all account balances.
 | FR-3 | A transaction stores date, amount, account, the raw bank description, a cleaned payee name, notes, status and envelope(s). | M | Built |
 | FR-4 | Split one transaction across several envelopes, with the split amounts required to sum to the total. | M | Built |
 | FR-5 | A transfer between two accounts is stored as a linked pair and never counted as spending or income. | M | Built |
-| FR-6 | Reconcile an account: mark transactions cleared and compare to a statement balance. | S | Not built |
+| FR-6 | Reconcile an account: mark transactions cleared and compare to a statement balance. | S | Not built ([#1](https://github.com/sakian/manilla/issues/1)) |
 
 ## File import
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
 | FR-7 | Import OFX and QFX files, mapping each file's account to a Manilla account (remembered for next time). | M | Built |
-| FR-8 | Import CSV with a column-mapping step, saved per account for reuse. | S | Not built |
+| FR-8 | Import CSV with a column-mapping step, saved per account for reuse. | S | Not built ([#2](https://github.com/sakian/manilla/issues/2)) |
 | FR-9 | Show a preview before committing: new rows, exact duplicates, and possible duplicates. | M | Built |
 | FR-10 | Deduplicate on the bank's transaction ID (OFX FITID) per account. For CSV, fall back to date + amount + description. Possible duplicates go to a review list and are never dropped silently. | M | Built |
 | FR-11 | Importing the same file twice, or two overlapping date ranges, must change nothing the second time. | M | Built |
@@ -61,12 +61,12 @@ banking credentials. See [measurements.md](measurements.md) and the README.
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
-| FR-15 | Connect accounts through a bank-data aggregator, chosen per account. | S | Deferred |
-| FR-16 | Sync at least daily and on demand. | S | Deferred |
-| FR-17 | Synced transactions follow the same pending-review path as imports. | S | Deferred |
-| FR-18 | A synced transaction and a file-imported one for the same bank entry must merge into one, never duplicate. | S | Deferred |
-| FR-19 | Handle the pending-to-posted change (new ID, changed amount) without creating duplicates. | S | Deferred |
-| FR-20 | Bank login credentials never touch the app. Only the aggregator's access token is stored, encrypted, and can be revoked in one click. | M | Deferred |
+| FR-15 | Connect accounts through a bank-data aggregator, chosen per account. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-16 | Sync at least daily and on demand. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-17 | Synced transactions follow the same pending-review path as imports. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-18 | A synced transaction and a file-imported one for the same bank entry must merge into one, never duplicate. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-19 | Handle the pending-to-posted change (new ID, changed amount) without creating duplicates. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-20 | Bank login credentials never touch the app. Only the aggregator's access token is stored, encrypted, and can be revoked in one click. | M | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
 
 The schema is shaped for this already: `bank_sync` is a transaction source and
 `aggregator` an external-id kind, so a feed is additive rather than a rewrite.
@@ -76,11 +76,11 @@ The schema is shaped for this already: `bank_sync` is a transaction source and
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
 | FR-21 | Create, rename, reorder and archive envelopes, each belonging to one group. | M | Built. Envelopes are alphabetical within a group; the manual order is on groups, which are read as a shape rather than scanned. |
-| FR-22 | Groups are collapsible and show a rolled-up balance, budgeted amount and spent amount. | M | Partial. Groups collapse; the roll-up was removed from view mode as noise beside the per-envelope figures. |
+| FR-22 | Groups are collapsible and show a rolled-up balance, budgeted amount and spent amount. | M | Partial. Groups collapse; the roll-up was removed from view mode as noise beside the per-envelope figures. ([#13](https://github.com/sakian/manilla/issues/13)) |
 | FR-23 | By default an envelope's balance carries over month to month. | M | Built |
 | FR-24 | An envelope may go negative. It is shown as overspent and listed on the dashboard. | M | Built |
 | FR-25 | Archiving an envelope with a non-zero balance requires moving that balance first. | M | Built |
-| FR-26 | A goal envelope has a target amount and date, and shows the monthly amount needed to reach it. | S | Not built |
+| FR-26 | A goal envelope has a target amount and date, and shows the monthly amount needed to reach it. | S | Not built ([#12](https://github.com/sakian/manilla/issues/12)) |
 
 ## Monthly budget and income allocation
 
@@ -91,8 +91,8 @@ The schema is shaped for this already: `bank_sync` is a transaction source and
 | FR-29 | A one-click "fund envelopes" action builds allocations from the budget, with an editable preview. | M | Built |
 | FR-30 | Allocations are stored as records, dated and reversible, so past months stay correct when the budget changes later. | M | Built |
 | FR-31 | Warn when planned amounts exceed income received or expected, and when income is left unallocated. | M | Built |
-| FR-32 | Override the budget for a single month without changing the default. | S | Partial. The data model and the reads support it; no screen writes one. |
-| FR-33 | Support annual or irregular bills by budgeting a yearly amount that funds monthly. | S | Not built |
+| FR-32 | Override the budget for a single month without changing the default. | S | Partial. The data model and the reads support it; no screen writes one. ([#6](https://github.com/sakian/manilla/issues/6)) |
+| FR-33 | Support annual or irregular bills by budgeting a yearly amount that funds monthly. | S | Not built ([#12](https://github.com/sakian/manilla/issues/12)) |
 
 ## Envelope transfers
 
@@ -125,7 +125,7 @@ flowchart LR
 | CA-3 | History match: suggest the envelope most often used for the same normalized payee, weighted by recency. | M | Built |
 | CA-4 | Amount awareness: use typical amount as a signal, so a fuel-sized charge at a fuel station scores high for Gas while a small one may score toward Snacks. | S | Built |
 | CA-5 | AI model layer: for payees the first layers cannot place, send the payee text, amount, date, memo and your envelope list to a language model, which returns an envelope, a confidence score and a one-line reason. | S | Built |
-| CA-6 | AI may also propose splits but never applies one without confirmation. | C | Not built |
+| CA-6 | AI may also propose splits but never applies one without confirmation. | C | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
 | CA-7 | Confidence bands: high confidence (0.95 or above) is pre-assigned and shown as suggested; low confidence is left uncategorized with the top candidates listed. | M | Built |
 | CA-8 | The AI is limited to envelopes that exist. It cannot invent envelopes. | M | Built |
 | CA-9 | Show why a suggestion was made (rule, history count, or AI reason) on each row. | S | Built |
@@ -145,10 +145,10 @@ flowchart LR
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
-| VW-1 | Dashboard for the current month: every envelope as a progress bar of spent against available, grouped, with a month selector. | M | Partial. Figures yes, bars and the month selector no. |
-| VW-2 | Pace marker on each bar showing how far through the month you are. | S | Not built |
+| VW-1 | Dashboard for the current month: every envelope as a progress bar of spent against available, grouped, with a month selector. | M | Partial. Figures yes, bars and the month selector no. ([#3](https://github.com/sakian/manilla/issues/3)) |
+| VW-2 | Pace marker on each bar showing how far through the month you are. | S | Not built ([#3](https://github.com/sakian/manilla/issues/3)) |
 | VW-3 | Dashboard callouts: overspent envelopes, unallocated income, transactions awaiting review, and the FR-37 balance check. | M | Built, as one ranked list shown on every main screen. |
-| VW-4 | Envelope view: envelopes in groups with balance, budgeted and spent. Opening one shows its transactions, transfers, allocations and a balance-over-time chart. | M | Partial. Everything but the chart. |
+| VW-4 | Envelope view: envelopes in groups with balance, budgeted and spent. Opening one shows its transactions, transfers, allocations and a balance-over-time chart. | M | Partial. Everything but the chart. ([#4](https://github.com/sakian/manilla/issues/4)) |
 | VW-5 | Account view: accounts with balances, and each account's transactions filterable by status, date, payee and envelope. | M | Built, unified. One `/transactions` screen behind every filter. |
 | VW-6 | Global transaction search and filter (text, amount range, date range, envelope, status). | M | Built |
 
@@ -158,8 +158,8 @@ flowchart LR
 | --- | --- | --- | --- |
 | RP-1 | Spending per envelope and per group over a custom date range, with drill-down. | M | Built |
 | RP-2 | Monthly trend of spending for one or more envelopes, over any number of months. | M | Built |
-| RP-3 | Compare two periods (this month against last, this year against last) per envelope. | S | Not built |
-| RP-4 | Income against spending by month, and budgeted against actual per envelope. | S | Not built |
+| RP-3 | Compare two periods (this month against last, this year against last) per envelope. | S | Not built ([#5](https://github.com/sakian/manilla/issues/5)) |
+| RP-4 | Income against spending by month, and budgeted against actual per envelope. | S | Not built ([#5](https://github.com/sakian/manilla/issues/5)) |
 | RP-5 | Reports exclude transfers and count each split at its envelope's share. | M | Built by construction: reports read envelope lines, never transactions. |
 | RP-6 | Export any report or transaction list as CSV. | M | Built |
 
@@ -171,13 +171,13 @@ is built.
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
-| AI-1 | Anomaly detection against the payee's or envelope's own history — a utility bill more than 30% above its trailing 12-month average, or an unusually large charge from a new payee. | S | Not built |
-| AI-2 | Each insight states the finding, the numbers behind it, and a suggested next step. | S | Not built |
-| AI-3 | Trend detection: an envelope rising or falling steadily over several months, adjusted for seasonality once a year of data exists. | S | Not built |
-| AI-4 | Recurring-charge detection: new subscriptions, price increases, and charges that stopped or doubled. | C | Not built |
-| AI-5 | Budget suggestions: an envelope consistently over or under budget gets a proposed new amount, applied only if accepted. | C | Not built |
-| AI-6 | An insights inbox where each item can be dismissed, snoozed, or marked "expected" to teach the detector. | S | Not built |
-| AI-7 | Natural-language questions about your own data, answered from computed queries, with the underlying rows shown. | C | Not built |
+| AI-1 | Anomaly detection against the payee's or envelope's own history — a utility bill more than 30% above its trailing 12-month average, or an unusually large charge from a new payee. | S | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
+| AI-2 | Each insight states the finding, the numbers behind it, and a suggested next step. | S | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
+| AI-3 | Trend detection: an envelope rising or falling steadily over several months, adjusted for seasonality once a year of data exists. | S | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
+| AI-4 | Recurring-charge detection: new subscriptions, price increases, and charges that stopped or doubled. | C | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
+| AI-5 | Budget suggestions: an envelope consistently over or under budget gets a proposed new amount, applied only if accepted. | C | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
+| AI-6 | An insights inbox where each item can be dismissed, snoozed, or marked "expected" to teach the detector. | S | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
+| AI-7 | Natural-language questions about your own data, answered from computed queries, with the underlying rows shown. | C | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
 
 ## Migration
 
@@ -194,7 +194,7 @@ rewrite; one is implemented.
 | MG-4 | Reproduce income, envelope-to-envelope transfers, account transfers and splits, so historical envelope balances come out right. Anything the export cannot represent is listed rather than guessed. | M | Built |
 | MG-5 | Imported history is marked with its source and pre-set to confirmed, since it was already categorized. | M | Built |
 | MG-6 | Run into a staging area first. Commit only after the reconciliation check, and allow the whole migration to be undone. | S | Built |
-| MG-7 | Reconciliation report: compare envelope and account balances at the migration date with the balances you enter from the old app, and list every difference. | M | Partial. The comparison and the dated adjustments are implemented and tested; no screen reaches them. |
+| MG-7 | Reconciliation report: compare envelope and account balances at the migration date with the balances you enter from the old app, and list every difference. | M | Partial. The comparison and the dated adjustments are implemented and tested; no screen reaches them. ([#7](https://github.com/sakian/manilla/issues/7)) |
 | MG-8 | Migrated history seeds the payee history and AI examples immediately. | M | Built |
 | MG-9 | The first bank import will overlap the last weeks of migrated history. Match on account, date and amount and attach the bank's transaction ID to the existing row instead of adding a duplicate. | M | Built |
 
@@ -211,7 +211,7 @@ model rank above features.
 | ID | Area | Requirement | Status |
 | --- | --- | --- | --- |
 | NF-1 | Money accuracy | Store amounts as integers in the currency's smallest unit, never floating point. Balances must always be reproducible from the transaction, allocation and transfer records. | Built |
-| NF-2 | Integrity | Imports and migrations are atomic: they fully apply or not at all. Edits and deletions keep an audit trail. | Partial. Atomic yes; no audit trail. |
+| NF-2 | Integrity | Imports and migrations are atomic: they fully apply or not at all. Edits and deletions keep an audit trail. | Partial. Atomic yes; no audit trail. ([#8](https://github.com/sakian/manilla/issues/8)) |
 | NF-3 | Authentication | Strong sign-in: passkeys, with session timeouts. | Built. Passkeys plus single-use recovery codes; sessions lapse after 12 idle hours and end after 30 days. |
 | NF-4 | Data protection | Encrypt in transit and at rest. No bank credentials are ever stored. | Partial. TLS via the Tailscale node, and no credentials exist to store; at-rest encryption is the host's disk, not the app's. |
 | NF-5 | AI data minimization | Send the model only what the task needs. Settings show exactly what is sent, with an off switch. | Built. Payee text, amount, date, memo and envelope names — see the note in the README about what a bank writes into a memo. |
