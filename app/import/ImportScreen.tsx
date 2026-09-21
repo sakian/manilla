@@ -17,7 +17,6 @@
 import { useCallback, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Hint } from '../Hint.tsx';
-import Link from 'next/link';
 import {
   commitImportAction,
   previewImportAction,
@@ -55,12 +54,6 @@ function money(cents: number): string {
   return `${sign}$${Math.floor(abs / 100).toLocaleString()}.${String(abs % 100).padStart(2, '0')}`;
 }
 
-function shortDate(date: string): string {
-  const [, month, day] = date.split('-');
-  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${names[Number(month) - 1]} ${Number(day)}`;
-}
-
 /**
  * What each row does if nobody touches it. A transfer half links, because the
  * money is already recorded on both accounts and what this statement adds is
@@ -88,18 +81,25 @@ export default function ImportScreen({
 
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [decisions, setDecisions] = useState<Record<number, Decision>>({});
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   /** Set when the statement is for a bank account Manilla has not met (FR-7). */
   const [needsAccount, setNeedsAccount] = useState<string | null>(null);
-  const [chosenAccount, setChosenAccount] = useState(accounts[0]?.id ?? '');
+  /**
+   * A file whose account number is already mapped never reaches this control - it
+   * is recognised and used (FR-7). When one does, the likeliest answer is an
+   * account that has no bank number yet, since a mapped one already belongs to a
+   * different statement.
+   */
+  const [chosenAccount, setChosenAccount] = useState(
+    () =>
+      accounts.find((account) => !account.externalAccountId)?.id ?? accounts[0]?.id ?? '',
+  );
 
   const reset = useCallback(() => {
     setLoaded(null);
     setPreview(null);
-    setDecisions({});
     setNeedsAccount(null);
     setError(null);
     if (fileRef.current) fileRef.current.value = '';
@@ -132,8 +132,7 @@ export default function ImportScreen({
         ...(result.aiNote ? { aiNote: result.aiNote } : {}),
         warnings: result.warnings,
       });
-      setDecisions({});
-    });
+      });
   }, []);
 
   const onFile = useCallback(
@@ -146,10 +145,13 @@ export default function ImportScreen({
     [runPreview],
   );
 
-  const decisionFor = useCallback(
-    (row: PreviewRow): Decision => decisions[row.index] ?? defaultDecision(row),
-    [decisions],
-  );
+  /**
+   * What each row will do, with nothing to override it. A new row is added, one
+   * the bank id already claims is linked, and anything that looks like a repeat
+   * is left out - which is what the counts above say, so there is nothing here a
+   * person has to decide before the review queue.
+   */
+  const decisionFor = useCallback((row: PreviewRow): Decision => defaultDecision(row), []);
 
   const tally = useMemo(() => {
     if (!preview) return { add: 0, link: 0, skip: 0 };
@@ -244,9 +246,9 @@ export default function ImportScreen({
           <Hint label="How importing works">
             OFX or QFX, as your bank exports it. The account is recognised from the file where it
             can be, and remembered when you pick one. Every row is matched against what is already
-            here, so importing a statement twice adds nothing — anything that looks like a repeat is
-            shown as one and can be kept anyway. Nothing is written until you have seen what it
-            would do, and a whole import can be undone in one step afterwards.
+            here, so importing a statement twice adds nothing. Nothing is written until you press
+            Import, everything imported lands in the review queue with a suggested envelope already
+            applied, and a whole import can be undone in one step afterwards.
           </Hint>
         </h2>
       </div>
@@ -342,97 +344,46 @@ export default function ImportScreen({
             </p>
           )}
 
-          {preview.balance && (
-            <p className={`budget-warning${preview.balance.matches ? ' ok' : ''}`}>
-              {preview.balance.matches ? (
-                <>
-                  The statement says the account holds {money(preview.balance.statedCents)}, and it
-                  will once this is applied.
-                </>
-              ) : (
-                <>
-                  The statement says the account holds {money(preview.balance.statedCents)}, but
-                  applying this leaves it at {money(preview.balance.projectedCents)} - a difference
-                  of {money(preview.balance.statedCents - preview.balance.projectedCents)}. That
-                  usually means history from before this file is missing (FR-14). On a first
-                  import, setting the account's opening balance{' '}
-                  {money(preview.balance.statedCents - preview.balance.projectedCents)} higher, as
-                  of the day before the earliest row here, makes the two agree. The import works
-                  either way; the check is only telling you what it sees.
-                </>
-              )}
+          {preview.balance && !preview.balance.matches && (
+            <p className="budget-warning">
+              Balance off by{' '}
+              {money(preview.balance.statedCents - preview.balance.projectedCents)}: the statement
+              says {money(preview.balance.statedCents)}, this leaves{' '}
+              {money(preview.balance.projectedCents)}.{' '}
+              <Hint label="What a balance difference means">
+                Usually history from before this file is missing (FR-14). On a first import,
+                setting the account&rsquo;s opening balance{' '}
+                {money(preview.balance.statedCents - preview.balance.projectedCents)} higher, as of
+                the day before the earliest row here, makes the two agree. The import works either
+                way; the check is only telling you what it sees.
+              </Hint>
             </p>
           )}
 
-          <section className="panel">
-            <div className="panel-head">
-              <h3>What this would do</h3>
-              <span className="muted">
-                add {tally.add} · link {tally.link} · skip {tally.skip}
-              </span>
-            </div>
-
-            <div className="import-table">
-              {preview.rows.map((row) => {
-                const decision = decisionFor(row);
-                return (
-                  <div key={row.index} className={`import-row ${row.verdict}`}>
-                    <span className="muted txn-date">{shortDate(row.date)}</span>
-
-                    <span className="import-payee">
-                      <span className="queue-name">{row.payee}</span>
-                      <span className="queue-sub muted">{row.reason}</span>
-                    </span>
-
-                    <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
-                      {money(row.amountCents)}
-                    </span>
-
-                    <span className="import-envelope">
-                      {row.transferToName ? (
-                        <span className="chip">transfer to {row.transferToName}</span>
-                      ) : row.envelopeName ? (
-                        <span className={`chip band-${row.band ?? 'low'}`}>{row.envelopeName}</span>
-                      ) : (
-                        <span className="chip none">Uncategorized</span>
-                      )}
-                    </span>
-
-                    <span className="import-actions">
-                      {(['add', 'skip'] as const).map((option) => (
-                        <button
-                          key={option}
-                          className={decision === option ? 'active' : ''}
-                          onClick={() =>
-                            setDecisions((current) => ({ ...current, [row.index]: option }))
-                          }
-                          disabled={pending}
-                        >
-                          {option}
-                        </button>
-                      ))}
-                      {row.existingId && (
-                        <button
-                          className={decision === 'link' ? 'active' : ''}
-                          onClick={() =>
-                            setDecisions((current) => ({ ...current, [row.index]: 'link' }))
-                          }
-                          disabled={pending}
-                          title="Treat it as the transaction already here, and attach the bank id to it"
-                        >
-                          link
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+          {/*
+            The per-row table went. Deciding add-or-skip on each of two hundred
+            rows before knowing where any of them belong is a review, and the
+            review queue is the screen for that - this one only has to say what is
+            in the file and whether it has seen it before. A row that looks like a
+            repeat is skipped by default; the queue is where anything is judged.
+          */}
+          {preview.counts.possible_duplicate > 0 && (
+            <p className="muted footnote">
+              {preview.counts.possible_duplicate} row
+              {preview.counts.possible_duplicate === 1 ? '' : 's'} match something already here
+              closely enough to look like a repeat, and will be left out.
+            </p>
+          )}
 
           <div className="signin-actions">
-            <button className="primary" onClick={commit} disabled={pending || tally.add + tally.link === 0}>
-              {pending ? 'Importing…' : `Import ${tally.add + tally.link}`}
+            <button
+              className="primary"
+              onClick={commit}
+              disabled={pending || tally.add + tally.link === 0}
+            >
+              {pending
+                ? 'Importing…'
+                : `Import ${tally.add + tally.link} and review ${tally.add + tally.link}`}
             </button>
             <button onClick={reset} disabled={pending}>
               Choose a different file
@@ -443,7 +394,13 @@ export default function ImportScreen({
 
       {history.length > 0 && (
         <section className="panel">
-          <h3>Previous imports</h3>
+          <h3>
+            Previous imports{' '}
+            <Hint label="What undoing an import does">
+              Undoing removes the transactions that import created (FR-13). Anything you have since
+              edited by hand goes with them.
+            </Hint>
+          </h3>
           {history.map((batch) => (
             <div key={batch.id} className="row">
               <span>
@@ -468,20 +425,10 @@ export default function ImportScreen({
               </span>
             </div>
           ))}
-          <p className="muted footnote">
-            Undoing removes the transactions that import created (FR-13). Anything you have since
-            edited by hand goes with them.
-          </p>
+
         </section>
       )}
 
-      {!preview && (
-        <p className="muted footnote">
-          Everything imported arrives in the <Link href="/review">review queue</Link> with a
-          suggested envelope already applied, so the dashboard is accurate before you have finished
-          reviewing.
-        </p>
-      )}
     </>
   );
 }
