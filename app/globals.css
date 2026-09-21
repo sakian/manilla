@@ -889,6 +889,12 @@ details[open] > summary > .group-summary::before {
   max-width: 420px;
 }
 
+/* A statement Manilla cannot place, asked about in a panel of its own beside
+   the statements it can: the same width as they are, the picker kept short. */
+.account-question .field {
+  max-width: 420px;
+}
+
 /* --- Dialogs ------------------------------------------------------------- */
 
 .dialog {
@@ -2140,4 +2146,9 @@ details[open] > summary > .group-summary::before {
 
 .declined .row {
   align-items: center;
+}
+
+/* The import buttons end the statements, and the history panel starts below. */
+.import-actions {
+  margin-bottom: 20px;
 }
