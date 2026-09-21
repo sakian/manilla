@@ -84,8 +84,18 @@ export default function AccountManager({
     [router],
   );
 
+  // "No group" is not a category anyone made, so it only earns a panel while it
+  // holds a live account. It was showing empty whenever its only accounts were
+  // archived, since those are listed below instead. Choosing it for an account
+  // is the picker's own "No category", which does not depend on this list.
   const live = useMemo(
-    () => categories.filter((category) => category.archivedAt === null),
+    () =>
+      categories.filter(
+        (category) =>
+          category.archivedAt === null &&
+          (category.id !== null ||
+            category.accounts.some((account) => account.archivedAt === null)),
+      ),
     [categories],
   );
   const archivedGroups = categories.filter((category) => category.archivedAt !== null);
@@ -255,9 +265,21 @@ export default function AccountManager({
                 <Money cents={account.balanceCents} />
 
                 <span className="envelope-figures muted">
-                  <span className="figure">
-                    <span className="figure-label">no.</span>
-                    {account.externalAccountId ?? 'not mapped'}
+                  {/* The number a bank statement names this account by (FR-7).
+                      Written as "NO. not mapped", which read as a refusal
+                      rather than as a statement never having been imported. */}
+                  <span
+                    className="figure"
+                    title="The account number in this account's bank statements. The first statement imported for it sets it, and later ones are matched to this account by it."
+                  >
+                    {account.externalAccountId ? (
+                      <>
+                        <span className="figure-label">acct no.</span>
+                        {account.externalAccountId}
+                      </>
+                    ) : (
+                      'no statement imported yet'
+                    )}
                   </span>
                   <span className="figure">
                     <span className="figure-label">last</span>
