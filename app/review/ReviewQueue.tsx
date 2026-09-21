@@ -130,8 +130,8 @@ export default function ReviewQueue({
     [transfers],
   );
 
-  const envelopeName = useMemo(
-    () => new Map(envelopes.map((envelope) => [envelope.id, envelope.name])),
+  const envelopeById = useMemo(
+    () => new Map(envelopes.map((envelope) => [envelope.id, envelope])),
     [envelopes],
   );
 
@@ -318,7 +318,18 @@ export default function ReviewQueue({
                 onClick={() => openPicker(row)}
                 disabled={pending}
               >
-                {chosen ? envelopeName.get(chosen) : 'Choose an envelope'}
+                {/* With its category: "Insurance" alone could be the car's or the
+                    house's, and the queue is where that gets settled. */}
+                {chosen ? (
+                  <>
+                    <span className="envelope-pick-group">
+                      {envelopeById.get(chosen)?.groupName}
+                    </span>{' '}
+                    {envelopeById.get(chosen)?.name}
+                  </>
+                ) : (
+                  'Choose an envelope'
+                )}
               </button>
 
               {/* Choosing is itself a decision, so it confirms; a row filled in

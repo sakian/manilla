@@ -322,6 +322,15 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+/* The category, quieter than the envelope it holds - the same weight as the
+   picker's group headings. */
+.envelope-pick-group {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
 .envelope-pick.chosen {
   border-style: solid;
   border-color: var(--accent);
