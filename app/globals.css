@@ -467,7 +467,7 @@ a.callout:hover {
 }
 
 /* The pull-up suits text under text, not under a row of controls (#19). */
-:is(.add-device, .export-links) + .footnote {
+:is(.add-device, .export-links, .row) + .footnote {
   margin-top: 10px;
 }
 
@@ -1096,6 +1096,16 @@ details[open] > summary > .group-summary::before {
 
 .map-row:last-child {
   border-bottom: none;
+}
+
+/* Which input is which: the group and the name are otherwise two unlabelled
+   boxes side by side. Same cells as the rows, so it wraps with them on a phone. */
+.map-row.map-head {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  padding-bottom: 2px;
 }
 
 .map-row.reconcile {

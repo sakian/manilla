@@ -504,9 +504,32 @@ describe(
       const result = await commitMigration(db, plan, {
         envelopes: { 'Vehicle:Gas': { action: 'existing', envelopeId: env.gasId } },
         accounts: {},
-        defaultAccountId: cash,
+        defaultAccount: { action: 'existing', accountId: cash },
       });
       assert.equal(result.added, 1);
+    });
+
+    test('rows with no account can go to an account the migration creates', async () => {
+      // A fresh install has no accounts to nominate; the export's own must do.
+      const mixed = [
+        'Date,Envelope,Account,Name,Notes,Check #,Amount,Status,Details',
+        '18/09/2026,Vehicle:Gas,Chequing,SHELL,,,-40.00,Cleared,',
+        '19/09/2026,Vehicle:Gas,[none],CASH FOR FUEL,,,-20.00,Cleared,',
+      ].join('\n');
+      const plan = planMigration([mixed]);
+      assert.equal(plan.rowsWithoutAccount, 1);
+
+      const result = await commitMigration(db, plan, {
+        envelopes: { 'Vehicle:Gas': { action: 'existing', envelopeId: env.gasId } },
+        accounts: { Chequing: { action: 'create', name: 'Chequing', kind: 'chequing' } },
+        defaultAccount: { action: 'create', name: 'Chequing', kind: 'chequing' },
+      });
+      assert.equal(result.added, 2);
+      assert.equal(result.accountsCreated, 1, 'the same account, not a second one by that name');
+
+      const rows = await db.select().from(transactions);
+      assert.equal(new Set(rows.map((row) => row.accountId)).size, 1);
+      assert.ok((await checkInvariant(db)).ok);
     });
 
     test('a migration can be undone whole, envelope moves included (MG-6)', async () => {

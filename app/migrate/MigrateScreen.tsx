@@ -42,6 +42,25 @@ import { formatMoney } from '../../src/money.ts';
 type Step = 'files' | 'mapping' | 'report' | 'done';
 
 const ACCOUNT_KINDS = ['chequing', 'savings', 'credit_card', 'cash', 'line_of_credit'] as const;
+type AccountKind = (typeof ACCOUNT_KINDS)[number];
+
+/**
+ * The rows-with-no-account choice as the server takes it. Following an export
+ * account sends that account's own choice: a created account is matched by name,
+ * so both land in the one account rather than two with the same name.
+ */
+function defaultAccountChoice(
+  value: string,
+  created: { name: string; kind: AccountKind },
+  accountChoices: Record<string, AccountChoice>,
+): AccountChoice | null {
+  if (value.startsWith('export:')) return accountChoices[value.slice('export:'.length)] ?? null;
+  if (value.startsWith('existing:')) {
+    return { action: 'existing', accountId: value.slice('existing:'.length) };
+  }
+  const name = created.name.trim();
+  return name ? { action: 'create', name, kind: created.kind } : null;
+}
 
 /** `Vehicle:Gas` becomes group "Vehicle", name "Gas". */
 function splitName(full: string): { group: string; name: string } {
@@ -80,7 +99,17 @@ export default function MigrateScreen({
 
   const [envelopeChoices, setEnvelopeChoices] = useState<Record<string, EnvelopeChoice>>({});
   const [accountChoices, setAccountChoices] = useState<Record<string, AccountChoice>>({});
-  const [defaultAccountId, setDefaultAccountId] = useState(accounts[0]?.id ?? '');
+  /**
+   * Where rows that name no account go: `export:<name>` follows whatever that
+   * export account becomes, `existing:<id>` is one already here, and `create`
+   * is a new one. Offering only existing accounts left a fresh install - which
+   * has none - with an empty list and a commit that could never succeed.
+   */
+  const [defaultAccount, setDefaultAccount] = useState('create');
+  const [newDefault, setNewDefault] = useState<{ name: string; kind: AccountKind }>({
+    name: 'Cash',
+    kind: 'cash',
+  });
 
   const [result, setResult] = useState<{
     batchId: string;
@@ -137,6 +166,13 @@ export default function MigrateScreen({
             : { action: 'create', name: account.name, kind: 'chequing' };
         }
 
+        // The export's busiest account is the likeliest home for rows it left
+        // unnamed; failing that, one already here. The row is on screen either way.
+        const busiest = planned.summary.accounts[0];
+        setDefaultAccount(
+          busiest ? `export:${busiest.name}` : accounts[0] ? `existing:${accounts[0].id}` : 'create',
+        );
+
         setSummary(planned.summary);
         setEnvelopeChoices(defaults);
         setAccountChoices(accountDefaults);
@@ -153,8 +189,15 @@ export default function MigrateScreen({
     const mapping: MigrationMapping = {
       envelopes: envelopeChoices,
       accounts: accountChoices,
-      ...(summary.needsDefaultAccount ? { defaultAccountId } : {}),
     };
+    if (summary.needsDefaultAccount) {
+      const chosen = defaultAccountChoice(defaultAccount, newDefault, accountChoices);
+      if (!chosen) {
+        setError('Choose where the rows that name no account should go.');
+        return;
+      }
+      mapping.defaultAccount = chosen;
+    }
 
     startTransition(async () => {
       const committed = await commitMigrationAction(
@@ -171,7 +214,7 @@ export default function MigrateScreen({
       setStep('done');
       router.refresh();
     });
-  }, [accountChoices, defaultAccountId, envelopeChoices, files, from, router, summary]);
+  }, [accountChoices, defaultAccount, envelopeChoices, files, from, newDefault, router, summary]);
 
   const undo = useCallback(() => {
     if (!result) return;
@@ -312,6 +355,12 @@ export default function MigrateScreen({
             </p>
 
             <div className="map-table">
+              <div className="map-row map-head" aria-hidden="true">
+                <span className="map-name">In the export · rows</span>
+                <span>Becomes</span>
+                <span>Group</span>
+                <span>Name</span>
+              </div>
               {summary.envelopes
                 .filter((envelope) => envelope.name !== '[Available]')
                 .map((envelope) => {
@@ -385,6 +434,12 @@ export default function MigrateScreen({
           <section className="panel">
             <h3>Accounts</h3>
             <div className="map-table">
+              <div className="map-row map-head" aria-hidden="true">
+                <span className="map-name">In the export · rows</span>
+                <span>Becomes</span>
+                <span>Name</span>
+                <span>Kind</span>
+              </div>
               {summary.accounts.map((account) => {
                 const choice = accountChoices[account.name];
                 if (!choice) return null;
@@ -397,6 +452,7 @@ export default function MigrateScreen({
 
                     <select
                       value={choice.action === 'existing' ? choice.accountId : '__create__'}
+                      aria-label={`What ${account.name} becomes`}
                       onChange={(event) => {
                         const value = event.target.value;
                         setAccountChoices((current) => ({
@@ -417,44 +473,90 @@ export default function MigrateScreen({
                     </select>
 
                     {choice.action === 'create' && (
-                      <select
-                        value={choice.kind}
-                        onChange={(event) =>
-                          setAccountChoices((current) => ({
-                            ...current,
-                            [account.name]: {
-                              ...choice,
-                              kind: event.target.value as (typeof ACCOUNT_KINDS)[number],
-                            },
-                          }))
-                        }
-                      >
-                        {ACCOUNT_KINDS.map((kind) => (
-                          <option key={kind} value={kind}>
-                            {kind.replace(/_/g, ' ')}
-                          </option>
-                        ))}
-                      </select>
+                      <>
+                        <input
+                          value={choice.name}
+                          aria-label={`Name for ${account.name}`}
+                          onChange={(event) =>
+                            setAccountChoices((current) => ({
+                              ...current,
+                              [account.name]: { ...choice, name: event.target.value },
+                            }))
+                          }
+                        />
+                        <KindSelect
+                          value={choice.kind}
+                          label={`Kind of account for ${account.name}`}
+                          onChange={(kind) =>
+                            setAccountChoices((current) => ({
+                              ...current,
+                              [account.name]: { ...choice, kind },
+                            }))
+                          }
+                        />
+                      </>
                     )}
                   </div>
                 );
               })}
-            </div>
 
+              {summary.needsDefaultAccount && (
+                <div className="map-row">
+                  <span className="map-name">
+                    <em>No account named</em>
+                    <span className="muted"> · {summary.rowsWithoutAccount}</span>
+                  </span>
+
+                  <select
+                    value={defaultAccount}
+                    aria-label="Where rows that name no account go"
+                    onChange={(event) => setDefaultAccount(event.target.value)}
+                  >
+                    {summary.accounts.length > 0 && (
+                      <optgroup label="In this export">
+                        {summary.accounts.map((account) => (
+                          <option key={account.name} value={`export:${account.name}`}>
+                            Same as {account.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {accounts.length > 0 && (
+                      <optgroup label="Already here">
+                        {accounts.map((account) => (
+                          <option key={account.id} value={`existing:${account.id}`}>
+                            {account.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <option value="create">A new account</option>
+                  </select>
+
+                  {defaultAccount === 'create' && (
+                    <>
+                      <input
+                        value={newDefault.name}
+                        aria-label="Name for the new account"
+                        onChange={(event) =>
+                          setNewDefault((current) => ({ ...current, name: event.target.value }))
+                        }
+                      />
+                      <KindSelect
+                        value={newDefault.kind}
+                        label="Kind of the new account"
+                        onChange={(kind) => setNewDefault((current) => ({ ...current, kind }))}
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
             {summary.needsDefaultAccount && (
-              <label className="field">
-                <span>Rows that name no account</span>
-                <select
-                  value={defaultAccountId}
-                  onChange={(event) => setDefaultAccountId(event.target.value)}
-                >
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <p className="muted footnote">
+                Rows the export records with no account still moved real money, so they need an
+                account to belong to.
+              </p>
             )}
           </section>
 
@@ -617,5 +719,29 @@ export default function MigrateScreen({
         </>
       )}
     </>
+  );
+}
+
+function KindSelect({
+  value,
+  label,
+  onChange,
+}: {
+  value: AccountKind;
+  label: string;
+  onChange: (kind: AccountKind) => void;
+}) {
+  return (
+    <select
+      value={value}
+      aria-label={label}
+      onChange={(event) => onChange(event.target.value as AccountKind)}
+    >
+      {ACCOUNT_KINDS.map((kind) => (
+        <option key={kind} value={kind}>
+          {kind.replace(/_/g, ' ')}
+        </option>
+      ))}
+    </select>
   );
 }

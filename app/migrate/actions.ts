@@ -69,6 +69,7 @@ export type PlanSummary = {
   willWrite: { transactions: number; lines: number; moves: number; transfers: number };
   unrepresentable: Unrepresentable[];
   needsDefaultAccount: boolean;
+  rowsWithoutAccount: number;
   warnings: string[];
 };
 
@@ -110,6 +111,7 @@ export async function planMigrationAction(
         // of them and says how many more there are.
         unrepresentable: plan.unrepresentable.slice(0, 200),
         needsDefaultAccount: plan.needsDefaultAccount,
+        rowsWithoutAccount: plan.rowsWithoutAccount,
         warnings: plan.warnings,
       },
     };

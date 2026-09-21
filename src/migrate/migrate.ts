@@ -128,6 +128,8 @@ export type MigrationPlan = {
   unrepresentable: Unrepresentable[];
   /** True when some rows name no account, so one has to be nominated for them. */
   needsDefaultAccount: boolean;
+  /** How many, so the screen can say what the choice affects. */
+  rowsWithoutAccount: number;
   warnings: string[];
   /** Which app the files were read as, so the commit reads them the same way. */
   from: MigrationSourceId;
@@ -379,6 +381,7 @@ export function planMigration(
     counts,
     unrepresentable,
     needsDefaultAccount: transactions.some((transaction) => !transaction.account),
+    rowsWithoutAccount: transactions.filter((transaction) => !transaction.account).length,
     warnings,
     from,
   };
@@ -537,8 +540,15 @@ export type MigrationMapping = {
   /** Keyed by the envelope name exactly as the export writes it. */
   envelopes: Record<string, EnvelopeChoice>;
   accounts: Record<string, AccountChoice>;
-  /** Where rows that name no account are recorded. Required when the plan says so. */
-  defaultAccountId?: string;
+  /**
+   * Where rows that name no account are recorded. Required when the plan says so.
+   *
+   * The same choice as any other account, not just an existing one: on a fresh
+   * install there are no existing ones, and asking for an id left that migration
+   * with no way to commit. A created account is matched by name like the others,
+   * so naming one the export also creates puts these rows in that same account.
+   */
+  defaultAccount?: AccountChoice;
 };
 
 export type MigrationResult = {
@@ -571,7 +581,7 @@ export async function commitMigration(
   mapping: MigrationMapping,
   meta: { filename?: string } = {},
 ): Promise<MigrationResult> {
-  if (plan.needsDefaultAccount && !mapping.defaultAccountId) {
+  if (plan.needsDefaultAccount && !mapping.defaultAccount) {
     throw new MigrationError(
       'Some rows name no account. Nominate one for them before committing.',
     );
@@ -599,7 +609,8 @@ export async function commitMigration(
       .values({
         source: 'goodbudget',
         filename: meta.filename ?? null,
-        accountId: mapping.defaultAccountId ?? null,
+        accountId:
+          mapping.defaultAccount?.action === 'existing' ? mapping.defaultAccount.accountId : null,
       })
       .returning({ id: importBatches.id });
     const batchId = batch!.id;
@@ -671,33 +682,42 @@ export async function commitMigration(
       existingAccounts.map((row) => [row.name.toLowerCase(), row.id]),
     );
 
-    for (const [name, choice] of Object.entries(mapping.accounts)) {
-      if (choice.action === 'existing') {
-        accountIds.set(name, choice.accountId);
-        continue;
-      }
+    const resolveAccount = async (choice: AccountChoice): Promise<string> => {
+      if (choice.action === 'existing') return choice.accountId;
 
       const already = accountsByName.get(choice.name.toLowerCase());
-      if (already) {
-        accountIds.set(name, already);
-        continue;
-      }
+      if (already) return already;
 
       const [created] = await tx
         .insert(accounts)
         .values({ name: choice.name, kind: choice.kind })
         .returning({ id: accounts.id });
-      accountIds.set(name, created!.id);
       accountsByName.set(choice.name.toLowerCase(), created!.id);
       accountsCreated += 1;
+      return created!.id;
+    };
+
+    for (const [name, choice] of Object.entries(mapping.accounts)) {
+      accountIds.set(name, await resolveAccount(choice));
+    }
+
+    // After the export's own accounts, so choosing one of those by name finds it.
+    const defaultAccountId = mapping.defaultAccount
+      ? await resolveAccount(mapping.defaultAccount)
+      : undefined;
+    if (defaultAccountId && mapping.defaultAccount?.action === 'create') {
+      await tx
+        .update(importBatches)
+        .set({ accountId: defaultAccountId })
+        .where(eq(importBatches.id, batchId));
     }
 
     const accountFor = (name: string | undefined): string => {
       if (!name) {
-        if (!mapping.defaultAccountId) {
+        if (!defaultAccountId) {
           throw new MigrationError('A row names no account and no default was nominated');
         }
-        return mapping.defaultAccountId;
+        return defaultAccountId;
       }
       const id = accountIds.get(name);
       if (!id) throw new MigrationError(`No account mapped for "${name}"`);
