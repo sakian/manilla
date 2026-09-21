@@ -40,14 +40,13 @@
  * server does both in one transaction.
  */
 
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useCallback, useMemo, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { FundingPlan } from '../src/budget/budget.ts';
 import type { ManagedGroup } from '../src/envelopes/manage.ts';
 import { Hint } from './Hint.tsx';
-import { Money } from './Money.tsx';
-import { Notices, type Notice } from './Notices.tsx';
+import { Money, Spend } from './Money.tsx';
 import { inputFromCents } from './amount.ts';
 import {
   archiveGroupAction,
@@ -80,18 +79,6 @@ export type MonthFigures = Record<
   }
 >;
 
-export type Headline = {
-  /** Transactions waiting in the review queue. */
-  waiting: number;
-  /** What is sitting in the income pool, unassigned to any envelope. */
-  unallocatedCents: number;
-  overspentCount: number;
-  /** FR-37: whether the two sides of the ledger still agree. */
-  invariantOk: boolean;
-  unexplainedCents: number;
-  unassignedCents: number;
-};
-
 function money(cents: number): string {
   const sign = cents < 0 ? '-' : '';
   const abs = Math.abs(cents);
@@ -104,16 +91,20 @@ export default function HomeScreen({
   groups,
   figures,
   monthLabel,
+  lastMonthLabel,
   month,
   funding,
-  headline,
+  notices,
 }: {
   groups: ManagedGroup[];
   figures: MonthFigures;
   monthLabel: string;
+  /** Short form of the month before this one, for the per-row history figure. */
+  lastMonthLabel: string;
   month: string;
   funding: FundingPlan;
-  headline: Headline;
+  /** The notices list, rendered on the server and slotted in under the heading. */
+  notices?: ReactNode;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -162,63 +153,6 @@ export default function HomeScreen({
    * counts it - so the queue gets an ordinary nudge, while a genuine mismatch is
    * the only thing here that means something is broken.
    */
-  const notices = useMemo<Notice[]>(() => {
-    const list: Notice[] = [];
-
-    // One line each. A notice is a thing to notice, not a paragraph about it -
-    // what to do about each of these is on the screen it links to, or in the
-    // button beside the thing itself.
-    if (!headline.invariantOk) {
-      list.push({
-        kind: 'bad',
-        text: (
-          <>
-            Envelopes and accounts disagree by <Money cents={headline.unexplainedCents} plain />
-          </>
-        ),
-      });
-    }
-
-    if (headline.unallocatedCents < 0) {
-      list.push({
-        kind: 'bad',
-        text: (
-          <>
-            Available overdrawn by <Money cents={-headline.unallocatedCents} plain />
-          </>
-        ),
-      });
-    }
-
-    if (headline.overspentCount > 0) {
-      list.push({
-        kind: 'warn',
-        text: `${headline.overspentCount} envelope${headline.overspentCount === 1 ? '' : 's'} overspent`,
-      });
-    }
-
-    if (headline.waiting > 0) {
-      list.push({
-        kind: 'info',
-        href: '/review',
-        text: `${headline.waiting} to review`,
-      });
-    }
-
-    if (headline.unallocatedCents > 0) {
-      list.push({
-        kind: 'info',
-        text: (
-          <>
-            <Money cents={headline.unallocatedCents} plain /> in Available
-          </>
-        ),
-      });
-    }
-
-    return list;
-  }, [headline]);
-
   /** Where an envelope can be moved to. Archived groups are not a destination. */
   const liveGroups = useMemo(
     () => live.map((group) => ({ id: group.id, name: group.name })),
@@ -284,7 +218,8 @@ export default function HomeScreen({
               Balances carry over month to month. Planned and spent are for {monthLabel}; the
               balance is everything that has ever happened to the envelope. Edit lets you rename,
               regroup, archive and set planned amounts; groups can be reordered there too, while
-              envelopes stay alphabetical.
+              envelopes stay alphabetical. Editing also shows what each envelope has actually cost -
+              averaged over a year, and last month - which is the context a planned figure needs.
             </Hint>
           </h2>
           <div className="head-actions">
@@ -311,6 +246,12 @@ export default function HomeScreen({
             >
               Fund
             </button>
+            {/* A link styled as one of these buttons: importing is a page, not a
+                dialog, and it is here as well as on Accounts because a monthly
+                statement is the most common reason to open the app at all. */}
+            <Link href="/import" className="button-link head-button">
+              Import
+            </Link>
             <button
               onClick={() => setEditing(!editing)}
               disabled={pending}
@@ -324,7 +265,7 @@ export default function HomeScreen({
 
       </div>
 
-      <Notices notices={notices} />
+      {notices}
 
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
@@ -420,27 +361,33 @@ export default function HomeScreen({
 
                   <span className="envelope-figures muted">
                     {editing && !envelope.isUnallocated ? (
-                      <label className="planned-edit">
-                        <span className="figure-label">plan</span>
-                        <input
-                          className="amount"
-                          inputMode="decimal"
-                          aria-label={`Planned each month for ${envelope.name}`}
-                          defaultValue={inputFromCents(figure?.plannedCents ?? 0)}
-                          onBlur={(event) => savePlanned(envelope.id, figure, event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') event.currentTarget.blur();
-                          }}
-                        />
-                      </label>
+                      <>
+                        <label className="planned-edit">
+                          <span className="figure-label">plan</span>
+                          <input
+                            className="amount"
+                            inputMode="decimal"
+                            aria-label={`Planned each month for ${envelope.name}`}
+                            defaultValue={inputFromCents(figure?.plannedCents ?? 0)}
+                            onBlur={(event) => savePlanned(envelope.id, figure, event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') event.currentTarget.blur();
+                            }}
+                          />
+                        </label>
+                        {/* What the envelope actually costs, beside the box where
+                            you decide what it should get. This is what the budget
+                            screen was for; a planned figure with no history next
+                            to it is a guess. */}
+                        <Spend cents={figure?.averageSpentCents ?? 0} label="avg/mo" />
+                        <Spend cents={figure?.lastMonthSpentCents ?? 0} label={lastMonthLabel} />
+                      </>
                     ) : figure ? (
                       <>
                         <span className="figure">
                           <span className="figure-label">planned</span> {money(figure.plannedCents)}
                         </span>
-                        <span className="figure">
-                          <span className="figure-label">spent</span> {money(figure.spentCents)}
-                        </span>
+                        <Spend cents={figure.spentCents} />
                       </>
                     ) : (
                       'archived group'

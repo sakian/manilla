@@ -8,9 +8,11 @@ import {
   isEmptyQuery,
   searchTransactions,
 } from '../../src/transactions/search.ts';
+import { attention } from '../../src/notices/notices.ts';
 import { requireUser } from '../auth.ts';
 import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
+import { Notices } from '../Notices.tsx';
 import { PAGE_SIZE, readForm, readPage, readQuery, withParams } from '../search/urlQuery.ts';
 import TransactionFilters from '../transactions/TransactionFilters.tsx';
 import TransactionList from '../transactions/TransactionList.tsx';
@@ -48,10 +50,11 @@ export default async function AccountsPage(props: {
   });
   const page = readPage(params);
 
-  const [found, choices, envelopes] = await Promise.all([
+  const [found, choices, envelopes, report] = await Promise.all([
     searchTransactions(connection, query),
     filterChoices(connection),
     transferOptions(connection),
+    attention(connection),
   ]);
 
   const accountNames = new Map(choices.accounts.map((account) => [account.id, account.name]));
@@ -66,6 +69,7 @@ export default async function AccountsPage(props: {
   return (
     <>
       <div className="page-head">
+        <div className="month-head">
         <h2>
           Accounts{' '}
           <Hint label="What this screen shows">
@@ -74,7 +78,15 @@ export default async function AccountsPage(props: {
             showing.
           </Hint>
         </h2>
+          <div className="head-actions">
+            <Link href="/import" className="button-link head-button">
+              Import a statement
+            </Link>
+          </div>
+        </div>
       </div>
+
+      <Notices report={report} />
 
       <AccountManager accounts={managed} selectedId={selected?.id ?? null} />
 

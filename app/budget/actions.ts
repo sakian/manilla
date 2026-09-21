@@ -26,12 +26,9 @@ function failed(error: unknown): { ok: false; error: string } {
   return { ok: false, error: error instanceof Error ? error.message : String(error) };
 }
 
-/** Everything the budget touches shows up on the dashboard too. */
-function refreshed(month?: string): void {
-  revalidatePath('/budget');
-  revalidatePath('/envelopes');
+/** Plans and allocations are read on the envelopes screen, which is home. */
+function refreshed(): void {
   revalidatePath('/');
-  if (month) revalidatePath(`/budget?month=${month}`);
 }
 
 export async function setPlannedAction(
@@ -43,7 +40,7 @@ export async function setPlannedAction(
     await requireUser();
     const cents = centsFromInput(amount);
     await setPlanned(db(), envelopeId, cents, month ? { month: assertMonth(month) } : {});
-    refreshed(month);
+    refreshed();
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -81,7 +78,7 @@ export async function fundEnvelopesAction(
     }
 
     const result = await fundEnvelopes(db(), assertMonth(month), amounts);
-    refreshed(month);
+    refreshed();
 
     const total = (result.totalCents / 100).toFixed(2);
     return {
@@ -101,7 +98,7 @@ export async function reverseAllocationAction(moveId: string, month: string): Pr
   try {
     await requireUser();
     await reverseAllocation(db(), moveId);
-    refreshed(month);
+    refreshed();
     return { ok: true, message: 'Sent back to Available.' };
   } catch (error) {
     return failed(error);

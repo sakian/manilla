@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { db } from '../../db/client.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
@@ -50,6 +51,23 @@ export default async function SettingsPage() {
           .
         </p>
       </div>
+
+      {/* Migration happens once, so it does not need a place in the navigation -
+          but it does need to be findable a second time, which is what a settings
+          screen is for. */}
+      <section className="panel">
+        <div className="panel-head">
+          <h3>Bring in a history</h3>
+          <Link href="/migrate" className="button-link">
+            Open the migration
+          </Link>
+        </div>
+        <p className="muted">
+          A multi-year export from another envelope budgeting app: its envelopes, splits, income and
+          transfers. Nothing is written until you have seen what it would do, and the whole thing can
+          be undone in one step.
+        </p>
+      </section>
 
       <DataPanel
         counts={{

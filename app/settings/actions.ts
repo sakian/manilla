@@ -126,8 +126,7 @@ export async function eraseEverythingAction(
     revalidatePath('/');
     revalidatePath('/accounts');
     revalidatePath('/envelopes');
-    revalidatePath('/budget');
-    return { ok: true, removed };
+      return { ok: true, removed };
   } catch (error) {
     return failed(error);
   }

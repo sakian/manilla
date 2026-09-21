@@ -37,7 +37,6 @@ function refreshed(): void {
   revalidatePath('/migrate');
   revalidatePath('/envelopes');
   revalidatePath('/accounts');
-  revalidatePath('/budget');
   revalidatePath('/');
 }
 

@@ -44,13 +44,26 @@ URL so a search can be bookmarked and downloaded as the CSV of exactly what is
 on screen. It lives on the screens that list transactions rather than on a page
 of its own - the account view with no account picked is every transaction.
 
-The screens then went through a usability pass. The dashboard and the envelope
-list were one column of balances shown twice, so they are one screen: two lines
-per envelope (name with its balance, then plan and spend), the whole card a link
-into it, and renaming, archiving, regrouping and planned amounts behind an Edit
-button. Envelopes are alphabetical inside their group and groups keep a manual
-order — dozens of one are scanned, a handful of the other are read as a shape.
-Accounts are their own tab.
+The screens then went through a usability pass. There are three places —
+envelopes, accounts, reports — because seven did not fit across a phone and most
+of them were not destinations: importing is a button where the statements go, the
+review queue is reached from the notice saying there is something to review, and
+migrating lives in Settings because it happens once. The budget screen went
+altogether: it edited the same standing plan the envelopes screen edits, so what
+was worth keeping — what each envelope actually costs, averaged over a year and
+last month — moved next to the box where the plan is set.
+
+The dashboard and the envelope list were one column of balances shown twice, so
+they are one screen: two lines per envelope (name with its balance, then plan and
+spend), the whole card a link into it, and renaming, archiving, regrouping and
+planned amounts behind an Edit button. Envelopes are alphabetical inside their
+group and groups keep a manual order — dozens of one are scanned, a handful of the
+other are read as a shape.
+
+What needs attention is one ranked list, read once on the server and shown on
+every main screen: a ledger that does not add up, an overdrawn pool, overspent
+envelopes, a plan beyond the income to fund it, transactions to review. A quiet
+screen shows nothing at all.
 
 Moving money is one dialog, beside the envelopes being filled: every envelope is
 listed whether it has a plan or not, amounts can be added or given as a target
@@ -70,8 +83,9 @@ Still outstanding: CSV import with a column-mapping step (FR-8), period
 comparisons and income-against-spending (RP-3, RP-4), progress bars and a pace
 marker on the dashboard (VW-1, VW-2), a balance-over-time chart on an envelope
 (VW-4), reconciliation of an account against a statement (FR-6), and per-month
-budget overrides in the UI (FR-32, which the data model and the reads already
-support).
+budget overrides (FR-32, which the data model and the reads support but which no
+screen now writes — the month navigation that could have gone with them went with
+the budget screen).
 
 ## What Phase 0 measured
 
@@ -124,7 +138,7 @@ app/                    the web app (Next.js App Router)
   Notices.tsx           one ranked list of what is wrong or worth knowing
   Hint.tsx              screen explanations, behind a marker rather than always on
   review/               the review queue, keyboard-driven (RQ-1 to RQ-5)
-  budget/               the monthly plan against what each envelope costs (FR-27, FR-31, FR-32)
+  budget/               funding envelopes out of Available, and the plan's writes (FR-27 to FR-31)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
   migrate/              the migration wizard (MG-1 to MG-7)
   reports/              spending by envelope, month by month, with CSV (RP-1 to RP-6)
@@ -148,6 +162,7 @@ src/
   queue/queue.ts        the review queue's reads and writes
   budget/               months, the plan, funding and reversal
   migrate/migrate.ts    a loaded export, written as transactions (MG-1 to MG-7)
+  notices/notices.ts    what needs attention, as data, for every screen to show (VW-3)
   reports/reports.ts    spending read from envelope lines, so RP-5 holds by construction
   ai/ai.ts              the off switch, budget, merchant cache and accuracy measure (NF-5)
   export/export.ts      the whole ledger as JSON or CSV (NF-6)

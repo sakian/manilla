@@ -14,7 +14,7 @@
  * existing row so the next import recognises it (MG-9).
  */
 
-import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -74,9 +74,12 @@ function defaultDecision(row: PreviewRow): Decision {
 export default function ImportScreen({
   accounts,
   history,
+  notices,
 }: {
   accounts: { id: string; name: string; externalAccountId: string | null }[];
   history: ImportRecord[];
+  /** What needs attention, so what an import just created is reachable from here. */
+  notices?: ReactNode;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -191,8 +194,7 @@ export default function ImportScreen({
       setNote(
         `Imported ${result.added} ${result.added === 1 ? 'transaction' : 'transactions'}` +
           (result.linked > 0 ? `, linked ${result.linked}` : '') +
-          (result.skipped > 0 ? `, skipped ${result.skipped}` : '') +
-          '. They are waiting in the review queue.',
+          (result.skipped > 0 ? `, skipped ${result.skipped}` : '') + '.',
       );
       reset();
       router.refresh();
@@ -233,6 +235,8 @@ export default function ImportScreen({
           do.
         </p>
       </div>
+
+      {notices}
 
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}

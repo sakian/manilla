@@ -101,7 +101,9 @@ a {
 
 .nav {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
   font-size: 14px;
 }
 
@@ -1500,6 +1502,13 @@ details[open] > summary > .group-summary::before {
   display: inline;
 }
 
+/* A month that ran backwards - refunds beyond spending - reads as received, and
+   is tinted so it is obvious before the word is read. */
+.figure.received .figure-label,
+.figure.received .money {
+  color: var(--positive);
+}
+
 .envelope-figures .figure + .figure::before {
   content: '·';
   margin: 0 6px 0 2px;
@@ -1859,4 +1868,16 @@ details[open] > summary > .group-summary::before {
 
 .notice.bad .money {
   color: inherit;
+}
+
+/* A month that ran backwards, on the envelope's own page. */
+.callout.received {
+  color: var(--positive);
+  border-color: var(--positive);
+}
+
+/* A link wearing one of the head-row buttons. */
+.head-button {
+  font-size: 14px;
+  padding: 6px 12px;
 }

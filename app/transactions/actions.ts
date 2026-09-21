@@ -33,7 +33,6 @@ function failed(error: unknown): { ok: false; error: string } {
 function refreshed(): void {
   revalidatePath('/accounts');
   revalidatePath('/envelopes');
-  revalidatePath('/budget');
   revalidatePath('/review');
   revalidatePath('/');
 }

@@ -22,14 +22,18 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <h1 className="wordmark">Manilla</h1>
             {session && (
               <>
+                {/*
+                  Three places. Seven did not fit across a phone - the bar had no
+                  wrap, so it pushed every page sideways - and most of them were
+                  not destinations anyway. Import is a button where the statements
+                  go, Review is reached from the notice that says there is
+                  something to review, and Migrate lives in Settings because it
+                  happens once.
+                */}
                 <nav className="nav">
                   <Link href="/">Envelopes</Link>
-                  <Link href="/import">Import</Link>
-                  <Link href="/review">Review</Link>
-                  <Link href="/budget">Budget</Link>
                   <Link href="/accounts">Accounts</Link>
                   <Link href="/reports">Reports</Link>
-                  <Link href="/migrate">Migrate</Link>
                 </nav>
                 <form action={signOutAction} className="topbar-end">
                   <Link href="/settings" className="muted">

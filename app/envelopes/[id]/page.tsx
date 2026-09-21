@@ -52,8 +52,10 @@ export default async function EnvelopePage(props: { params: Promise<{ id: string
         <div className="callout">
           Allocated in {monthLabel(month)} <strong>{<Money cents={envelope.allocatedCents} plain />}</strong>
         </div>
-        <div className="callout">
-          Spent in {monthLabel(month)} <strong>{<Money cents={envelope.spentCents} plain />}</strong>
+        <div className={`callout${envelope.spentCents < 0 ? ' received' : ''}`}>
+          {envelope.spentCents < 0 ? 'Received in ' : 'Spent in '}
+          {monthLabel(month)}{' '}
+          <strong>{<Money cents={Math.abs(envelope.spentCents)} plain />}</strong>
         </div>
       </div>
 

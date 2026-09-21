@@ -35,7 +35,6 @@ function failed(error: unknown): { ok: false; error: string } {
 
 function refreshed(envelopeId?: string): void {
   revalidatePath('/envelopes');
-  revalidatePath('/budget');
   revalidatePath('/');
   if (envelopeId) revalidatePath(`/envelopes/${envelopeId}`);
 }
