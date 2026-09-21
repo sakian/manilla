@@ -734,3 +734,55 @@ export async function balanceCheckpoints(
     return checkpoint;
   });
 }
+
+export type StatementMismatch = {
+  accountId: string;
+  accountName: string;
+  asOf: string;
+  /** Ledger less bank, on the day of the account's latest statement. */
+  differenceCents: number;
+};
+
+/**
+ * Live accounts whose latest statement disagrees with the ledger on its day.
+ *
+ * Only the latest: an old gap that has since closed is history, and the account's
+ * own list shows every checkpoint. One query for every account, since this runs
+ * with the notices on every main screen.
+ */
+export async function statementMismatches(db: Database): Promise<StatementMismatch[]> {
+  const rows = await db.execute<{
+    account_id: string;
+    name: string;
+    as_of: string;
+    stated: string;
+    ledger: string;
+  }>(sql`
+    select latest.account_id, latest.name, latest.as_of, latest.stated,
+      coalesce((
+        select sum(t.amount_cents) from transactions t
+        where t.account_id = latest.account_id and t.date <= latest.as_of::date
+      ), 0) as ledger
+    from (
+      select distinct on (b.account_id)
+        b.account_id, a.name, b.stated_balance_as_of::text as as_of,
+        b.stated_balance_cents as stated
+      from import_batches b
+      join accounts a on a.id = b.account_id
+      where b.stated_balance_cents is not null
+        and b.stated_balance_as_of is not null
+        and a.archived_at is null
+      order by b.account_id, b.stated_balance_as_of desc, b.created_at desc
+    ) latest
+  `);
+
+  return rows
+    .map((row) => ({
+      accountId: row.account_id,
+      accountName: row.name,
+      asOf: row.as_of,
+      differenceCents: Number(row.ledger) - Number(row.stated),
+    }))
+    .filter((row) => row.differenceCents !== 0)
+    .sort((left, right) => left.accountName.localeCompare(right.accountName));
+}

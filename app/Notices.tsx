@@ -41,6 +41,18 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
       };
     case 'envelopes_overspent':
       return { text: `${count} envelope${count === 1 ? '' : 's'} overspent` };
+    case 'statement_mismatch':
+      return notice.account
+        ? {
+            text: (
+              <>
+                {notice.account.name} is <Money cents={Math.abs(cents)} plain />{' '}
+                {cents > 0 ? 'over' : 'under'} its last statement
+              </>
+            ),
+            href: `/transactions?account=${notice.account.id}`,
+          }
+        : { text: `${count} accounts disagree with their last statement`, href: '/accounts' };
     case 'awaiting_review':
       return { text: `${count} to review`, href: '/review' };
     case 'unallocated':

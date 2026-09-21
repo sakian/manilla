@@ -18,6 +18,7 @@ import { budgetLines, envelopes } from '../../db/schema.ts';
 import { checkInvariant } from '../ledger/ledger.ts';
 import { pendingCount } from '../queue/queue.ts';
 import { ruleSuggestionCount } from '../rules/rules.ts';
+import { statementMismatches } from '../import/ofxImport.ts';
 
 export type AttentionKind =
   /** The two sides of the ledger disagree, which should be impossible (FR-37). */
@@ -26,6 +27,8 @@ export type AttentionKind =
   | 'pool_overdrawn'
   /** At least one envelope has spent past what it holds. */
   | 'envelopes_overspent'
+  /** FR-14: an account's latest statement states a balance the ledger does not reach. */
+  | 'statement_mismatch'
   /** Imported transactions are waiting to be categorized (RQ-1). */
   | 'awaiting_review'
   /** Income has arrived and is not in an envelope yet. */
@@ -50,6 +53,8 @@ export type Attention = {
   /** A second figure, where the notice compares two: planned against income. */
   againstCents?: number;
   count?: number;
+  /** The one account a notice is about, so it can lead straight there. */
+  account?: { id: string; name: string };
 };
 
 export type AttentionReport = {
@@ -110,7 +115,7 @@ export async function attention(
   db: Database,
   month: MonthKey = currentMonth(),
 ): Promise<AttentionReport> {
-  const [balances, invariant, waiting, received, expected, average, suggestions] =
+  const [balances, invariant, waiting, received, expected, average, suggestions, mismatched] =
     await Promise.all([
       balancesForNotices(db, month),
       checkInvariant(db),
@@ -119,6 +124,7 @@ export async function attention(
       getExpectedIncome(db),
       suggestExpectedIncome(db, month),
       ruleSuggestionCount(db),
+      statementMismatches(db),
     ]);
 
   const notices: Attention[] = [];
@@ -138,6 +144,21 @@ export async function attention(
 
   if (overspent > 0) {
     notices.push({ kind: 'envelopes_overspent', severity: 'warn', count: overspent });
+  }
+
+  // A warning, not a fault: the ledger still agrees with itself. It disagrees
+  // with the bank, which usually means a missing or doubled transaction, and the
+  // account's list shows between which two statements it happened.
+  if (mismatched.length === 1) {
+    const [only] = mismatched;
+    notices.push({
+      kind: 'statement_mismatch',
+      severity: 'warn',
+      cents: only!.differenceCents,
+      account: { id: only!.accountId, name: only!.accountName },
+    });
+  } else if (mismatched.length > 1) {
+    notices.push({ kind: 'statement_mismatch', severity: 'warn', count: mismatched.length });
   }
 
   // The warning the budget screen used to carry. It belongs with the others now

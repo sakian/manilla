@@ -147,6 +147,46 @@ describe(
       assert.equal(report.notices[0]!.severity, 'bad');
     });
 
+    test('an account its last statement disagrees with is named, and leads to it', async () => {
+      const { importBatches } = await import('../../db/schema.ts');
+      const statement = (account: string, asOf: string, statedCents: number) =>
+        db.insert(importBatches).values({
+          source: 'file_import',
+          accountId: account,
+          statedBalanceCents: statedCents,
+          statedBalanceAsOf: asOf,
+        });
+      await recordTransaction(db, {
+        accountId,
+        date: '2026-09-01',
+        amountCents: 50000,
+        payeeRaw: 'PAYROLL',
+        source: 'file_import',
+      });
+
+      // Agrees: nothing to say.
+      await statement(accountId, '2026-09-02', 50000);
+      assert.ok(!(await kinds()).includes('statement_mismatch'));
+
+      // A later statement says $10 more than the ledger reaches.
+      await statement(accountId, '2026-09-10', 51000);
+      let notice = (await attention(db, '2026-09')).notices.find(
+        (item) => item.kind === 'statement_mismatch',
+      );
+      assert.equal(notice?.severity, 'warn');
+      assert.equal(notice?.cents, -1000, 'the ledger is short of the bank');
+      assert.deepEqual(notice?.account, { id: accountId, name: 'Chequing' });
+
+      // A second account off too: one line for both, not a line each.
+      const visa = await openAccount(db, { name: 'Visa', kind: 'credit_card' });
+      await statement(visa, '2026-09-10', -2500);
+      notice = (await attention(db, '2026-09')).notices.find(
+        (item) => item.kind === 'statement_mismatch',
+      );
+      assert.equal(notice?.count, 2);
+      assert.equal(notice?.account, undefined);
+    });
+
     test('rules worth suggesting are read from the count, not searched for', async () => {
       const { RULE_SUGGESTION_MINIMUM, refreshRuleSuggestionCount } = await import(
         '../rules/rules.ts'
