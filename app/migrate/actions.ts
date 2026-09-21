@@ -106,13 +106,27 @@ function fillCoverage(plan: ReturnType<typeof planMigration>) {
   };
 }
 
+/**
+ * The files the wizard sent, as text. They come as uploads rather than as
+ * strings in an array, which React caps at a million characters in all.
+ */
+async function readUpload(upload: FormData): Promise<{ texts: string[]; names: string[] }> {
+  const files = upload.getAll('file').filter((entry): entry is File => entry instanceof File);
+  if (files.length === 0) throw new Error('No files arrived.');
+  return {
+    texts: await Promise.all(files.map((file) => file.text())),
+    names: files.map((file) => file.name),
+  };
+}
+
 export async function planMigrationAction(
-  files: string[],
+  upload: FormData,
   from: string,
 ): Promise<{ ok: true; summary: PlanSummary } | Failure> {
   try {
     await requireUser();
-    const plan = planMigration(files, { from: sourceFrom(from) });
+    const { texts } = await readUpload(upload);
+    const plan = planMigration(texts, { from: sourceFrom(from) });
 
     return {
       ok: true,
@@ -147,10 +161,9 @@ export async function planMigrationAction(
 }
 
 export async function commitMigrationAction(
-  files: string[],
+  upload: FormData,
   mapping: MigrationMapping,
   from: string,
-  meta: { filename?: string } = {},
 ): Promise<
   | {
       ok: true;
@@ -168,8 +181,9 @@ export async function commitMigrationAction(
   try {
     await requireUser();
     const connection = db();
-    const plan = planMigration(files, { from: sourceFrom(from) });
-    const result = await commitMigration(connection, plan, mapping, meta);
+    const { texts, names } = await readUpload(upload);
+    const plan = planMigration(texts, { from: sourceFrom(from) });
+    const result = await commitMigration(connection, plan, mapping, { filename: names.join(', ') });
     refreshed();
     await countedAgain(connection);
     return { ok: true, ...result };

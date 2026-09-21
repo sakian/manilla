@@ -63,6 +63,18 @@ function defaultAccountChoice(
   return name ? { action: 'create', name, kind: created.kind } : null;
 }
 
+/**
+ * The files as files, not as their text. Sent as an array of strings, the text
+ * counted against React's ceiling of a million characters inside any one array
+ * argument - which a full export and a handful of category exports passed, and
+ * one long export would pass alone.
+ */
+function uploadOf(files: File[]): FormData {
+  const upload = new FormData();
+  for (const file of files) upload.append('file', file);
+  return upload;
+}
+
 /** `Vehicle:Gas` becomes group "Vehicle", name "Gas". */
 function splitName(full: string): { group: string; name: string } {
   const at = full.indexOf(':');
@@ -95,7 +107,7 @@ export default function MigrateScreen({
    * and a reader, not a pass over every string on screen.
    */
   const [from, setFrom] = useState<MigrationSourceId>(DEFAULT_SOURCE);
-  const [files, setFiles] = useState<{ name: string; text: string }[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [summary, setSummary] = useState<PlanSummary | null>(null);
 
   const [envelopeChoices, setEnvelopeChoices] = useState<Record<string, EnvelopeChoice>>({});
@@ -127,14 +139,12 @@ export default function MigrateScreen({
 
   const readFiles = useCallback(
     async (chosen: FileList) => {
-      const read = await Promise.all(
-        [...chosen].map(async (file) => ({ name: file.name, text: await file.text() })),
-      );
+      const read = [...chosen];
       setFiles(read);
       setError(null);
 
       startTransition(async () => {
-        const planned = await planMigrationAction(read.map((file) => file.text), from);
+        const planned = await planMigrationAction(uploadOf(read), from);
         if (!planned.ok) {
           setError(planned.error);
           return;
@@ -202,12 +212,7 @@ export default function MigrateScreen({
     }
 
     startTransition(async () => {
-      const committed = await commitMigrationAction(
-        files.map((file) => file.text),
-        mapping,
-        from,
-        { filename: files.map((file) => file.name).join(', ') },
-      );
+      const committed = await commitMigrationAction(uploadOf(files), mapping, from);
       if (!committed.ok) {
         setError(committed.error);
         return;
