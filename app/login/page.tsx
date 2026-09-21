@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { db } from '../../db/client.ts';
 import { authConfig, isSecureOrigin } from '../../src/auth/config.ts';
@@ -27,7 +28,15 @@ export default async function LoginPage(props: {
   // Already signed in: nothing to do here. This is the authoritative check, which
   // is why the proxy does not make it - a cookie that only looks like a session
   // would send the browser round in circles.
-  if (await currentSession()) redirect(safeNext(searchParams.next));
+  //
+  // Except in the re-render that follows this page's own sign-in actions. Setting
+  // the session cookie makes Next render the page again in the same response, and
+  // redirecting there took setup straight past the recovery codes - shown once,
+  // never again - and sent a recovery-code sign-in to `next` rather than to
+  // Settings to replace the code it spent. Each of those actions navigates on the
+  // client when it is ready, so the page just stays put.
+  const rerenderAfterAction = (await headers()).has('next-action');
+  if (!rerenderAfterAction && (await currentSession())) redirect(safeNext(searchParams.next));
 
   const state = await setupState(db());
 
