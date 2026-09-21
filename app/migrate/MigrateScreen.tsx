@@ -252,6 +252,14 @@ export default function MigrateScreen({
               ))}
             </select>
           </label>
+          {/* Under the list it explains. Below the file picker it was pulled up
+              into the input by .footnote's negative margin. */}
+          {MIGRATION_SOURCES.length === 1 && (
+            <p className="muted footnote">
+              One app so far. Another would need a reader for its own row shape, not just a name in
+              this list — so it is a real piece of work rather than a setting.
+            </p>
+          )}
 
           <p className="muted">
             {migrationSource(from).hint} Rows that appear in more than one file are recognised and
@@ -270,12 +278,6 @@ export default function MigrateScreen({
           />
           {pending && <p className="muted">Reading…</p>}
 
-          {MIGRATION_SOURCES.length === 1 && (
-            <p className="muted footnote">
-              One app so far. Another would need a reader for its own row shape, not just a name in
-              this list — so it is a real piece of work rather than a setting.
-            </p>
-          )}
         </section>
       )}
 
