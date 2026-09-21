@@ -39,7 +39,9 @@ export type TransferRule = {
 export type ListedRule = {
   id: string;
   contains: string;
-  outcome: { kind: 'envelope'; name: string } | { kind: 'transfer'; name: string };
+  outcome:
+    | { kind: 'envelope'; name: string; envelopeId: string }
+    | { kind: 'transfer'; name: string; accountId: string };
   minCents: number | null;
   maxCents: number | null;
   onlyAccountName: string | null;
@@ -52,6 +54,7 @@ export async function listRules(db: Database): Promise<ListedRule[]> {
       id: rules.id,
       contains: rules.contains,
       envelopeName: envelopes.name,
+      envelopeId: rules.envelopeId,
       minCents: rules.minCents,
       maxCents: rules.maxCents,
       createdAt: rules.createdAt,
@@ -74,8 +77,13 @@ export async function listRules(db: Database): Promise<ListedRule[]> {
       ? {
           kind: 'transfer' as const,
           name: accountNames.get(row.transferAccountId) ?? 'another account',
+          accountId: row.transferAccountId,
         }
-      : { kind: 'envelope' as const, name: row.envelopeName ?? 'an envelope' },
+      : {
+          kind: 'envelope' as const,
+          name: row.envelopeName ?? 'an envelope',
+          envelopeId: row.envelopeId!,
+        },
     minCents: row.minCents === null ? null : Number(row.minCents),
     maxCents: row.maxCents === null ? null : Number(row.maxCents),
     onlyAccountName: row.accountId ? (accountNames.get(row.accountId) ?? null) : null,
@@ -202,6 +210,86 @@ export async function createTransferRule(
   return created!.id;
 }
 
+export type RuleEdit = {
+  contains: string;
+  /** The envelope for an envelope rule, the account for a transfer rule. */
+  targetId: string;
+  minCents: number | null;
+  maxCents: number | null;
+};
+
+/**
+ * Change what a rule matches and where it sends it.
+ *
+ * A rule keeps its kind. Turning "this is spending in Gas" into "this is a
+ * transfer to Visa" is a different statement about the money, and deleting one
+ * and making the other says so more plainly than an edit that flips it.
+ *
+ * Nothing already recorded changes: rules are consulted when a transaction
+ * arrives, and an edit is a new instruction, not a correction of history.
+ */
+export async function updateRule(db: Database, ruleId: string, edit: RuleEdit): Promise<void> {
+  const [rule] = await db
+    .select({ envelopeId: rules.envelopeId, transferAccountId: rules.transferAccountId })
+    .from(rules)
+    .where(eq(rules.id, ruleId))
+    .limit(1);
+  if (!rule) throw new RuleError('That rule no longer exists.');
+
+  const contains = edit.contains.trim().toUpperCase();
+  if (contains.length < 3) {
+    throw new RuleError(
+      'A rule needs at least three characters to match on, or it will catch things it should not.',
+    );
+  }
+
+  for (const [label, value] of [
+    ['smallest', edit.minCents],
+    ['largest', edit.maxCents],
+  ] as const) {
+    if (value !== null && (!Number.isSafeInteger(value) || value < 0)) {
+      throw new RuleError(`The ${label} amount has to be zero or more.`);
+    }
+  }
+  if (edit.minCents !== null && edit.maxCents !== null && edit.minCents > edit.maxCents) {
+    throw new RuleError('The smallest amount is larger than the largest, so nothing would match.');
+  }
+
+  if (rule.envelopeId !== null) {
+    const [envelope] = await db
+      .select({ archivedAt: envelopes.archivedAt })
+      .from(envelopes)
+      .where(eq(envelopes.id, edit.targetId))
+      .limit(1);
+    if (!envelope) throw new RuleError('No such envelope.');
+    if (envelope.archivedAt !== null) {
+      throw new RuleError('That envelope is archived, so nothing should be sent to it.');
+    }
+  } else {
+    const [account] = await db
+      .select({ archivedAt: accounts.archivedAt })
+      .from(accounts)
+      .where(eq(accounts.id, edit.targetId))
+      .limit(1);
+    if (!account) throw new RuleError('No such account.');
+    if (account.archivedAt !== null) {
+      throw new RuleError('That account is archived, so nothing should be transferred to it.');
+    }
+  }
+
+  await db
+    .update(rules)
+    .set({
+      contains,
+      ...(rule.envelopeId !== null
+        ? { envelopeId: edit.targetId }
+        : { transferAccountId: edit.targetId }),
+      minCents: edit.minCents,
+      maxCents: edit.maxCents,
+    })
+    .where(eq(rules.id, ruleId));
+}
+
 export async function deleteRule(db: Database, ruleId: string): Promise<void> {
   await db.delete(rules).where(eq(rules.id, ruleId));
 }
@@ -278,6 +366,22 @@ export async function dismissedRuleSuggestions(db: Database): Promise<string[]> 
     // A setting nobody can read is a setting that has nothing to say.
     return [];
   }
+}
+
+/**
+ * Take back a "no", so the payee can be suggested again when it qualifies.
+ * Declining sticks on purpose, which is also why there has to be a way to
+ * change your mind.
+ */
+export async function undismissRuleSuggestion(db: Database, contains: string): Promise<void> {
+  const already = await dismissedRuleSuggestions(db);
+  if (!already.includes(contains)) return;
+
+  const value = JSON.stringify(already.filter((item) => item !== contains));
+  await db
+    .update(appSettings)
+    .set({ value, updatedAt: new Date() })
+    .where(eq(appSettings.key, DISMISSED_KEY));
 }
 
 export async function dismissRuleSuggestion(db: Database, contains: string): Promise<void> {
@@ -384,6 +488,23 @@ export async function ruleSuggestionCount(db: Database): Promise<number> {
 
 /** Recount and store it. Called from wherever the answer could have changed. */
 export async function refreshRuleSuggestionCount(db: Database): Promise<number> {
+  return (await suggestAndCount(db)).total;
+}
+
+/**
+ * The suggestions to show, and how many there are in all - storing that count
+ * as it goes.
+ *
+ * The settings page runs the search anyway, so it saves what it found. Relying
+ * on the actions alone left the count stale whenever the answer changed without
+ * one: raising the threshold kept "24 rules Manilla could write" on every screen
+ * while the page it led to had nothing to show, and nothing on that page to
+ * press that would recount.
+ */
+export async function suggestAndCount(
+  db: Database,
+  options: { limit?: number } = {},
+): Promise<{ suggestions: SuggestedRule[]; total: number }> {
   const found = await suggestedRules(db, { limit: SUGGESTION_COUNT_CAP });
   const value = String(found.length);
 
@@ -395,7 +516,7 @@ export async function refreshRuleSuggestionCount(db: Database): Promise<number> 
       set: { value, updatedAt: new Date() },
     });
 
-  return found.length;
+  return { suggestions: found.slice(0, options.limit ?? 20), total: found.length };
 }
 
 /** Accept one suggestion, which is the only way a rule gets written (CA-2). */

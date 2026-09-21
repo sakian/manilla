@@ -45,6 +45,17 @@ async function migrateIfNeeded(production: boolean): Promise<void> {
     const { ensureIncomePool } = await import('./src/ledger/ledger.ts');
     await ensureIncomePool(db);
     console.log('[manilla] database is up to schema');
+
+    // The count behind "N rules Manilla could write" is stored, and a deploy
+    // can change the answer without any action to redo it - raising the
+    // threshold left a count of 24 pointing at a page with none. A wrong count
+    // is not worth refusing to start over.
+    try {
+      const { refreshRuleSuggestionCount } = await import('./src/rules/rules.ts');
+      await refreshRuleSuggestionCount(db);
+    } catch (error) {
+      console.warn('[manilla] could not recount rule suggestions:', error);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Serving against a schema we could not bring up to date is how a ledger

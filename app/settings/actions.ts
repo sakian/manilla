@@ -28,6 +28,9 @@ import {
   deleteRule,
   dismissRuleSuggestion,
   refreshRuleSuggestionCount,
+  undismissRuleSuggestion,
+  updateRule,
+  type RuleEdit,
 } from '../../src/rules/rules.ts';
 import { eraseAllData } from '../../src/export/export.ts';
 import { clearAnswerCache, setAiSettings } from '../../src/ai/ai.ts';
@@ -94,6 +97,43 @@ export async function removeDeviceAction(
     const session = await requireUser();
     await removeDevice(db(), session.userId, credentialId);
     revalidatePath('/settings');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/**
+ * Change a rule. The count is redone because a rule that matches less can let a
+ * payee back into the suggestions, and one that matches more can take some out.
+ */
+export async function updateRuleAction(
+  ruleId: string,
+  edit: RuleEdit,
+): Promise<{ ok: true } | Failure> {
+  try {
+    await requireUser();
+    const connection = db();
+    await updateRule(connection, ruleId, edit);
+    await refreshRuleSuggestionCount(connection);
+    revalidatePath('/settings');
+    revalidatePath('/review');
+    revalidatePath('/');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** Take back a "no", so the payee can be suggested again. */
+export async function undismissRuleAction(contains: string): Promise<{ ok: true } | Failure> {
+  try {
+    await requireUser();
+    const connection = db();
+    await undismissRuleSuggestion(connection, contains);
+    await refreshRuleSuggestionCount(connection);
+    revalidatePath('/settings');
+    revalidatePath('/');
     return { ok: true };
   } catch (error) {
     return failed(error);

@@ -35,6 +35,15 @@ export default function RuleSuggestions({
   /** Hidden the moment they are answered, so the list shortens as you go. */
   const [answered, setAnswered] = useState<string[]>([]);
 
+  // Only until the server's list arrives, which leaves them out itself. Kept any
+  // longer, a payee declined and then asked about again stayed hidden here for
+  // as long as the page was open.
+  const [answeredFrom, setAnsweredFrom] = useState(suggestions);
+  if (answeredFrom !== suggestions) {
+    setAnsweredFrom(suggestions);
+    setAnswered([]);
+  }
+
   const run = useCallback(
     (contains: string, work: () => Promise<{ ok: boolean; error?: string }>) => {
       setError(null);

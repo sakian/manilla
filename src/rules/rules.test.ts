@@ -16,6 +16,10 @@ import {
   matchTransferRule,
   suggestedRules,
   RULE_SUGGESTION_MINIMUM,
+  ruleSuggestionCount,
+  suggestAndCount,
+  undismissRuleSuggestion,
+  updateRule,
   type TransferRule,
 } from './rules.ts';
 import {
@@ -27,7 +31,7 @@ import {
   truncateAll,
   type Fixture,
 } from '../ledger/testdb.ts';
-import { rules } from '../../db/schema.ts';
+import { appSettings, envelopes, rules } from '../../db/schema.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 
 /**
@@ -221,7 +225,7 @@ describe(
       const listed = await listRules(db);
       assert.equal(listed.length, 1);
       assert.equal(listed[0]!.contains, normalizePayee('FREEDOM MOBILE').key);
-      assert.deepEqual(listed[0]!.outcome, { kind: 'envelope', name: 'Gas' });
+      assert.deepEqual(listed[0]!.outcome, { kind: 'envelope', name: 'Gas', envelopeId: env.gasId });
     });
 
     test('a declined suggestion stays declined', async () => {
@@ -401,6 +405,102 @@ describe(
         (await listTransferRules(db)).map((item) => item.contains),
         ['TFR-FR SAVINGS'],
       );
+    });
+
+    // -- editing -----------------------------------------------------------
+
+    const onlyRule = async () => (await listRules(db))[0]!;
+
+    test('a rule can be edited: what it matches, where it sends it, and its range', async () => {
+      await createEnvelopeRule(db, { contains: 'DUNBAR DENTAL', envelopeId: env.gasId });
+      const rule = await onlyRule();
+
+      await updateRule(db, rule.id, {
+        contains: ' dental ',
+        targetId: env.groceriesId,
+        minCents: 1000,
+        maxCents: 50000,
+      });
+
+      const edited = await onlyRule();
+      assert.equal(edited.contains, 'DENTAL', 'upper-cased and trimmed, as a new rule is');
+      assert.deepEqual(edited.outcome, {
+        kind: 'envelope',
+        name: 'Groceries',
+        envelopeId: env.groceriesId,
+      });
+      assert.equal(edited.minCents, 1000);
+      assert.equal(edited.maxCents, 50000);
+    });
+
+    test('a transfer rule stays a transfer rule, pointed at another account', async () => {
+      const savings = await openAccount(db, { name: 'Savings', kind: 'savings' });
+      await createTransferRule(db, { contains: 'TFR TO C C', transferAccountId: visa });
+      const rule = await onlyRule();
+
+      await updateRule(db, rule.id, {
+        contains: 'TFR TO SAV',
+        targetId: savings,
+        minCents: null,
+        maxCents: null,
+      });
+      assert.deepEqual((await onlyRule()).outcome, {
+        kind: 'transfer',
+        name: 'Savings',
+        accountId: savings,
+      });
+    });
+
+    test('an edit that would make a bad rule is refused, and changes nothing', async () => {
+      await createEnvelopeRule(db, { contains: 'DUNBAR DENTAL', envelopeId: env.gasId });
+      const rule = await onlyRule();
+      const edit = { contains: 'DENTAL', targetId: env.gasId, minCents: null, maxCents: null };
+
+      await assert.rejects(updateRule(db, rule.id, { ...edit, contains: 'DE' }), RuleError);
+      await assert.rejects(
+        updateRule(db, rule.id, { ...edit, minCents: 5000, maxCents: 1000 }),
+        /nothing would match/,
+      );
+      await assert.rejects(updateRule(db, rule.id, { ...edit, minCents: -1 }), RuleError);
+
+      const [archived] = await db
+        .insert(envelopes)
+        .values({ groupId: env.groupId, name: 'Old', archivedAt: new Date() })
+        .returning({ id: envelopes.id });
+      await assert.rejects(updateRule(db, rule.id, { ...edit, targetId: archived!.id }), /archived/);
+
+      assert.equal((await onlyRule()).contains, 'DUNBAR DENTAL');
+    });
+
+    // -- declined, and asked again ------------------------------------------
+
+    test('a "no" can be taken back, and the payee is suggested again', async () => {
+      await history('THE CORNER SHOP', env.gasId, enough);
+      const key = normalizePayee('THE CORNER SHOP').key;
+
+      await dismissRuleSuggestion(db, key);
+      assert.deepEqual(await suggestedRules(db), []);
+
+      await undismissRuleSuggestion(db, key);
+      assert.deepEqual(await dismissedRuleSuggestions(db), []);
+      assert.equal((await suggestedRules(db))[0]?.contains, key);
+    });
+
+    // -- the stored count ---------------------------------------------------
+
+    test('looking at the suggestions corrects a stale count', async () => {
+      // What raising the threshold left behind: a count from the old rules, and
+      // nothing on the settings page to press that would recount.
+      await db
+        .insert(appSettings)
+        .values({ key: 'rule_suggestion_count', value: '24' })
+        .onConflictDoUpdate({ target: appSettings.key, set: { value: '24' } });
+      await history('ONE REAL HABIT', env.gasId, enough);
+
+      const { suggestions, total } = await suggestAndCount(db);
+      assert.equal(suggestions.length, 1);
+      assert.equal(total, 1);
+      assert.equal(await ruleSuggestionCount(db), 1);
     });
   },
 );

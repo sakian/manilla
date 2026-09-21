@@ -4,10 +4,12 @@ import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
 import {
   SUGGESTION_COUNT_CAP,
+  dismissedRuleSuggestions,
   listRules,
-  ruleSuggestionCount,
-  suggestedRules,
+  suggestAndCount,
 } from '../../src/rules/rules.ts';
+import { transferOptions } from '../../src/envelopes/transfer.ts';
+import { listAccounts } from '../../src/accounts/manage.ts';
 import { exportLedger } from '../../src/export/export.ts';
 import { accuracy, aiSettings, aiUsage, unknownMerchantEstimate } from '../../src/ai/ai.ts';
 import { requireUser } from '../auth.ts';
@@ -28,8 +30,10 @@ export default async function SettingsPage() {
     devices,
     unusedRecoveryCodes,
     rules,
-    suggestions,
-    suggestionTotal,
+    { suggestions, total: suggestionTotal },
+    declined,
+    envelopeChoices,
+    accountChoices,
     ledger,
     ai,
     usage,
@@ -39,8 +43,12 @@ export default async function SettingsPage() {
     listDevices(connection, session.userId),
     countUnusedRecoveryCodes(connection, session.userId),
     listRules(connection),
-    suggestedRules(connection),
-    ruleSuggestionCount(connection),
+    // Searched and counted together, so the notice that leads here always
+    // agrees with what it finds.
+    suggestAndCount(connection),
+    dismissedRuleSuggestions(connection),
+    transferOptions(connection),
+    listAccounts(connection),
     exportLedger(connection),
     aiSettings(connection),
     aiUsage(connection),
@@ -109,7 +117,12 @@ export default async function SettingsPage() {
         keyPresent={Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN)}
       />
 
-      <Rules rules={rules} />
+      <Rules
+        rules={rules}
+        declined={declined}
+        envelopes={envelopeChoices.map(({ id, name, groupName }) => ({ id, name, groupName }))}
+        accounts={accountChoices.map(({ id, name }) => ({ id, name }))}
+      />
 
       <Devices devices={devices} unusedRecoveryCodes={unusedRecoveryCodes} />
 

@@ -467,7 +467,7 @@ a.callout:hover {
 }
 
 /* The pull-up suits text under text, not under a row of controls (#19). */
-:is(.add-device, .export-links, .row) + .footnote {
+:is(.add-device, .export-links, .row, .rule-edit) + .footnote {
   margin-top: 10px;
 }
 
@@ -2105,4 +2105,39 @@ details[open] > summary > .group-summary::before {
 .figure.pending .figure-label,
 .figure.pending .money {
   color: var(--medium);
+}
+
+/* --- Editing a rule -------------------------------------------------------- */
+
+/* The match text gets the room; the amounts need a few digits each. */
+.rule-edit {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rule-edit .signin-actions {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .rule-edit {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .rule-edit .field:nth-child(-n + 2) {
+    grid-column: 1 / -1;
+  }
+}
+
+.declined {
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 10px;
+}
+
+.declined .row {
+  align-items: center;
 }
