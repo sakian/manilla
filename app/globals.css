@@ -2319,3 +2319,21 @@ details[open] > summary > .group-summary::before {
     grid-column: 1 / -1;
   }
 }
+
+/* A fill or transfer in an envelope's history: the same row as a transaction,
+   marked at the left in the positive colour and set a touch quieter, so money
+   moved between envelopes reads apart from money spent. */
+.txn-move {
+  color: inherit;
+  text-decoration: none;
+  border-left: 3px solid var(--positive);
+  padding-left: 8px;
+}
+
+.txn-move:hover {
+  background: var(--surface-2);
+}
+
+.txn-move .txn-payee {
+  font-style: italic;
+}

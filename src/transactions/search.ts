@@ -341,6 +341,43 @@ export async function searchTransactions(
 }
 
 /**
+ * These transactions, in the list's own shape, by id - for a page whose order
+ * was decided somewhere else, such as an envelope's activity, where moves are
+ * interleaved with them.
+ */
+export async function transactionsById(
+  db: Database,
+  ids: string[],
+): Promise<Map<string, FoundTransaction>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      payeeRaw: transactions.payeeRaw,
+      amountCents: transactions.amountCents,
+      status: transactions.status,
+      kind: transactions.kind,
+      memo: transactions.memo,
+      note: transactions.note,
+      checkNumber: transactions.checkNumber,
+      transferPairId: transactions.transferPairId,
+      accountId: transactions.accountId,
+      accountName: accounts.name,
+    })
+    .from(transactions)
+    .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+    .where(inArray(transactions.id, ids));
+  const envelopeNames = await namesForPage(db, ids);
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { ...row, amountCents: Number(row.amountCents), envelopeNames: envelopeNames.get(row.id) ?? [] },
+    ]),
+  );
+}
+
+/**
  * The account's running balance after each of these transactions.
  *
  * Summed over every transaction in the account, not just the ones the search

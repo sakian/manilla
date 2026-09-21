@@ -15,6 +15,7 @@ import TransactionFilters from './TransactionFilters.tsx';
 import TransactionList from './TransactionList.tsx';
 import { BalanceCheckpoints } from './BalanceCheckpoints.tsx';
 import { balanceCheckpoints } from '../../src/import/ofxImport.ts';
+import { envelopeActivity } from '../../src/envelopes/activity.ts';
 
 /**
  * Every transaction, one screen (VW-5, VW-6).
@@ -70,8 +71,39 @@ export default async function TransactionsPage(props: {
   // One account on screen: its statements' balances, to check the list against.
   const checkpoints = onlyAccount ? await balanceCheckpoints(connection, onlyAccount.id) : null;
 
+  // One envelope, narrowed by nothing but dates: its whole history, fills and
+  // transfers among the transactions, each row with the balance it left. Every
+  // other filter - payee, account, "not reviewed", amount - is a question about
+  // transactions that a move has no answer to, so with one of those the list is
+  // transactions alone, as before.
+  const envelopeHistory =
+    onlyEnvelope &&
+    !query.text?.trim() &&
+    !query.payee?.trim() &&
+    !query.memo?.trim() &&
+    !query.accountIds?.length &&
+    !query.accountGroupIds?.length &&
+    !query.envelopeGroupIds?.length &&
+    !query.status &&
+    !query.kind &&
+    query.minCents === undefined &&
+    query.maxCents === undefined &&
+    !query.direction &&
+    (query.sort ?? 'date') === 'date'
+      ? await envelopeActivity(connection, onlyEnvelope.envelopeId, {
+          ...(query.from ? { from: query.from } : {}),
+          ...(query.to ? { to: query.to } : {}),
+          ...(query.order ? { order: query.order } : {}),
+          ...(query.limit ? { limit: query.limit } : {}),
+          ...(query.offset ? { offset: query.offset } : {}),
+        })
+      : null;
+  const listed = envelopeHistory ?? found;
+  const plural = (count: number) =>
+    envelopeHistory ? (count === 1 ? 'entry' : 'entries') : count === 1 ? 'transaction' : 'transactions';
+
   const empty = isEmptyQuery(query);
-  const lastPage = Math.max(1, Math.ceil(found.total / PAGE_SIZE));
+  const lastPage = Math.max(1, Math.ceil(listed.total / PAGE_SIZE));
   const liveAccounts = choices.accounts
     .filter((account) => !account.archived)
     .map((account) => ({ id: account.id, name: account.name }));
@@ -143,6 +175,9 @@ export default async function TransactionsPage(props: {
 
         <TransactionList
           rows={found.rows}
+          {...(envelopeHistory && onlyEnvelope
+            ? { history: envelopeHistory.rows, historyEnvelopeId: onlyEnvelope.envelopeId }
+            : {})}
           accounts={liveAccounts}
           envelopes={envelopeChoices}
           {...(onlyAccount ? { defaultAccountId: onlyAccount.id } : {})}
@@ -150,9 +185,9 @@ export default async function TransactionsPage(props: {
           // The only place the count is stated, now the summary line is gone, so
           // it has to say it even when everything fits on one page.
           heading={
-            found.total > found.rows.length
-              ? `Showing ${found.offset + 1}–${found.offset + found.rows.length} of ${found.total.toLocaleString()}`
-              : `${found.total.toLocaleString()} transaction${found.total === 1 ? '' : 's'}`
+            listed.total > listed.rows.length
+              ? `Showing ${listed.offset + 1}–${listed.offset + listed.rows.length} of ${listed.total.toLocaleString()}`
+              : `${listed.total.toLocaleString()} ${plural(listed.total)}`
           }
         />
 
@@ -166,7 +201,7 @@ export default async function TransactionsPage(props: {
             <span className="muted">
               Page {page} of {lastPage.toLocaleString()}
             </span>
-            {found.hasMore ? (
+            {listed.hasMore ? (
               <Link href={withParams('/transactions', params, page + 1)}>Older →</Link>
             ) : (
               <span className="muted">Older →</span>
