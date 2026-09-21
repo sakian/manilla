@@ -10,6 +10,7 @@
 import Link from 'next/link';
 import type { BalanceCheckpoint } from '../../src/import/ofxImport.ts';
 import { addDays } from '../../src/budget/month.ts';
+import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
 
 export function BalanceCheckpoints({
@@ -36,7 +37,15 @@ export function BalanceCheckpoints({
   return (
     <details className="checkpoints" open={latest.differenceCents !== 0}>
       <summary>
-        <span>Against the bank&rsquo;s statements</span>
+        <span>
+          Against the bank&rsquo;s statements{' '}
+          <Hint label="What these figures mean">
+            &ldquo;Here&rdquo; is this account&rsquo;s balance at the end of that day, reviewed or
+            not, and the difference is here less the bank. A difference that stays the same from
+            one statement to the next is one old mistake carried forward; one that moves happened
+            between them.
+          </Hint>
+        </span>
         <span className={latest.differenceCents === 0 ? 'muted' : 'checkpoint-off'}>
           {latest.differenceCents === 0 ? (
             'agrees'
@@ -85,13 +94,6 @@ export function BalanceCheckpoints({
           )}
         </div>
       ))}
-
-      <p className="muted footnote">
-        &ldquo;Here&rdquo; is this account&rsquo;s balance at the end of that day, reviewed or
-        not, and the difference is here less the bank. A difference that stays the same from one
-        statement to the next is one old mistake carried forward; one that moves happened between
-        them.
-      </p>
     </details>
   );
 }

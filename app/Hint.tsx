@@ -19,7 +19,15 @@ export function Hint({ children, label }: { children: ReactNode; label?: string 
   const [open, setOpen] = useState(false);
 
   return (
-    <span className="hint">
+    // Inside a <summary>, a click anywhere here would also open or close the
+    // disclosure it heads. Nothing else in a hint has a default worth keeping,
+    // except a link someone put in the explanation.
+    <span
+      className="hint"
+      onClick={(event) => {
+        if (!(event.target as HTMLElement).closest('a')) event.preventDefault();
+      }}
+    >
       <button
         type="button"
         className="hint-toggle"
