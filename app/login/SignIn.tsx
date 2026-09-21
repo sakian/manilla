@@ -68,6 +68,17 @@ function readableError(error: unknown): string {
   return message;
 }
 
+/**
+ * The mark, above whichever thing the sign-in page is currently saying.
+ *
+ * This is the one screen reached without a session, so it is also the only place
+ * the logo has to be served to a stranger - see the public files in proxy.ts.
+ */
+function SignInMark() {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className="signin-mark" src="/logo.png" alt="" width={44} height={44} />;
+}
+
 export default function SignIn({
   needsSetup,
   secureOrigin,
@@ -209,6 +220,7 @@ export default function SignIn({
   if (codes) {
     return (
       <div className="signin">
+        <SignInMark />
         <h2>Save these recovery codes</h2>
         <p className="muted">
           Each one signs you in once if you lose your device, and is the only way back in without
@@ -237,6 +249,7 @@ export default function SignIn({
     const here = browser?.origin ?? origin;
     return (
       <div className="signin">
+        <SignInMark />
         <h2>{insecure ? 'Passkeys need a secure origin' : 'Passkeys are bound to another host'}</h2>
         {insecure ? (
           <p className="muted">
@@ -267,6 +280,7 @@ export default function SignIn({
   if (needsSetup) {
     return (
       <div className="signin">
+        <SignInMark />
         <h2>Set up Manilla</h2>
         <p className="muted">
           Nobody has registered yet, so this first passkey becomes the way in. Your device will ask
@@ -295,6 +309,7 @@ export default function SignIn({
   if (mode === 'recovery') {
     return (
       <div className="signin">
+        <SignInMark />
         <h2>Use a recovery code</h2>
         <p className="muted">
           One of the codes from setup. Each works once, and signing in this way takes you straight to
@@ -334,6 +349,7 @@ export default function SignIn({
 
   return (
     <div className="signin">
+      <SignInMark />
       <h2>Sign in</h2>
       <p className="muted">
         Your passkey is bound to this hostname, so there is nothing to type and nothing to phish.

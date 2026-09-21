@@ -8,8 +8,13 @@
   --border: #e3ded6;
   --text: #1d1b17;
   --text-dim: #6b665c;
-  --accent: #8a6a3b;
-  --accent-soft: #f0e7d8;
+  /* Drawn from the logo, which is a manila envelope folded into an M: its amber
+     is #dd8524, which is 2.8:1 on this paper and so cannot be text. This is the
+     same colour taken deeper, at 4.9:1 on a panel. `--brand` is the logo's own
+     amber, for the places nothing has to be read against it. */
+  --accent: #a85f16;
+  --accent-soft: #f7e9d3;
+  --brand: #dd8524;
   --positive: #2f6b4f;
   --negative: #9a3b2f;
   --high: #2f6b4f;
@@ -27,8 +32,9 @@
     --border: #35322a;
     --text: #f0ece3;
     --text-dim: #a09a8c;
-    --accent: #d2ab6d;
-    --accent-soft: #332b1d;
+    --accent: #e0932f;
+    --accent-soft: #3a2a14;
+    --brand: #dd8524;
     --positive: #7fc4a0;
     --negative: #e08b7d;
     --high: #7fc4a0;
@@ -44,8 +50,9 @@
   --border: #35322a;
   --text: #f0ece3;
   --text-dim: #a09a8c;
-  --accent: #d2ab6d;
-  --accent-soft: #332b1d;
+  --accent: #e0932f;
+  --accent-soft: #3a2a14;
+  --brand: #dd8524;
   --positive: #7fc4a0;
   --negative: #e08b7d;
   --high: #7fc4a0;
@@ -576,6 +583,15 @@ input.amount {
   border-radius: var(--radius);
   background: var(--surface);
   padding: 24px;
+}
+
+.signin-mark {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  box-shadow: 0 0 0 1px var(--border);
+  margin: 0 0 14px;
 }
 
 .signin h2 {
@@ -1596,6 +1612,23 @@ details[open] > summary > .group-summary::before {
   .envelope-row.editing .envelope-actions {
     justify-content: flex-start;
   }
+}
+
+/* --- The wordmark --------------------------------------------------------- */
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+/* A tile rather than a bare mark: half the logo is charcoal, which would vanish
+   against the dark theme's background. */
+.wordmark img {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 /* --- Explanations you ask for -------------------------------------------- */

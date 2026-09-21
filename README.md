@@ -132,6 +132,41 @@ the rest is automatic.
 The schema is already shaped for it: `bank_sync` is a transaction source and
 `aggregator` an external-id kind, so a feed is additive rather than a rewrite.
 
+### Planned: supplementary imports
+
+A bank line says `AMZN Mktp CA*5O3F50IB2`. Phase 0 measured what that costs:
+68% of transactions happen at merchants used for more than one envelope, and
+Amazon Marketplace alone spans 21 envelopes across 712 transactions. Whether an
+order was clothing or groceries is not in the bank feed, which is why 72% is the
+realistic ceiling and not 90%.
+
+A *supplementary* import is a second file about transactions that are already
+here. It creates nothing; it attaches what the bank left out. The shape is meant
+to take more than one source, because Amazon is the worst case but not the only
+one — a receipt export, a fuel card statement and a utility's own billing history
+are all the same problem.
+
+So a source declares three things: how to read its rows, how to recognise the
+transaction a row belongs to, and what it has to add. Matching starts strict —
+exact amount inside a date window, one-to-one, the same shape as the transfer
+pairing that already exists — and anything ambiguous is left for a person rather
+than guessed at, because a wrong attachment is harder to notice than a missing
+one.
+
+What it adds goes into the memo first. The AI layer already puts the memo in its
+prompt, so item names reach the classifier with no further work, and the review
+queue already shows the memo beside the payee — which turns
+`AMZN Mktp CA*5O3F50IB2` into something a human can categorise at a glance too.
+Splitting an order across envelopes by item is the obvious next step and
+deliberately not the first one.
+
+On getting the data: Amazon removed its order-history CSV in March 2023, and the
+browser extensions that scraped the page went with it. Privacy → Request your
+data → Your orders still works and returns a stable `Retail.OrderHistory` CSV,
+but takes hours to days. An extension that produces the same columns sooner is a
+perfectly good input — which is the argument for defining the format Manilla
+accepts rather than the tool that produced it.
+
 Still outstanding: CSV import with a column-mapping step (FR-8), period
 comparisons and income-against-spending (RP-3, RP-4), progress bars and a pace
 marker on the dashboard (VW-1, VW-2), a balance-over-time chart on an envelope

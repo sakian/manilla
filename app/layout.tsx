@@ -9,6 +9,18 @@ export const metadata = {
   description: 'Envelope budgeting',
 };
 
+/**
+ * The browser chrome matches the paper the app is printed on, in whichever
+ * theme is showing. Without this, adding Manilla to a phone's home screen gives
+ * it a white status bar above a dark page.
+ */
+export const viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#fbfaf8' },
+    { media: '(prefers-color-scheme: dark)', color: '#16150f' },
+  ],
+};
+
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // The navigation is only useful once you are in, and the sign-in page has no
   // use for it at all.
@@ -19,7 +31,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body>
         <div className="shell">
           <header className="topbar">
-            <h1 className="wordmark">Manilla</h1>
+            <h1 className="wordmark">
+              {/* Plain <img>: this is a fixed 26px mark from /public, so Next's
+                  image pipeline has nothing to optimise and a layout shift to
+                  avoid. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="" width={26} height={26} />
+              Manilla
+            </h1>
             {session && (
               <>
                 {/*

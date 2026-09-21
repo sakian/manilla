@@ -20,7 +20,29 @@ import { SESSION_COOKIE } from './src/auth/cookie.ts';
  */
 const PUBLIC_PATHS = ['/login', '/api/health', '/api/dev-ca'];
 
+/**
+ * The app's own face: the logo, the icons, the manifest.
+ *
+ * These have to answer without a session or two things break. The sign-in page
+ * would show a broken image where its own logo goes, and adding Manilla to a
+ * phone's home screen fetches the manifest and its icons in ways that do not
+ * always carry a cookie - so the icon would silently come out blank.
+ *
+ * Nothing here is about anybody's money. It is a picture of an envelope.
+ */
+const PUBLIC_FILES = new Set([
+  '/manifest.webmanifest',
+  '/icon.png',
+  '/apple-icon.png',
+  '/logo.png',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png',
+  '/robots.txt',
+]);
+
 function isPublic(pathname: string): boolean {
+  if (PUBLIC_FILES.has(pathname)) return true;
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
