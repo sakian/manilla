@@ -8,7 +8,8 @@
  * already applied, and confirming or changing it is meant to be one keystroke.
  */
 
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Database } from '../../db/client.ts';
 import {
   accounts,
@@ -35,10 +36,94 @@ export type QueueRow = {
   envelopeName: string | null;
   confidence: number | null;
   reason: string | null;
+  /** Which layer proposed it: a rule is a standing instruction, not a guess (CA-9). */
+  layer: string | null;
   band: Band | null;
   /** Days the row has been waiting, for the age indicator (RQ-6). */
   ageDays: number;
 };
+
+/**
+ * The other side of a transfer, found rather than declared.
+ *
+ * The importer already pairs the two halves when they arrive close enough
+ * together (`transfer_half`), but a row left uncategorized does not get a second
+ * chance at it - and the second statement usually turns up weeks later. So the
+ * queue looks for it: an equal and opposite amount, in a different account, a few
+ * days either side, still unconfirmed.
+ *
+ * Offered as a suggestion, never applied. Two numbers cancelling is evidence, not
+ * proof - a refund the same size as a purchase looks identical from here - so the
+ * pairing stays a thing a person agrees to.
+ */
+export type TransferCandidate = {
+  /** The pending row this is about. */
+  transactionId: string;
+  /** The account the other half sits in, which is where the money went or came from. */
+  accountId: string;
+  accountName: string;
+  otherDate: string;
+  otherPayee: string;
+};
+
+/** How far apart the two halves of one transfer may be dated (FR-5). */
+const TRANSFER_WINDOW_DAYS = 6;
+
+export async function transferCandidates(
+  db: Database,
+  options: { importBatchId?: string } = {},
+): Promise<TransferCandidate[]> {
+  const other = alias(transactions, 'other');
+  const otherAccount = alias(accounts, 'other_account');
+
+  // The same table twice under two aliases rather than a correlated subquery:
+  // Drizzle leaves a column reference unqualified in a single-table query, and an
+  // unqualified name that also exists inside the subquery binds there instead.
+  const rows = await db
+    .select({
+      transactionId: transactions.id,
+      accountId: other.accountId,
+      accountName: otherAccount.name,
+      otherDate: other.date,
+      otherPayee: other.payeeRaw,
+    })
+    .from(transactions)
+    .innerJoin(
+      other,
+      and(
+        sql`${other.amountCents} = -${transactions.amountCents}`,
+        sql`${other.accountId} <> ${transactions.accountId}`,
+        sql`${other.id} <> ${transactions.id}`,
+        sql`abs(${other.date} - ${transactions.date}) <= ${TRANSFER_WINDOW_DAYS}`,
+        // Already half of something is not a candidate for being half of this.
+        sql`${other.transferPairId} is null`,
+        sql`${other.kind} = 'spending'`,
+      )!,
+    )
+    .innerJoin(otherAccount, eq(otherAccount.id, other.accountId))
+    .where(
+      and(
+        eq(transactions.status, 'pending_review'),
+        eq(transactions.kind, 'spending'),
+        sql`${transactions.amountCents} <> 0`,
+        sql`${transactions.transferPairId} is null`,
+        ...(options.importBatchId
+          ? [eq(transactions.importBatchId, options.importBatchId)]
+          : []),
+      ),
+    )
+    .orderBy(asc(transactions.id), asc(other.date))
+    .limit(500);
+
+  // One suggestion per row: more than one equal-and-opposite partner means the
+  // evidence is weaker, not stronger, so the nearest in time wins and the rest
+  // are dropped rather than offered as a menu of guesses.
+  const best = new Map<string, TransferCandidate>();
+  for (const row of rows) {
+    if (!best.has(row.transactionId)) best.set(row.transactionId, row);
+  }
+  return [...best.values()];
+}
 
 export type EnvelopeOption = {
   id: string;
@@ -69,6 +154,7 @@ export async function pendingTransactions(
       envelopeName: envelopes.name,
       confidence: suggestions.confidence,
       reason: suggestions.reason,
+      layer: suggestions.layer,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
@@ -101,6 +187,7 @@ export async function pendingTransactions(
     envelopeName: row.envelopeName,
     confidence: row.confidence,
     reason: row.reason,
+    layer: row.layer,
     band: row.confidence === null ? null : bandOf(row.confidence),
     ageDays: Math.floor((today - row.createdAt.getTime()) / 86_400_000),
   }));

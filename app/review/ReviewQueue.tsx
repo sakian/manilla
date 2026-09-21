@@ -30,9 +30,9 @@
  * screen whose whole purpose is looking.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { EnvelopeOption, QueueRow } from '../../src/queue/queue.ts';
+import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
 import { markAsTransferAction, saveReviewAction } from '../actions.ts';
 
@@ -65,6 +65,10 @@ function confidenceOf(row: QueueRow): { label: string; tone: string; detail: str
   if (row.confidence === null || !row.envelopeId) {
     return { label: 'unknown', tone: 'none', detail: '' };
   }
+  // A rule is a standing instruction you wrote, not a guess anybody made, so it
+  // is not given a percentage to argue with.
+  if (row.layer === 'rule') return { label: 'rule', tone: 'high', detail: '' };
+
   const percent = `${Math.round(row.confidence * 100)}%`;
   if (row.confidence >= BAND_THRESHOLDS.high) return { label: 'sure', tone: 'high', detail: percent };
   if (row.confidence >= BAND_THRESHOLDS.medium) {
@@ -83,10 +87,13 @@ type Decision = {
 export default function ReviewQueue({
   rows,
   envelopes,
+  transfers,
   accounts,
 }: {
   rows: QueueRow[];
   envelopes: EnvelopeOption[];
+  /** Rows that look like half of a transfer, found rather than declared. */
+  transfers: TransferCandidate[];
   accounts: { id: string; name: string }[];
 }) {
   const router = useRouter();
@@ -100,8 +107,11 @@ export default function ReviewQueue({
       rows.map((row) => [
         row.id,
         {
-          // Pre-filled only where the pipeline would bet on it.
-          envelopeId: row.band === 'high' && row.envelopeId ? row.envelopeId : null,
+          // Anything proposed at all is filled in. The reason for holding back
+          // was that an unsure guess reads as an answer - but the card says how
+          // sure it is right beside the name, so it reads as what it is, and
+          // starting from a guess beats starting from nothing on every row.
+          envelopeId: row.envelopeId,
           confirmed: false,
           createRule: false,
         },
@@ -112,10 +122,12 @@ export default function ReviewQueue({
   const [picking, setPicking] = useState<QueueRow | null>(null);
   /** The picker shows envelopes first, and the account list once "not spending". */
   const [pickingTransfer, setPickingTransfer] = useState(false);
-  const [filter, setFilter] = useState('');
-  const [pickCursor, setPickCursor] = useState(0);
   const [transferRule, setTransferRule] = useState(true);
-  const filterRef = useRef<HTMLInputElement>(null);
+
+  const transferFor = useMemo(
+    () => new Map(transfers.map((candidate) => [candidate.transactionId, candidate])),
+    [transfers],
+  );
 
   const envelopeName = useMemo(
     () => new Map(envelopes.map((envelope) => [envelope.id, envelope.name])),
@@ -141,15 +153,11 @@ export default function ReviewQueue({
   const openPicker = useCallback((row: QueueRow) => {
     setPicking(row);
     setPickingTransfer(false);
-    setFilter('');
-    setPickCursor(0);
-    setTimeout(() => filterRef.current?.focus(), 0);
   }, []);
 
   const closePicker = useCallback(() => {
     setPicking(null);
     setPickingTransfer(false);
-    setFilter('');
   }, []);
 
   /** Choosing an envelope is a decision, so it confirms the row as well. */
@@ -237,16 +245,16 @@ export default function ReviewQueue({
     [envelopes, picking],
   );
 
-  const matches = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
-    const rest = suggested ? envelopes.filter((envelope) => envelope.id !== suggested.id) : envelopes;
-    if (!needle) return rest;
-    return envelopes.filter(
-      (envelope) =>
-        envelope.name.toLowerCase().includes(needle) ||
-        envelope.groupName.toLowerCase().includes(needle),
-    );
-  }, [envelopes, filter, suggested]);
+  /** Every envelope under its own heading, in the order the envelopes screen uses. */
+  const grouped = useMemo(() => {
+    const groups: { name: string; envelopes: EnvelopeOption[] }[] = [];
+    for (const envelope of envelopes) {
+      const last = groups.at(-1);
+      if (last && last.name === envelope.groupName) last.envelopes.push(envelope);
+      else groups.push({ name: envelope.groupName, envelopes: [envelope] });
+    }
+    return groups;
+  }, [envelopes]);
 
   if (rows.length === 0) {
     return (
@@ -268,8 +276,8 @@ export default function ReviewQueue({
         const decision = decisionFor(row.id);
         const confidence = confidenceOf(row);
         const chosen = decision.envelopeId;
-        /** Pre-filled means the pipeline was sure; only those offer a one-press confirm. */
-        const prefilled = row.band === 'high' && row.envelopeId !== null;
+        /** Filled in by the pipeline rather than chosen here: this is the row a press settles. */
+        const prefilled = row.envelopeId !== null;
 
         return (
           <div key={row.id} className={`queue-row${decision.confirmed ? ' decided' : ''}`}>
@@ -289,6 +297,9 @@ export default function ReviewQueue({
                 {confidence.label}
                 {confidence.detail && ` ${confidence.detail}`}
               </span>
+              {transferFor.get(row.id) && (
+                <span className="band medium">looks like a transfer</span>
+              )}
               {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
             </span>
 
@@ -302,13 +313,21 @@ export default function ReviewQueue({
                 {chosen ? envelopeName.get(chosen) : 'Choose an envelope'}
               </button>
 
-              {/* Choosing is itself a decision, so it confirms; a row that was
-                  filled in for you has not been decided by anyone yet, and that
-                  is the one that needs a press. */}
+              {/* Choosing is itself a decision, so it confirms; a row filled in
+                  by the pipeline has not been decided by anyone yet, and that is
+                  the one a press settles. Unconfirming empties it again rather
+                  than leaving a figure nobody has agreed to sitting there. */}
               {(prefilled || decision.confirmed) && chosen && (
                 <button
                   className={decision.confirmed ? 'link-button' : 'primary confirm'}
-                  onClick={() => set(row.id, { confirmed: !decision.confirmed })}
+                  onClick={() =>
+                    set(
+                      row.id,
+                      decision.confirmed
+                        ? { confirmed: false, envelopeId: null, createRule: false }
+                        : { confirmed: true },
+                    )
+                  }
                   disabled={pending}
                 >
                   {decision.confirmed ? 'Unconfirm' : 'Confirm'}
@@ -385,39 +404,35 @@ export default function ReviewQueue({
               </>
             ) : (
               <>
-                <input
-                  ref={filterRef}
-                  value={filter}
-                  placeholder="Type to narrow"
-                  onChange={(event) => {
-                    setFilter(event.target.value);
-                    setPickCursor(0);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'ArrowDown') {
-                      event.preventDefault();
-                      setPickCursor((at) => Math.min(at + 1, matches.length - 1));
-                    } else if (event.key === 'ArrowUp') {
-                      event.preventDefault();
-                      setPickCursor((at) => Math.max(at - 1, 0));
-                    } else if (event.key === 'Enter') {
-                      event.preventDefault();
-                      const picked = matches[pickCursor];
-                      if (picked) choose(picking.id, picked.id, event.shiftKey);
-                    }
-                  }}
-                />
-
                 <div className="picker-list">
                   {/* The guess, offered at the top rather than assumed into the
-                      row. Not repeated further down the list. */}
-                  {suggested && !filter && (
+                      row, and named as a guess. */}
+                  {suggested && (
                     <button
                       className="picker-option suggested"
                       onClick={(event) => choose(picking.id, suggested.id, event.shiftKey)}
                     >
-                      <span>{suggested.name}</span>
-                      <span className="muted">suggested · {suggested.groupName}</span>
+                      <span className="picker-name">{suggested.name}</span>
+                      <span className="muted picker-group">suggested · {suggested.groupName}</span>
+                    </button>
+                  )}
+
+                  {/* The other half, when one turned up. One press rather than
+                      "not spending" then picking the account it obviously is. */}
+                  {transferFor.get(picking.id) && (
+                    <button
+                      className="picker-option suggested"
+                      onClick={() =>
+                        markTransfer(picking, transferFor.get(picking.id)!.accountId, false)
+                      }
+                      disabled={pending}
+                    >
+                      <span className="picker-name">
+                        Transfer to {transferFor.get(picking.id)!.accountName}
+                      </span>
+                      <span className="muted picker-group">
+                        matches {transferFor.get(picking.id)!.otherDate}
+                      </span>
                     </button>
                   )}
 
@@ -427,30 +442,36 @@ export default function ReviewQueue({
                     onClick={() => setPickingTransfer(true)}
                     disabled={pending}
                   >
-                    <span>Not spending</span>
-                    <span className="muted">a transfer between my own accounts</span>
+                    <span className="picker-name">Not spending</span>
+                    <span className="muted picker-group">a transfer between my own accounts</span>
                   </button>
 
-                  {matches.length === 0 && (
-                    <div className="muted picker-empty">No envelope matches.</div>
-                  )}
-                  {matches.map((envelope, index) => (
-                    <button
-                      key={envelope.id}
-                      className={`picker-option${index === pickCursor ? ' active' : ''}`}
-                      onClick={(event) => choose(picking.id, envelope.id, event.shiftKey)}
-                      onMouseEnter={() => setPickCursor(index)}
-                    >
-                      <span>{envelope.name}</span>
-                      <span className="muted">{envelope.groupName}</span>
-                    </button>
+                  {/*
+                    Grouped under their own headings and nothing else. There was a
+                    filter box here, which is a way of coping with a list you
+                    cannot read; fifty envelopes under nine headings can be read,
+                    and scanning beats typing when you do not know the exact name.
+                  */}
+                  {grouped.map((group) => (
+                    <div key={group.name} className="picker-group-block">
+                      <div className="picker-group-head">{group.name}</div>
+                      {group.envelopes.map((envelope) => (
+                        <button
+                          key={envelope.id}
+                          className={`picker-option${
+                            envelope.id === decisionFor(picking.id).envelopeId ? ' active' : ''
+                          }`}
+                          onClick={(event) => choose(picking.id, envelope.id, event.shiftKey)}
+                        >
+                          <span className="picker-name">{envelope.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
 
                 <div className="picker-foot muted">
-                  <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>↵</kbd> choose ·{' '}
-                  <kbd>shift</kbd>+<kbd>↵</kbd> choose and always use it for this payee ·{' '}
-                  <kbd>esc</kbd> cancel
+                  Hold <kbd>shift</kbd> while choosing to always use it for this payee
                 </div>
               </>
             )}

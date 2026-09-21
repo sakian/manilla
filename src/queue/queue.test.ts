@@ -12,6 +12,7 @@ import {
   recategorize,
   saveReview,
   splitTransaction,
+  transferCandidates,
 } from './queue.ts';
 import {
   closeDb,
@@ -83,6 +84,75 @@ describe(
       }
       return id;
     }
+
+    // -- finding the other half of a transfer -------------------------------
+
+    test('an equal and opposite row in another account is offered as the other half', async () => {
+      const { openAccount: open } = await import('../ledger/ledger.ts');
+      const visa = await open(db, { name: 'Visa', kind: 'credit_card' });
+
+      const leaving = await pending({
+        payee: 'TFR-TO C C',
+        amountCents: -50000,
+        date: '2026-03-15',
+      });
+      await recordTransaction(db, {
+        accountId: visa,
+        date: '2026-03-17',
+        amountCents: 50000,
+        payeeRaw: 'PAYMENT RECEIVED',
+        source: 'file_import',
+        status: 'pending_review',
+      });
+
+      const [candidate] = await transferCandidates(db);
+      assert.ok(candidate, 'the second statement completes the pair');
+      assert.equal(candidate.transactionId, leaving);
+      assert.equal(candidate.accountId, visa);
+      assert.equal(candidate.accountName, 'Visa');
+      assert.equal(candidate.otherDate, '2026-03-17');
+    });
+
+    test('the same account, a different amount, or too long apart is not a pair', async () => {
+      const { openAccount: open } = await import('../ledger/ledger.ts');
+      const visa = await open(db, { name: 'Visa', kind: 'credit_card' });
+
+      await pending({ payee: 'TFR-TO C C', amountCents: -50000, date: '2026-03-15' });
+
+      // Same amount, same account: two sides of nothing.
+      await pending({ payee: 'REFUND', amountCents: 50000, date: '2026-03-15' });
+      // Right shape, wrong account pairing is fine - but three weeks later.
+      await recordTransaction(db, {
+        accountId: visa,
+        date: '2026-04-06',
+        amountCents: 50000,
+        payeeRaw: 'TOO LATE',
+        source: 'file_import',
+        status: 'pending_review',
+      });
+
+      assert.deepEqual(await transferCandidates(db), []);
+    });
+
+    test('a row already half of a transfer is not offered as half of another', async () => {
+      const { openAccount: open } = await import('../ledger/ledger.ts');
+      const { convertToTransfer } = await import('../transactions/manage.ts');
+      const visa = await open(db, { name: 'Visa', kind: 'credit_card' });
+      const savings = await open(db, { name: 'Savings', kind: 'savings' });
+
+      await pending({ payee: 'TFR-TO C C', amountCents: -50000, date: '2026-03-15' });
+      const claimed = await recordTransaction(db, {
+        accountId: visa,
+        date: '2026-03-16',
+        amountCents: 50000,
+        payeeRaw: 'ALREADY PAIRED',
+        source: 'file_import',
+        status: 'confirmed',
+      });
+      await convertToTransfer(db, claimed, { toAccountId: savings });
+
+      assert.deepEqual(await transferCandidates(db), [], 'it belongs to something already');
+    });
 
     // -- saving a sitting's decisions ---------------------------------------
 

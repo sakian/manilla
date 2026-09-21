@@ -1,7 +1,12 @@
 import Link from 'next/link';
 import { db } from '../../db/client.ts';
 import { listAccounts } from '../../src/accounts/manage.ts';
-import { envelopeOptions, pendingCount, pendingTransactions } from '../../src/queue/queue.ts';
+import {
+  envelopeOptions,
+  pendingCount,
+  pendingTransactions,
+  transferCandidates,
+} from '../../src/queue/queue.ts';
 import { requireUser } from '../auth.ts';
 import { Hint } from '../Hint.tsx';
 import ReviewQueue from './ReviewQueue.tsx';
@@ -21,11 +26,12 @@ export default async function ReviewPage(props: {
 
   // `?batch=` is what an import lands on: the same screen, looking only at what
   // just arrived. Everything else waiting is one link away.
-  const [rows, everything, envelopes, accounts] = await Promise.all([
+  const [rows, everything, envelopes, accounts, transfers] = await Promise.all([
     pendingTransactions(connection, batch ? { importBatchId: batch } : {}),
     batch ? pendingCount(connection) : Promise.resolve(0),
     envelopeOptions(connection),
     listAccounts(connection),
+    transferCandidates(connection, batch ? { importBatchId: batch } : {}),
   ]);
 
   return (
@@ -56,6 +62,7 @@ export default async function ReviewPage(props: {
       <ReviewQueue
         rows={rows}
         envelopes={envelopes}
+        transfers={transfers}
         accounts={accounts.map((account) => ({ id: account.id, name: account.name }))}
       />
     </>
