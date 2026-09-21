@@ -49,20 +49,26 @@ export default function DataPanel({ counts }: { counts: { transactions: number; 
     <section className="panel">
       <h3>Your data</h3>
       <p className="muted">
-        {counts.transactions.toLocaleString()} transactions across {counts.envelopes} envelopes.
-        Everything here is yours to take at any time; nothing is locked in (NF-6).
+        {counts.transactions.toLocaleString()} transaction{counts.transactions === 1 ? '' : 's'}{' '}
+        across {counts.envelopes} envelope{counts.envelopes === 1 ? '' : 's'}. Everything here is
+        yours to take at any time; nothing is locked in (NF-6).
       </p>
 
-      <div className="signin-actions">
+      {/* Each explanation sits above the buttons it is about. It used to be one
+          footnote under the JSON button, pulled up into it by .footnote's
+          negative margin and reading as a caption for the CSVs below (#19). */}
+      <p className="muted">
+        As JSON, which keeps the structure - each transaction with its envelope shares and the bank
+        ids it has collected:
+      </p>
+
+      <div className="export-links">
         <a className="button-link" href="/api/export?format=json" download>
           Download everything as JSON
         </a>
       </div>
 
-      <p className="muted footnote">
-        JSON keeps the structure - each transaction with its envelope shares and the bank ids it has
-        collected. The CSVs are flat, one file per thing, for a spreadsheet:
-      </p>
+      <p className="muted">Or as CSVs, flat and one file per thing, for a spreadsheet:</p>
 
       <div className="export-links">
         {CSV_TABLES.map((item) => (
