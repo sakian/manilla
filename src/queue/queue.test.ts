@@ -357,13 +357,13 @@ describe(
       assert.equal(rule!.contains, 'SHELL');
     });
 
-    test('the queue lists what is waiting, newest first', async () => {
-      await pending({ payee: 'SHELL', amountCents: -4520, date: '2026-01-10' });
+    test('the queue lists what is waiting, oldest first', async () => {
       await pending({ payee: 'SAFEWAY', amountCents: -9000, date: '2026-02-10' });
+      await pending({ payee: 'SHELL', amountCents: -4520, date: '2026-01-10' });
 
       const rows = await pendingTransactions(db);
       assert.equal(rows.length, 2);
-      assert.equal(rows[0]!.payeeDisplay, 'Safeway', 'newest first');
+      assert.equal(rows[0]!.payeeDisplay, 'Shell', 'oldest first, whatever order they arrived in');
       assert.equal(await pendingCount(db), 2);
     });
 

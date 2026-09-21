@@ -8,7 +8,7 @@
  * already applied, and confirming or changing it is meant to be one keystroke.
  */
 
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Database } from '../../db/client.ts';
 import {
@@ -182,7 +182,10 @@ export async function pendingTransactions(
           : []),
       ),
     )
-    .orderBy(desc(transactions.date), desc(transactions.createdAt))
+    // Oldest first, the order a statement reads in and the order the waiting
+    // should be cleared in - and with a cap, the oldest are the ones shown. The
+    // id breaks ties, so rows on one day keep their places between loads.
+    .orderBy(asc(transactions.date), asc(transactions.createdAt), asc(transactions.id))
     .limit(options.limit ?? 200);
 
   const today = Date.now();
