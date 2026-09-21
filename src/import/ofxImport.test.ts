@@ -11,6 +11,7 @@ import {
   recordTransaction,
 } from '../ledger/ledger.ts';
 import {
+  balanceCheckpoints,
   commitImport,
   importHistory,
   previewImport,
@@ -206,6 +207,61 @@ describe(
       // exactly the mismatch FR-14 exists to surface.
       assert.equal(preview.balanceCheck!.matches, false);
       assert.equal(preview.balanceCheck!.projectedCents, 171212);
+    });
+
+    test('each statement leaves a balance checkpoint, and a repeat leaves no second', async () => {
+      for (let run = 0; run < 2; run += 1) {
+        await commitImport(
+          db,
+          await previewImport(db, bankStatement(), accountId, { categorize: false }),
+          acceptAll,
+        );
+      }
+      const checkpoints = await balanceCheckpoints(db, accountId);
+      assert.equal(checkpoints.length, 1);
+      assert.deepEqual(checkpoints[0], {
+        asOf: '2025-09-04',
+        statedCents: 482194,
+        ledgerCents: 171212,
+        differenceCents: 171212 - 482194,
+        changeCents: null,
+        previousAsOf: null,
+      });
+    });
+
+    test('a change between checkpoints says which weeks to look in', async () => {
+      const full = bankStatement();
+      const byDate = [...full.transactions].sort((a, b) => a.posted.localeCompare(b.posted));
+      const sum = (rows: typeof byDate) => rows.reduce((total, row) => total + row.amountCents, 0);
+      const early = byDate.slice(0, 3);
+
+      // The first statement agrees with the ledger exactly.
+      const first: OfxStatement = {
+        ...full,
+        transactions: early,
+        ledgerBalanceCents: sum(early),
+        ledgerBalanceAsOf: early[2]!.posted,
+      };
+      // The second says the bank holds $10 more than those five rows make: a
+      // deposit the ledger never saw, somewhere after the first statement.
+      const second: OfxStatement = {
+        ...full,
+        ledgerBalanceCents: sum(byDate) + 1000,
+        ledgerBalanceAsOf: byDate[4]!.posted,
+      };
+      for (const statement of [first, second]) {
+        await commitImport(
+          db,
+          await previewImport(db, statement, accountId, { categorize: false }),
+          acceptAll,
+        );
+      }
+
+      const [before, after] = await balanceCheckpoints(db, accountId);
+      assert.equal(before!.differenceCents, 0);
+      assert.equal(after!.differenceCents, -1000);
+      assert.equal(after!.changeCents, -1000, 'the gap opened between the two');
+      assert.equal(after!.previousAsOf, early[2]!.posted);
     });
 
     test('imported money is assigned immediately so the dashboard stays honest', async () => {

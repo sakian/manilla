@@ -75,7 +75,7 @@ export type PreviewResult =
         possible_duplicate: number;
         transfer_half: number;
       };
-      balance?: { statedCents: number; projectedCents: number; matches: boolean };
+      balance?: { statedCents: number; projectedCents: number; matches: boolean; asOf?: string };
       warnings: string[];
       /** Why the AI layer did not run, or stopped part way (NF-10). */
       aiNote?: string;
@@ -153,6 +153,7 @@ export async function previewImportAction(
               statedCents: preview.balanceCheck.statedCents,
               projectedCents: preview.balanceCheck.projectedCents,
               matches: preview.balanceCheck.matches,
+              ...(preview.balanceCheck.asOf ? { asOf: preview.balanceCheck.asOf } : {}),
             },
           }
         : {}),

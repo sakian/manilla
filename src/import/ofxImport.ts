@@ -91,6 +91,8 @@ export type ImportRow = {
 
 export type BalanceCheck = {
   statedCents: number;
+  /** The day the statement says that balance was as of. */
+  asOf?: string;
   /** Account balance after this import would be applied. */
   projectedCents: number;
   matches: boolean;
@@ -358,6 +360,7 @@ export async function previewImport(
 
     balanceCheck = {
       statedCents: statement.ledgerBalanceCents,
+      ...(statement.ledgerBalanceAsOf ? { asOf: statement.ledgerBalanceAsOf } : {}),
       projectedCents,
       matches: projectedCents === statement.ledgerBalanceCents,
     };
@@ -427,6 +430,14 @@ export async function commitImport(
         source: 'file_import',
         filename: meta.filename ?? null,
         accountId: preview.accountId,
+        // A checkpoint needs its day; a balance with no date says nothing about
+        // when the books agreed.
+        ...(preview.balanceCheck?.asOf
+          ? {
+              statedBalanceCents: preview.balanceCheck.statedCents,
+              statedBalanceAsOf: preview.balanceCheck.asOf,
+            }
+          : {}),
       })
       .returning({ id: importBatches.id });
 
@@ -653,4 +664,73 @@ export async function importHistory(
     .limit(options.limit ?? 20);
 
   return rows.map((row) => ({ ...row, remaining: Number(row.remaining) }));
+}
+
+// ---------------------------------------------------------------------------
+// Balance checkpoints (FR-14)
+// ---------------------------------------------------------------------------
+
+export type BalanceCheckpoint = {
+  /** The day the statement's balance was as of. */
+  asOf: string;
+  /** What the bank said the account held. */
+  statedCents: number;
+  /** What the ledger says it held at the end of that day. */
+  ledgerCents: number;
+  /** Ledger less bank: zero when they agree. */
+  differenceCents: number;
+  /**
+   * How much the difference moved since the checkpoint before this one. Non-zero
+   * means something between those two days is wrong, which is what narrows a
+   * search from "somewhere in six years" to "somewhere in these few weeks".
+   */
+  changeCents: number | null;
+  /** The earlier checkpoint's day, so the window can be opened as a filter. */
+  previousAsOf: string | null;
+};
+
+/**
+ * Every balance a statement has stated for this account, against the ledger's
+ * balance on the same day, oldest first.
+ *
+ * Every statement imported leaves one, including a statement imported again
+ * that added nothing - which is how old files can fill in history. Undoing an
+ * import does not remove its checkpoint: what the bank said is still what it
+ * said. The same day and figure stated twice is one checkpoint.
+ */
+export async function balanceCheckpoints(
+  db: Database,
+  accountId: string,
+): Promise<BalanceCheckpoint[]> {
+  const rows = await db.execute<{ as_of: string; stated: string; ledger: string }>(sql`
+    select distinct on (b.stated_balance_as_of, b.stated_balance_cents)
+      b.stated_balance_as_of::text as as_of,
+      b.stated_balance_cents as stated,
+      coalesce((
+        select sum(t.amount_cents) from transactions t
+        where t.account_id = ${accountId} and t.date <= b.stated_balance_as_of
+      ), 0) as ledger
+    from import_batches b
+    where b.account_id = ${accountId}
+      and b.stated_balance_cents is not null
+      and b.stated_balance_as_of is not null
+    order by b.stated_balance_as_of, b.stated_balance_cents
+  `);
+
+  let previous: { asOf: string; differenceCents: number } | null = null;
+  return rows.map((row) => {
+    const statedCents = Number(row.stated);
+    const ledgerCents = Number(row.ledger);
+    const differenceCents = ledgerCents - statedCents;
+    const checkpoint: BalanceCheckpoint = {
+      asOf: row.as_of,
+      statedCents,
+      ledgerCents,
+      differenceCents,
+      changeCents: previous ? differenceCents - previous.differenceCents : null,
+      previousAsOf: previous?.asOf ?? null,
+    };
+    previous = { asOf: row.as_of, differenceCents };
+    return checkpoint;
+  });
 }

@@ -13,6 +13,8 @@ import { PAGE_SIZE, readForm, readPage, readQuery, withParams } from '../../src/
 import NewTransaction from './NewTransaction.tsx';
 import TransactionFilters from './TransactionFilters.tsx';
 import TransactionList from './TransactionList.tsx';
+import { BalanceCheckpoints } from './BalanceCheckpoints.tsx';
+import { balanceCheckpoints } from '../../src/import/ofxImport.ts';
 
 /**
  * Every transaction, one screen (VW-5, VW-6).
@@ -64,6 +66,9 @@ export default async function TransactionsPage(props: {
           .flatMap((category) => category.accounts.map((a) => ({ ...a, group: category.name })))
           .find((account) => account.id === query.accountIds![0])
       : undefined;
+
+  // One account on screen: its statements' balances, to check the list against.
+  const checkpoints = onlyAccount ? await balanceCheckpoints(connection, onlyAccount.id) : null;
 
   const empty = isEmptyQuery(query);
   const lastPage = Math.max(1, Math.ceil(found.total / PAGE_SIZE));
@@ -131,6 +136,10 @@ export default async function TransactionsPage(props: {
           envelopeGroups={choices.envelopeGroups}
           active={!empty}
         />
+
+        {onlyAccount && checkpoints && (
+          <BalanceCheckpoints accountId={onlyAccount.id} checkpoints={checkpoints} />
+        )}
 
         <TransactionList
           rows={found.rows}

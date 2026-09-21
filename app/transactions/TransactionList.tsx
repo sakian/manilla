@@ -92,7 +92,9 @@ export default function TransactionList({
       {rows.map((row) => (
         <button
           key={row.id}
-          className={`txn txn-button${row.status === 'pending_review' ? ' unreviewed' : ''}`}
+          className={`txn txn-button${row.status === 'pending_review' ? ' unreviewed' : ''}${
+            row.balanceAfterCents !== undefined ? ' with-balance' : ''
+          }`}
           onClick={() => overlay.open(row.id)}
           disabled={pending}
         >
@@ -118,6 +120,14 @@ export default function TransactionList({
               {showAccount && row.kind !== 'account_transfer' && ` · ${row.accountName}`}
             </span>
           </span>
+          {/* The account's balance once this row is counted, under the amount
+              the way a statement prints it, so the day the books went wrong can
+              be found by reading down the list. */}
+          {row.balanceAfterCents !== undefined && (
+            <span className="txn-balance" title="The account's balance after this transaction">
+              <Money cents={row.balanceAfterCents} />
+            </span>
+          )}
           {row.note && <span className="txn-note">{row.note}</span>}
         </button>
       ))}

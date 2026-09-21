@@ -106,6 +106,11 @@ export type FoundTransaction = {
   envelopeNames: string[];
   /** Set on an account transfer, so its two halves can be shown as one thing (FR-5). */
   transferPairId: string | null;
+  /**
+   * The account's balance once this transaction is counted - only when the
+   * search is of exactly one account, where there is one balance to speak of.
+   */
+  balanceAfterCents?: number;
 };
 
 export type SearchResult = {
@@ -257,7 +262,9 @@ function ordering(query: TransactionQuery) {
     case 'payee':
       return [by(transactions.payeeKey), desc(transactions.date)];
     default:
-      return [by(transactions.date), by(transactions.createdAt)];
+      // The same order the running balance is summed in, so each row's balance
+      // follows from the one below it (newest first) or above it (oldest first).
+      return [by(transactions.date), by(transactions.createdAt), by(transactions.id)];
   }
 }
 
@@ -310,11 +317,18 @@ export async function searchTransactions(
   const envelopeNames = await namesForPage(db, found.map((row) => row.id));
   const total = Number(totals?.total ?? 0);
 
+  const onlyAccount =
+    query.accountIds?.length === 1 && !query.accountGroupIds?.length ? query.accountIds[0] : undefined;
+  const balances = onlyAccount
+    ? await balancesAfter(db, onlyAccount, found.map((row) => row.id))
+    : undefined;
+
   return {
     rows: found.map((row) => ({
       ...row,
       amountCents: Number(row.amountCents),
       envelopeNames: envelopeNames.get(row.id) ?? [],
+      ...(balances?.has(row.id) ? { balanceAfterCents: balances.get(row.id)! } : {}),
     })),
     total,
     totalCents: Number(totals?.totalCents ?? 0),
@@ -324,6 +338,41 @@ export async function searchTransactions(
     offset,
     hasMore: offset + found.length < total,
   };
+}
+
+/**
+ * The account's running balance after each of these transactions.
+ *
+ * Summed over every transaction in the account, not just the ones the search
+ * matched: a balance is a fact about the account, and a filter that hid the
+ * rows between two matches would otherwise make it jump for no visible reason.
+ * Unreviewed rows count - the money moved whether or not it has an envelope.
+ *
+ * Within one day the bank's own order is unknown, so rows are summed in the
+ * order they arrived; the balance at the end of each day is exact either way.
+ */
+async function balancesAfter(
+  db: Database,
+  accountId: string,
+  ids: string[],
+): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db.execute<{ id: string; balance_after: string }>(sql`
+    select id, balance_after from (
+      select id,
+        sum(amount_cents) over (
+          order by date, created_at, id
+          rows between unbounded preceding and current row
+        ) as balance_after
+      from transactions
+      where account_id = ${accountId}
+    ) running
+    where id in (${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+  `);
+  return new Map(rows.map((row) => [row.id, Number(row.balance_after)]));
 }
 
 /** The envelopes behind one page of results, in the order they were split. */

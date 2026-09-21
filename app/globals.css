@@ -477,7 +477,7 @@ a.callout:hover {
 }
 
 /* The pull-up suits text under text, not under a row of controls (#19). */
-:is(.add-device, .export-links, .row, .rule-edit) + .footnote {
+:is(.add-device, .export-links, .row, .rule-edit, .checkpoint) + .footnote {
   margin-top: 10px;
 }
 
@@ -2235,4 +2235,87 @@ details[open] > summary > .group-summary::before {
   text-align: left;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* One account's list carries its running balance under each amount; the meta
+   line gives up the right-hand column to it. */
+.txn.with-balance {
+  grid-template-areas:
+    'payee amount'
+    'meta  balance';
+}
+
+.txn-balance {
+  grid-area: balance;
+  justify-self: end;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* --- Statement balances against the ledger ------------------------------- */
+
+.checkpoints {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 10px 0 14px;
+  font-size: 13px;
+}
+
+.checkpoints summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.checkpoint-off {
+  color: var(--accent);
+}
+
+.checkpoint-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 5px 0;
+  text-align: right;
+}
+
+.checkpoint-row > :first-child {
+  text-align: left;
+}
+
+.checkpoint-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.checkpoint {
+  border-bottom: 1px solid var(--border);
+}
+
+.checkpoint-change {
+  margin: 0 0 6px;
+  color: var(--text-dim);
+}
+
+.checkpoints-none {
+  margin: 8px 0 12px;
+}
+
+/* On a phone the day takes its own line and the three figures share the next,
+   so four columns of money are never squeezed into one row. */
+@media (max-width: 720px) {
+  .checkpoint-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    font-size: 12px;
+  }
+  .checkpoint-row > :first-child {
+    grid-column: 1 / -1;
+  }
 }

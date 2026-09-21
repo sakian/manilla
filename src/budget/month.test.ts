@@ -62,3 +62,12 @@ describe('budget months', () => {
     assert.equal(monthLabel('2026-01'), 'January 2026');
   });
 });
+
+test('days move across months, years and a leap day without a timezone', async () => {
+  const { addDays } = await import('./month.ts');
+  assert.equal(addDays('2026-02-28', 1), '2026-03-01');
+  assert.equal(addDays('2028-02-28', 1), '2028-02-29');
+  assert.equal(addDays('2025-12-31', 1), '2026-01-01');
+  assert.equal(addDays('2026-03-01', -1), '2026-02-28');
+  assert.throws(() => addDays('2026-3-1', 1));
+});

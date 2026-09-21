@@ -235,6 +235,13 @@ export const importBatches = pgTable('import_batches', {
   accountId: uuid('account_id').references(() => accounts.id),
   addedCount: integer('added_count').notNull().default(0),
   duplicateCount: integer('duplicate_count').notNull().default(0),
+  /**
+   * The balance the statement itself stated, and the day it was as of (FR-14).
+   * Kept as checkpoints: the bank's own word on what the account held, against
+   * which the ledger's balance on the same day can be compared long after.
+   */
+  statedBalanceCents: cents('stated_balance_cents'),
+  statedBalanceAsOf: date('stated_balance_as_of'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   /** FR-13: an import can be undone wholesale. */
   revertedAt: timestamp('reverted_at', { withTimezone: true }),

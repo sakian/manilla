@@ -392,6 +392,38 @@ describe(
       );
       assert.deepEqual(choices.accountGroups, [], 'no categories of account made yet');
     });
+
+    test('one account shows its running balance, whatever else is filtered', async () => {
+      const add = (date: string, amountCents: number, payeeRaw: string) =>
+        recordTransaction(db, { accountId: chequing, date, amountCents, payeeRaw, source: 'manual' });
+      await add('2026-05-01', 100000, 'PAYROLL');
+      await add('2026-05-02', -2500, 'SHELL');
+      await add('2026-05-02', -4000, 'SAFEWAY');
+      await add('2026-05-03', -1000, 'SHELL');
+
+      const all = await searchTransactions(db, { accountIds: [chequing] });
+      assert.deepEqual(
+        all.rows.map((row) => [row.payeeRaw, row.balanceAfterCents]),
+        [
+          ['SHELL', 92500],
+          ['SAFEWAY', 93500],
+          ['SHELL', 97500],
+          ['PAYROLL', 100000],
+        ],
+        'newest first, each balance following from the row below it',
+      );
+
+      // Filtered to one payee, the balance is still the account's, not the sum
+      // of what matched: a filter must not make the money look different.
+      const shell = await searchTransactions(db, { accountIds: [chequing], payee: 'shell' });
+      assert.deepEqual(
+        shell.rows.map((row) => row.balanceAfterCents),
+        [92500, 97500],
+      );
+
+      const both = await searchTransactions(db, { accountIds: [chequing, visa] });
+      assert.ok(both.rows.every((row) => row.balanceAfterCents === undefined), 'two accounts, no one balance');
+    });
   },
 );
 

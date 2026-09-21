@@ -39,7 +39,7 @@ type Preview = {
     possible_duplicate: number;
     transfer_half: number;
   };
-  balance?: { statedCents: number; projectedCents: number; matches: boolean };
+  balance?: { statedCents: number; projectedCents: number; matches: boolean; asOf?: string };
   warnings: string[];
   aiNote?: string;
 };
@@ -186,6 +186,10 @@ export default function ImportScreen({
   const total = ready.reduce((sum, statement) => sum + tallyOf(statement.preview!), 0);
   const sharedAccount =
     new Set(ready.map((statement) => statement.preview!.accountId)).size < ready.length;
+  // A statement with nothing new still states a dated balance worth keeping as
+  // a checkpoint - which is how old statements fill in the account's history.
+  const balancesOnly =
+    total === 0 && ready.some((statement) => statement.preview!.balance?.asOf !== undefined);
 
   const commit = useCallback(() => {
     if (ready.length === 0) return;
@@ -229,9 +233,8 @@ export default function ImportScreen({
         return;
       }
       setNote(
-        linked > 0 || skipped > 0
-          ? `Nothing new. Linked ${linked}, skipped ${skipped}.`
-          : 'Nothing new in those files.',
+        `Nothing new${linked > 0 ? `; linked ${linked}` : ''}. Any balance the statements stated ` +
+          'is kept, and shows on the account’s transactions.',
       );
       router.refresh();
     });
@@ -384,10 +387,16 @@ export default function ImportScreen({
           )}
           <div className="signin-actions import-actions">
             {ready.length > 0 && (
-              <button className="primary" onClick={commit} disabled={pending || total === 0}>
+              <button
+                className="primary"
+                onClick={commit}
+                disabled={pending || (total === 0 && !balancesOnly)}
+              >
                 {pending
                   ? 'Working…'
-                  : ready.length === 1
+                  : balancesOnly
+                    ? `Nothing new - record the statement balance${ready.length === 1 ? '' : 's'}`
+                    : ready.length === 1
                     ? `Import ${total} and review ${total}`
                     : sharedAccount
                       ? // Rows two files share are only known once the first is in.

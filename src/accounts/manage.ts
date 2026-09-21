@@ -286,6 +286,8 @@ export type AccountTransaction = {
   accountId: string;
   accountName: string;
   envelopeNames: string[];
+  /** The account's balance after this one, when the list is of one account. */
+  balanceAfterCents?: number;
 };
 
 /**

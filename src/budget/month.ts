@@ -59,6 +59,17 @@ export function monthEnd(month: MonthKey): string {
   return `${month}-${String(last).padStart(2, '0')}`;
 }
 
+/**
+ * A calendar day moved by whole days: `2026-02-28` plus one is `2026-03-01`.
+ * UTC throughout, like `monthEnd`, so no local timezone can nudge it a day.
+ */
+export function addDays(date: string, delta: number): string {
+  const match = DAY.exec(date);
+  if (!match) throw new MonthError(`Not a calendar date (YYYY-MM-DD): ${date}`);
+  const moved = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + delta));
+  return moved.toISOString().slice(0, 10);
+}
+
 export function addMonths(month: MonthKey, delta: number): MonthKey {
   assertMonth(month);
   const [year, index] = month.split('-').map(Number) as [number, number];
