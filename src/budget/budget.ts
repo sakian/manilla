@@ -496,6 +496,8 @@ export type FundingPlan = {
   availableCents: number;
   /** How far the proposal exceeds the pool, or zero. */
   shortfallCents: number;
+  /** How many lines actually propose something, for "fund 12 envelopes". */
+  proposingCount: number;
 };
 
 /**
@@ -505,6 +507,15 @@ export type FundingPlan = {
  * Each line proposes the plan *minus what the month already received*, so an
  * envelope funded by hand earlier in the month is topped up rather than filled
  * twice, and an envelope already at its plan proposes nothing.
+ *
+ * Every live envelope gets a line, including ones with no plan at all. A plan is
+ * what funding *proposes*, not what it is allowed to do: "put whatever is left
+ * into Savings" is an ordinary month, and Savings has no monthly figure. Leaving
+ * the unplanned ones out meant the only way to fund them was a separate transfer
+ * from the pool, which is the same operation typed somewhere else.
+ *
+ * They propose nothing, so the total and the one-click default are unchanged -
+ * `fundEnvelopes` drops zero amounts, so an untouched row writes no move.
  */
 export async function planFunding(
   db: Database,
@@ -523,7 +534,7 @@ export async function planFunding(
  */
 export function fundingFromBudget(budget: BudgetMonth): FundingPlan {
   const lines: FundingLine[] = budget.rows
-    .filter((row) => !row.isUnallocated && row.plannedCents > 0)
+    .filter((row) => !row.isUnallocated)
     .map((row) => ({
       envelopeId: row.envelopeId,
       name: row.name,
@@ -542,6 +553,7 @@ export function fundingFromBudget(budget: BudgetMonth): FundingPlan {
     totalCents,
     availableCents,
     shortfallCents: Math.max(0, totalCents - availableCents),
+    proposingCount: lines.filter((line) => line.proposedCents > 0).length,
   };
 }
 

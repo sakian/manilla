@@ -8,6 +8,10 @@
  * the envelopes hold. The preview is the important part - every row proposes
  * what is *left* of its plan for the month, so funding twice does not fill
  * twice, and every figure can be edited before anything is written.
+ *
+ * Every envelope is listed, including the ones with no plan. A plan is what
+ * funding proposes, not what it is allowed to do, and "put whatever is left into
+ * Savings" is an ordinary month. Rows left at zero write nothing.
  */
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
@@ -63,8 +67,10 @@ export default function FundEnvelopes({
   const sendMonthBack = useCallback(() => {
     if (
       !window.confirm(
-        `Send every allocation for ${label} back to Available? Each one is reversed by an ` +
-          'opposite entry, so the history still shows what happened.',
+        `Take back everything allocated to envelopes in ${label}, returning it to Available?\n\n` +
+          'Only this month\u2019s allocations are touched - spending, transfers you made by hand, ' +
+          'and other months are left alone. Each one is reversed by an opposite entry, so the ' +
+          'envelope\u2019s history still shows what happened rather than losing the record.',
       )
     ) {
       return;
@@ -109,8 +115,12 @@ export default function FundEnvelopes({
 
         <div className="dialog-body">
           <p className="muted">
-            Each row proposes what is left of its plan for this month, so funding twice does not
-            fill twice. Edit anything before applying.
+            {funding.proposingCount === 0
+              ? 'Nothing has a planned amount left to fund this month. Type into any envelope to put something in it anyway.'
+              : `Proposing ${money(funding.totalCents)} across ${funding.proposingCount} ` +
+                `envelope${funding.proposingCount === 1 ? '' : 's'} with a plan left to fill. ` +
+                'Edit anything, including the envelopes proposing nothing.'}{' '}
+            Available holds {money(funding.availableCents)}.
           </p>
 
           <div className="budget-table">
@@ -171,7 +181,7 @@ export default function FundEnvelopes({
           </button>
           {allocatedCents !== 0 && (
             <button onClick={sendMonthBack} disabled={pending}>
-              Send {label} back
+              Undo {label} funding
             </button>
           )}
           <button onClick={onClose} disabled={pending}>

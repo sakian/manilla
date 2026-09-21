@@ -227,13 +227,50 @@ describe(
       );
     });
 
-    test('an envelope with no plan is left out of the preview', async () => {
+    test('an envelope with no plan is offered too, proposing nothing', async () => {
       await setPlanned(db, env.gasId, 20000);
       const plan = await planFunding(db, '2026-09', { today: '2026-09-19' });
+
+      // Every envelope is fundable: "put whatever is left into Savings" is an
+      // ordinary month and Savings has no monthly figure.
       assert.deepEqual(
-        plan.lines.map((line) => line.envelopeId),
-        [env.gasId],
+        [...plan.lines.map((line) => line.envelopeId)].sort(),
+        [env.gasId, env.groceriesId].sort(),
       );
+      assert.ok(
+        !plan.lines.some((line) => line.envelopeId === env.unallocatedId),
+        'the pool is not funded from itself',
+      );
+
+      const groceries = plan.lines.find((line) => line.envelopeId === env.groceriesId)!;
+      assert.equal(groceries.plannedCents, 0);
+      assert.equal(groceries.proposedCents, 0);
+
+      // So the one-click default is unchanged by their presence.
+      assert.equal(plan.totalCents, 20000);
+      assert.equal(plan.proposingCount, 1);
+    });
+
+    test('an unplanned envelope can be funded by typing an amount into it', async () => {
+      await receiveIncome(400000);
+      await setPlanned(db, env.gasId, 20000);
+
+      const plan = await planFunding(db, '2026-09', { today: '2026-09-19' });
+      const applied = await fundEnvelopes(
+        db,
+        '2026-09',
+        // Exactly what the dialog sends: every line, most of them zero.
+        plan.lines.map((line) => ({
+          envelopeId: line.envelopeId,
+          amountCents: line.envelopeId === env.groceriesId ? 150000 : line.proposedCents,
+        })),
+        { today: '2026-09-19' },
+      );
+
+      assert.equal(applied.moves, 2, 'zero rows write nothing');
+      assert.equal(applied.totalCents, 170000);
+      assert.equal(await balanceOf(env.groceriesId), 150000);
+      assert.equal(await balanceOf(env.gasId), 20000);
     });
 
     test('funding twice does not fill twice: the second run proposes the remainder', async () => {

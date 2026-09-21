@@ -226,14 +226,14 @@ export default function HomeScreen({
             >
               Move money
             </button>
-            {/* Reachable while there is either something to fund or something
-                already funded to send back (FR-30). */}
+            {/* Every envelope is fundable, so this is only unreachable when
+                there are none at all. */}
             <button
               onClick={() => setFunded(true)}
-              disabled={pending || (funding.lines.length === 0 && allocatedCents === 0)}
+              disabled={pending || funding.lines.length === 0}
               title={
-                funding.lines.length === 0 && allocatedCents === 0
-                  ? 'No envelope has a planned amount yet'
+                funding.totalCents === 0
+                  ? 'Put money into any envelope out of Available'
                   : `Move ${money(funding.totalCents)} out of Available`
               }
             >
