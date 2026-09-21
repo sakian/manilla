@@ -84,6 +84,20 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-manilla}:${POSTGRES_PASSWORD:-manilla}@db:5432/${POSTGRES_DB:-manilla}
       NODE_ENV: production
+      # Next's standalone server binds to whatever HOSTNAME says, and Docker sets
+      # that to the container's name - so without this the app listens on the
+      # compose network address and `tailscale serve`, which proxies to
+      # 127.0.0.1:3000 from inside this same namespace, gets nothing: a 502 from a
+      # container whose own logs look perfectly healthy.
+      #
+      # Loopback rather than 0.0.0.0 on purpose. This namespace also holds the
+      # tailnet address, and binding to everything would put the app on the
+      # tailnet as plain HTTP beside its own HTTPS - reachable, unencrypted, and
+      # useless for passkeys. Only the sidecar shares this loopback.
+      #
+      # Serving through Nginx instead means giving the app its own namespace and a
+      # published port, and then this has to be 0.0.0.0 for the port to reach it.
+      HOSTNAME: 127.0.0.1
       # Passkeys are bound to this hostname; it must match what you type in the
       # browser, e.g. manilla.your-tailnet.ts.net. The localhost defaults are for
       # development only: in production the boot-time check in instrumentation.ts
