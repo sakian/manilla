@@ -1,7 +1,13 @@
 import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Database } from '../../db/client.ts';
-import { checkInvariant, moveBetweenEnvelopes, openAccount, recordTransaction } from '../ledger/ledger.ts';
+import {
+  checkInvariant,
+  moveBetweenEnvelopes,
+  openAccount,
+  recordTransaction,
+  unallocatedEnvelope,
+} from '../ledger/ledger.ts';
 import { setPlanned } from '../budget/budget.ts';
 import { createTransferRule } from '../rules/rules.ts';
 import { parseCsv, toRecords } from '../csv.ts';
@@ -197,7 +203,8 @@ describe(
 
       const after = await exportLedger(db);
       assert.equal(after.counts.transactions, 0);
-      assert.equal(after.counts.envelopes, 0);
+      assert.equal(after.counts.envelopes, 1, 'only the income pool, as on a fresh install');
+      assert.equal((await unallocatedEnvelope(db)).name, 'Available');
       assert.equal(after.counts.accounts, 0);
       assert.equal(after.counts.budgetLines, 0);
 

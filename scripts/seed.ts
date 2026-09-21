@@ -10,13 +10,12 @@
  *   npm run seed -- --reset      wipe everything first
  */
 
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createDb } from '../db/client.ts';
 import { envelopeGroups, envelopes } from '../db/schema.ts';
-import { openAccount } from '../src/ledger/ledger.ts';
+import { ensureIncomePool, openAccount } from '../src/ledger/ledger.ts';
 
 const GROUPS: Record<string, string[]> = {
-  Income: ['Available'],
   Living: [
     'Groceries and Supplies',
     'Eating Out',
@@ -47,13 +46,23 @@ if (reset) {
   console.log('cleared existing data');
 }
 
-const existing = await db.select({ id: envelopes.id }).from(envelopes).limit(1);
+// The income pool alone is what a fresh install already has, so it does not
+// count as a chart someone has started.
+const existing = await db
+  .select({ id: envelopes.id })
+  .from(envelopes)
+  .where(eq(envelopes.isUnallocated, false))
+  .limit(1);
 if (existing.length > 0) {
   console.log('Envelopes already exist. Pass --reset to start over.');
   process.exit(0);
 }
 
-let groupPosition = 0;
+// The pool is made where the app makes it, in an Income group of its own, and
+// the chart below goes after it.
+await ensureIncomePool(db);
+
+let groupPosition = 1;
 for (const [groupName, names] of Object.entries(GROUPS)) {
   const [group] = await db
     .insert(envelopeGroups)
@@ -65,8 +74,6 @@ for (const [groupName, names] of Object.entries(GROUPS)) {
       groupId: group!.id,
       name,
       position: index,
-      // The one income pool, which a migrated export's own pool maps onto.
-      isUnallocated: groupName === 'Income' && name === 'Available',
     })),
   );
 }

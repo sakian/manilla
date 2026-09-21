@@ -170,6 +170,55 @@ export async function unallocatedEnvelope(db: Database) {
   return row;
 }
 
+/** A connection or an open transaction; drizzle types them apart. */
+type Executor = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
+
+/**
+ * Make sure the income pool exists (FR-28), creating it if not.
+ *
+ * Every screen that shows a budget needs the pool, and so does an opening
+ * balance and a migration. It used to come only from the development seed, so a
+ * fresh deploy had none and every one of those screens threw (#21) - as did
+ * the same install after "Erase everything". Nothing else about an empty ledger
+ * needs setting up, so this is the whole of "the initial setup".
+ *
+ * Safe to call on every boot: it does nothing when the pool is already there,
+ * and the partial unique index settles a race between two callers.
+ */
+export async function ensureIncomePool(db: Executor): Promise<void> {
+  const [existing] = await db
+    .select({ id: envelopes.id })
+    .from(envelopes)
+    .where(eq(envelopes.isUnallocated, true))
+    .limit(1);
+  if (existing) return;
+
+  await db.transaction(async (tx) => {
+    const [group] = await tx
+      .select({ id: envelopeGroups.id })
+      .from(envelopeGroups)
+      .where(eq(envelopeGroups.name, INCOME_GROUP))
+      .limit(1);
+    const groupId =
+      group?.id ??
+      (
+        await tx
+          .insert(envelopeGroups)
+          .values({ name: INCOME_GROUP, position: 0 })
+          .returning({ id: envelopeGroups.id })
+      )[0]!.id;
+
+    await tx
+      .insert(envelopes)
+      .values({ groupId, name: INCOME_POOL, isUnallocated: true, position: 0 })
+      .onConflictDoNothing();
+  });
+}
+
+/** The seed's names, so a pool made here looks like one made there. */
+export const INCOME_GROUP = 'Income';
+export const INCOME_POOL = 'Available';
+
 // ---------------------------------------------------------------------------
 // Writes
 // ---------------------------------------------------------------------------

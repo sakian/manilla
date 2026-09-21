@@ -5,6 +5,7 @@ import {
   LedgerError,
   accountBalances,
   checkInvariant,
+  ensureIncomePool,
   envelopeBalances,
   moveBetweenEnvelopes,
   openAccount,
@@ -22,7 +23,7 @@ import {
   truncateAll,
   type Fixture,
 } from './testdb.ts';
-import { envelopes } from '../../db/schema.ts';
+import { envelopeGroups, envelopes } from '../../db/schema.ts';
 
 const available = await databaseAvailable();
 
@@ -373,6 +374,35 @@ describe(
         (error: Error) => pgErrorCode(error) === '23505',
       );
       assert.equal((await unallocatedEnvelope(db)).id, env.unallocatedId);
+    });
+
+    test('an empty ledger gets an income pool, and only one (#21)', async () => {
+      await truncateAll(db);
+      await ensureIncomePool(db);
+      await ensureIncomePool(db);
+
+      const pool = await unallocatedEnvelope(db);
+      assert.equal(pool.name, 'Available');
+      assert.equal((await db.select().from(envelopes)).length, 1);
+      assert.equal((await db.select().from(envelopeGroups)).length, 1);
+
+      // An opening balance is the first thing a fresh install writes, and it
+      // needs somewhere to land.
+      await openAccount(db, { name: 'Chequing', kind: 'chequing', openingBalanceCents: 1000 });
+      assert.equal(await balanceOf(pool.id), 1000);
+    });
+
+    test('an existing pool is left alone', async () => {
+      await ensureIncomePool(db);
+      assert.equal((await unallocatedEnvelope(db)).id, env.unallocatedId);
+      assert.equal((await db.select().from(envelopes)).length, 3);
+    });
+
+    test('a pool is filed under an Income group that is already there', async () => {
+      await truncateAll(db);
+      await db.insert(envelopeGroups).values({ name: 'Income', position: 3 });
+      await ensureIncomePool(db);
+      assert.equal((await db.select().from(envelopeGroups)).length, 1);
     });
   },
 );

@@ -40,6 +40,10 @@ async function migrateIfNeeded(production: boolean): Promise<void> {
   const db = createDb(process.env.DATABASE_URL);
   try {
     await migrate(db, { migrationsFolder: './db/migrations' });
+    // A schema with no income pool is one every budget screen throws against
+    // (#21), and the seed that used to make it is a development script.
+    const { ensureIncomePool } = await import('./src/ledger/ledger.ts');
+    await ensureIncomePool(db);
     console.log('[manilla] database is up to schema');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

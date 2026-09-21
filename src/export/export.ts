@@ -30,6 +30,7 @@ import {
   txnLines,
 } from '../../db/schema.ts';
 import { toCsv } from '../csv.ts';
+import { ensureIncomePool } from '../ledger/ledger.ts';
 
 export type ExportedTransaction = {
   id: string;
@@ -321,6 +322,8 @@ export async function exportCsv(db: Database, table: CsvTableName): Promise<stri
  * Every other table goes, and the list has to be kept in step with the schema -
  * `account_groups` was missed when it was added, which left a set of empty
  * categories behind after an erase with nothing to say where they came from.
+ *
+ * What is left is what a fresh install has: an empty income pool.
  */
 export async function eraseAllData(db: Database): Promise<Record<string, number>> {
   const before = {
@@ -344,6 +347,9 @@ export async function eraseAllData(db: Database): Promise<Record<string, number>
     await tx.delete(accounts);
     await tx.delete(accountGroups);
     await tx.delete(appSettings);
+    // The one envelope an empty ledger still needs: without it every budget
+    // screen throws, which is not "starting again" (#21).
+    await ensureIncomePool(tx);
   });
 
   return before;
