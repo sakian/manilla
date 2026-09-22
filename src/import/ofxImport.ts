@@ -39,6 +39,14 @@ import { AI_MODEL } from '../categorize/ai.ts';
  */
 const TRANSFER_DATE_WINDOW_DAYS = 4;
 
+/**
+ * How far apart two records of one transaction can be dated. A bank statement
+ * dates a row when it posted; a migrated history dates it when it was entered,
+ * and the two were three days apart on a real pair that got in twice. A week
+ * covers a weekend either side without reaching last month's bill.
+ */
+const LOOKALIKE_WINDOW_DAYS = 5;
+
 /** Whole days between two `YYYY-MM-DD` dates, order-independent. */
 function daysApart(left: string, right: string): number {
   const to = (date: string) => Date.UTC(
@@ -174,10 +182,12 @@ export async function previewImport(
     for (const row of rows) knownById.set(row.value, row.transactionId);
   }
 
-  // Existing transactions in the statement's date range, for look-alike matching.
-  const dates = incoming.map((t) => t.posted).sort();
-  const lookAlikes = new Map<string, string[]>();
-  if (dates.length > 0) {
+  // Existing transactions a new row might be another record of: the same
+  // amount and payee, with no bank id of their own. One that has a bank id came
+  // from this bank already and is a different transaction - last month's bill,
+  // or the second of two identical charges - not this one from another source.
+  const lookAlikes = new Map<string, { id: string; date: string }[]>();
+  if (incoming.length > 0) {
     const rows = await db
       .select({
         id: transactions.id,
@@ -186,15 +196,26 @@ export async function previewImport(
         payeeKey: transactions.payeeKey,
       })
       .from(transactions)
-      .where(eq(transactions.accountId, accountId));
+      .where(
+        and(
+          eq(transactions.accountId, accountId),
+          sql`not exists (
+            select 1 from ${transactionExternalIds} x
+            where x.transaction_id = ${transactions.id} and x.kind = 'fitid'
+          )`,
+        ),
+      );
 
     for (const row of rows) {
-      const key = `${row.date}|${Number(row.amountCents)}|${row.payeeKey}`;
+      const key = `${Number(row.amountCents)}|${row.payeeKey}`;
       const list = lookAlikes.get(key);
-      if (list) list.push(row.id);
-      else lookAlikes.set(key, [row.id]);
+      if (list) list.push({ id: row.id, date: row.date });
+      else lookAlikes.set(key, [{ id: row.id, date: row.date }]);
     }
   }
+  // Each existing row answers for one new row at most, so a file with four
+  // identical charges is matched against four, not one four times.
+  const claimedLookAlikes = new Set<string>();
 
   // Transfer halves in this account that have no bank id yet, so they are still
   // waiting for their own statement to arrive (FR-5).
@@ -210,13 +231,8 @@ export async function previewImport(
     ]),
   );
 
-  // Count how many of each look-alike shape this file contains, so that a file
-  // legitimately holding four identical charges does not flag the last three.
-  const seenInFile = new Map<string, number>();
-
   const rows: ImportRow[] = incoming.map((transaction, index) => {
     const { key: payeeKey } = normalizePayee(transaction.name || transaction.memo || '');
-    const shape = `${transaction.posted}|${transaction.amountCents}|${payeeKey}`;
 
     const existingByFit = transaction.fitId ? knownById.get(transaction.fitId) : undefined;
     if (existingByFit) {
@@ -258,19 +274,32 @@ export async function previewImport(
       };
     }
 
-    const candidates = lookAlikes.get(shape) ?? [];
-    const alreadyUsed = seenInFile.get(shape) ?? 0;
-    seenInFile.set(shape, alreadyUsed + 1);
-
-    if (candidates.length > alreadyUsed) {
+    // Nearest date first, so this month's copy is matched rather than whichever
+    // was found first.
+    const [lookAlike] = (lookAlikes.get(`${transaction.amountCents}|${payeeKey}`) ?? [])
+      .filter(
+        (candidate) =>
+          !claimedLookAlikes.has(candidate.id) &&
+          daysApart(candidate.date, transaction.posted) <= LOOKALIKE_WINDOW_DAYS,
+      )
+      .sort(
+        (left, right) =>
+          daysApart(left.date, transaction.posted) - daysApart(right.date, transaction.posted),
+      );
+    if (lookAlike) {
+      claimedLookAlikes.add(lookAlike.id);
+      const gap = daysApart(lookAlike.date, transaction.posted);
       return {
         index,
         transaction,
         verdict: 'possible_duplicate',
-        existingId: candidates[alreadyUsed],
+        existingId: lookAlike.id,
         reason:
-          'Same date, amount and payee as an existing transaction, but no shared bank id. ' +
-          'Could be a genuine repeat, or the same transaction from another source.',
+          `Same amount and payee as a transaction ${
+            gap === 0 ? 'on the same day' : `dated ${lookAlike.date}`
+          }, with no bank id of its own. Could be a genuine repeat, or the same transaction ` +
+          'recorded from another source - a migrated history dates things when they were ' +
+          'entered, the bank when they posted.',
       };
     }
 

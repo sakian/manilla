@@ -166,8 +166,63 @@ describe(
       assert.equal(preview.counts.new, 4);
 
       const flagged = preview.rows.find((row) => row.verdict === 'possible_duplicate')!;
-      assert.match(flagged.reason, /no shared bank id/);
+      assert.match(flagged.reason, /no bank id of its own/);
       assert.ok(flagged.existingId, 'it points at what it matched');
+    });
+
+    test('a migrated copy dated a few days off is still caught', async () => {
+      // The real pair that got in twice: the old app dated two transfers the 1st,
+      // the bank posted them the 4th, and an exact-date match saw two strangers.
+      const shell = bankStatement().transactions.find((row) => row.name.startsWith('SHELL'))!;
+      const [year, month, day] = shell.posted.split('-').map(Number) as [number, number, number];
+      const shifted = (by: number) =>
+        new Date(Date.UTC(year, month - 1, day + by)).toISOString().slice(0, 10);
+
+      const copy = await recordTransaction(db, {
+        accountId,
+        date: shifted(-3),
+        amountCents: shell.amountCents,
+        payeeRaw: shell.name,
+        source: 'goodbudget',
+        status: 'confirmed',
+      });
+      // Far enough away to be a different visit, not this one.
+      await recordTransaction(db, {
+        accountId,
+        date: shifted(-10),
+        amountCents: shell.amountCents,
+        payeeRaw: shell.name,
+        source: 'goodbudget',
+        status: 'confirmed',
+      });
+
+      const preview = await previewImport(db, bankStatement(), accountId, { categorize: false });
+      const flagged = preview.rows.filter((row) => row.verdict === 'possible_duplicate');
+      assert.equal(flagged.length, 1);
+      assert.equal(flagged[0]!.existingId, copy, 'the near one, not the one ten days off');
+      assert.match(flagged[0]!.reason, new RegExp(`dated ${shifted(-3)}`));
+
+      // Skipped unless someone says otherwise, so importing does not double it.
+      await commitImport(db, preview, acceptAll);
+      const shells = (await db.select().from(transactions)).filter((row) =>
+        row.payeeRaw.startsWith('SHELL'),
+      );
+      assert.equal(shells.length, 2, 'the two migrated rows, and no third');
+    });
+
+    test('a row the bank already identified is never taken for a copy', async () => {
+      // Imported last week with its own bank id: a different transaction from
+      // this one, however alike - the second of two identical charges.
+      const first = await previewImport(db, bankStatement(), accountId, { categorize: false });
+      await commitImport(db, first, acceptAll);
+
+      const shell = bankStatement().transactions.find((row) => row.name.startsWith('SHELL'))!;
+      const again: OfxStatement = {
+        ...bankStatement(),
+        transactions: [{ ...shell, fitId: 'A-DIFFERENT-CHARGE' }],
+      };
+      const preview = await previewImport(db, again, accountId, { categorize: false });
+      assert.equal(preview.rows[0]!.verdict, 'new');
     });
 
     test('linking a look-alike attaches the bank id instead of duplicating', async () => {
