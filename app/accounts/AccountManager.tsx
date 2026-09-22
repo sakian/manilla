@@ -42,6 +42,7 @@ import {
   unarchiveAccountAction,
   unarchiveAccountGroupAction,
 } from './actions.ts';
+import { displayDate } from '../../src/budget/month.ts';
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -283,7 +284,7 @@ export default function AccountManager({
                   </span>
                   <span className="figure">
                     <span className="figure-label">last</span>
-                    {account.lastActivity ?? 'nothing yet'}
+                    {account.lastActivity ? displayDate(account.lastActivity) : 'nothing yet'}
                   </span>
                 </span>
 

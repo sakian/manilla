@@ -39,6 +39,7 @@ import {
   type PlanSummary,
 } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';
+import { displayDate } from '../../src/budget/month.ts';
 
 type Step = 'files' | 'mapping' | 'report' | 'done';
 
@@ -346,7 +347,7 @@ export default function MigrateScreen({
             </div>
             {summary.dateRange && (
               <div className="callout">
-                {summary.dateRange.from} to {summary.dateRange.to}
+                {displayDate(summary.dateRange.from)} to {displayDate(summary.dateRange.to)}
               </div>
             )}
           </div>

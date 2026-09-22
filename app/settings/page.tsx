@@ -19,6 +19,7 @@ import AiPanel from './AiPanel.tsx';
 import DataPanel from './DataPanel.tsx';
 import RuleSuggestions from './RuleSuggestions.tsx';
 import Rules from './Rules.tsx';
+import { displayInstant } from '../../src/budget/month.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,11 +70,7 @@ export default async function SettingsPage() {
         <h2>Settings</h2>
         <p className="muted">
           Signed in as {session.userName}. This session lapses if unused, and ends for good on{' '}
-          {session.endsAt.toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          })}
+          {displayInstant(session.endsAt)}
           .
         </p>
       </div>

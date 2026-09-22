@@ -11,14 +11,10 @@ import {
   removeDeviceAction,
   renameDeviceAction,
 } from './actions.ts';
+import { displayInstant } from '../../src/budget/month.ts';
 
 function when(date: Date | null): string {
-  if (!date) return 'never used';
-  return new Date(date).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return date ? displayInstant(date) : 'never used';
 }
 
 export default function Devices({

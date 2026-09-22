@@ -38,12 +38,7 @@ import { markAsTransferAction, pairTransferAction, saveReviewAction } from '../a
 import { setTransactionNoteAction } from '../transactions/actions.ts';
 import { formatMoney } from '../../src/money.ts';
 import { useOverlay } from '../useOverlay.ts';
-
-function longDate(date: string): string {
-  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const [year, month, day] = date.split('-');
-  return `${names[Number(month) - 1]} ${Number(day)}, ${year}`;
-}
+import { displayDate } from '../../src/budget/month.ts';
 
 /**
  * How sure the pipeline is: one word and a number.
@@ -361,7 +356,7 @@ export default function ReviewQueue({
               </span>
 
               <span className="muted queue-meta">
-                <span>{longDate(row.date)}</span>
+                <span>{displayDate(row.date)}</span>
                 {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
               </span>
 

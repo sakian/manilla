@@ -71,3 +71,14 @@ test('days move across months, years and a leap day without a timezone', async (
   assert.equal(addDays('2026-03-01', -1), '2026-02-28');
   assert.throws(() => addDays('2026-3-1', 1));
 });
+
+test('dates read the way people write them, this year without the year', async () => {
+  const { displayDate } = await import('./month.ts');
+  const today = '2026-09-21';
+  assert.equal(displayDate('2026-09-18', today), 'Sept 18');
+  assert.equal(displayDate('2026-06-03', today), 'June 3');
+  assert.equal(displayDate('2025-12-31', today), 'Dec 31, 2025');
+  assert.equal(displayDate('2027-01-01', today), 'Jan 1, 2027');
+  // Something that is not a date is shown as it came rather than mangled.
+  assert.equal(displayDate('soon', today), 'soon');
+});

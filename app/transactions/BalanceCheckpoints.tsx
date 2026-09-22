@@ -9,7 +9,7 @@
 
 import Link from 'next/link';
 import type { BalanceCheckpoint } from '../../src/import/ofxImport.ts';
-import { addDays } from '../../src/budget/month.ts';
+import { addDays, displayDate } from '../../src/budget/month.ts';
 import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
 
@@ -66,7 +66,7 @@ export function BalanceCheckpoints({
       {shown.map((checkpoint) => (
         <div key={`${checkpoint.asOf}:${checkpoint.statedCents}`} className="checkpoint">
           <div className="checkpoint-row">
-            <span>{checkpoint.asOf}</span>
+            <span>{displayDate(checkpoint.asOf)}</span>
             <Money cents={checkpoint.statedCents} />
             <Money cents={checkpoint.ledgerCents} />
             {/* Plain, not green and red: a difference is neither money in nor
@@ -81,7 +81,7 @@ export function BalanceCheckpoints({
           {checkpoint.changeCents !== null && checkpoint.changeCents !== 0 && (
             <p className="checkpoint-change">
               The gap moved by <Money cents={checkpoint.changeCents} plain /> since{' '}
-              {checkpoint.previousAsOf}.{' '}
+              {displayDate(checkpoint.previousAsOf!)}.{' '}
               <Link
                 href={`/transactions?account=${accountId}&from=${addDays(
                   checkpoint.previousAsOf!,

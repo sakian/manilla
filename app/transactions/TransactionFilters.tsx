@@ -21,6 +21,7 @@ import { useCallback, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { UNCATEGORIZED } from '../../src/transactions/search.ts';
 import { writeQuery, type FormValues } from '../../src/transactions/urlQuery.ts';
+import { displayDate } from '../../src/budget/month.ts';
 
 export type FilterChoice = { id: string; name: string; archived?: boolean };
 export type EnvelopeFilterChoice = { id: string; name: string; groupName: string };
@@ -127,8 +128,8 @@ export default function TransactionFilters({
       accountGroups: [],
     });
   }
-  if (form.from) chip('from', `from ${form.from}`, { from: '' });
-  if (form.to) chip('to', `to ${form.to}`, { to: '' });
+  if (form.from) chip('from', `from ${displayDate(form.from)}`, { from: '' });
+  if (form.to) chip('to', `to ${displayDate(form.to)}`, { to: '' });
   if (form.min) chip('min', `at least $${form.min}`, { min: '' });
   if (form.max) chip('max', `at most $${form.max}`, { max: '' });
   if (form.dir) chip('dir', form.dir === 'in' ? 'money in' : 'money out', { dir: '' });

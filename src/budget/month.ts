@@ -79,6 +79,48 @@ export function addMonths(month: MonthKey, delta: number): MonthKey {
   return `${String(outYear).padStart(4, '0')}-${String(outMonth).padStart(2, '0')}`;
 }
 
+/**
+ * Short months written out, long ones cut with no full stop - the way people
+ * write them by hand, "Sept 18" rather than "Sep 18" or "Sep. 18".
+ */
+const DAY_MONTHS = [
+  'Jan',
+  'Feb',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'Aug',
+  'Sept',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/**
+ * A calendar date the way a person reads one: `2026-09-18` becomes `Sept 18`,
+ * or `Sept 18, 2025` when it is not this year. Everywhere a date is shown; the
+ * `YYYY-MM-DD` form stays for storage, URLs and exports, where it sorts.
+ *
+ * Read off the string, never through a `Date`, so no timezone can move it. Pass
+ * `today` in tests; the default is the local calendar day.
+ */
+export function displayDate(date: string, today: string = localToday()): string {
+  const match = DAY.exec(date);
+  if (!match) return date;
+  const label = `${DAY_MONTHS[Number(match[2]) - 1]} ${Number(match[3])}`;
+  return match[1] === today.slice(0, 4) ? label : `${label}, ${match[1]}`;
+}
+
+/**
+ * An instant - when something was created, when a session ends - as the local
+ * calendar day it falls on, in the same form.
+ */
+export function displayInstant(instant: Date | string, today: string = localToday()): string {
+  return displayDate(localToday(new Date(instant)), today);
+}
+
 /** Human form for a heading: `2026-09` becomes `September 2026`. */
 export function monthLabel(month: MonthKey): string {
   assertMonth(month);

@@ -25,6 +25,7 @@ import type {
 import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
 import { formatMoney } from '../../src/money.ts';
+import { displayDate } from '../../src/budget/month.ts';
 
 const PRESETS: { key: string; label: string }[] = [
   { key: 'this-month', label: 'This month' },
@@ -126,7 +127,7 @@ export default function ReportScreen({
           Spent <strong>{formatMoney(spending.totalCents)}</strong>
         </div>
         <div className="callout">
-          {period.from} to {period.to}
+          {displayDate(period.from)} to {displayDate(period.to)}
         </div>
         <div className="callout">
           {spending.envelopeCount} envelope{spending.envelopeCount === 1 ? '' : 's'} used
@@ -211,7 +212,7 @@ export default function ReportScreen({
               <span className="txn-payee">{row.payeeRaw}</span>
               <Money cents={row.shareCents} />
               <span className="muted txn-meta">
-                <span className="txn-date">{row.date}</span>
+                <span className="txn-date">{displayDate(row.date)}</span>
                 <span className="txn-env">
                   {row.account}
                   {row.shareCents !== row.amountCents && ' · part of a split'}

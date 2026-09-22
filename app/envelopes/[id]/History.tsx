@@ -20,12 +20,7 @@ import { useRouter } from 'next/navigation';
 import type { EnvelopeEvent } from '../../../src/envelopes/manage.ts';
 import { Money } from '../../Money.tsx';
 import { reverseAllocationAction } from '../../budget/actions.ts';
-
-function shortDate(date: string): string {
-  const [year, month, day] = date.split('-');
-  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${names[Number(month) - 1]} ${Number(day)} ${year}`;
-}
+import { displayDate } from '../../../src/budget/month.ts';
 
 export default function History({
   events,
@@ -82,7 +77,7 @@ export default function History({
               )}
             </span>
             <span className="muted txn-meta">
-              <span className="txn-date">{shortDate(event.date)}</span>
+              <span className="txn-date">{displayDate(event.date)}</span>
               <span className="txn-env">
                 {event.kind === 'transaction' ? event.accountName : ''}
                 {event.pending && ' · pending review'}

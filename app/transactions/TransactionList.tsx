@@ -24,6 +24,7 @@ import TransactionForm, {
   type EditingTransaction,
   type EnvelopeChoice,
 } from './TransactionForm.tsx';
+import { displayDate } from '../../src/budget/month.ts';
 
 export default function TransactionList({
   rows,
@@ -189,7 +190,7 @@ function TransactionRow({
           grid cells: a long envelope name squeezed the date's column to
           nothing and the nowrap date spilled over the top of it. */}
       <span className="muted txn-meta">
-        <span className="txn-date">{row.date}</span>
+        <span className="txn-date">{displayDate(row.date)}</span>
         <span className="txn-env">
           {partOf && (
             <>
@@ -250,7 +251,7 @@ function MoveRow({
       </span>
       <Money cents={move.amountCents} />
       <span className="muted txn-meta">
-        <span className="txn-date">{move.date}</span>
+        <span className="txn-date">{displayDate(move.date)}</span>
         {move.note && <span className="txn-env">{move.note}</span>}
       </span>
       <span className="txn-balance" title="The envelope's balance after this">

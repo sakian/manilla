@@ -25,6 +25,7 @@ import {
 } from './actions.ts';
 import type { ImportRecord } from '../../src/import/ofxImport.ts';
 import { formatMoney } from '../../src/money.ts';
+import { displayInstant } from '../../src/budget/month.ts';
 
 type Decision = 'add' | 'skip' | 'link';
 
@@ -427,7 +428,7 @@ export default function ImportScreen({
                 <span className="muted">
                   {' '}
                   · {batch.accountName ?? 'unknown account'} ·{' '}
-                  {new Date(batch.createdAt).toLocaleDateString()}
+                  {displayInstant(batch.createdAt)}
                 </span>
                 {batch.revertedAt && <span className="tag">undone</span>}
               </span>
