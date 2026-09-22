@@ -166,7 +166,7 @@ describe(
       assert.equal(preview.counts.new, 4);
 
       const flagged = preview.rows.find((row) => row.verdict === 'possible_duplicate')!;
-      assert.match(flagged.reason, /no bank id of its own/);
+      assert.match(flagged.reason, /no shared bank id/);
       assert.ok(flagged.existingId, 'it points at what it matched');
     });
 
@@ -210,18 +210,29 @@ describe(
       assert.equal(shells.length, 2, 'the two migrated rows, and no third');
     });
 
-    test('a row the bank already identified is never taken for a copy', async () => {
-      // Imported last week with its own bank id: a different transaction from
-      // this one, however alike - the second of two identical charges.
+    test('a banked row is matched on its own date only', async () => {
       const first = await previewImport(db, bankStatement(), accountId, { categorize: false });
       await commitImport(db, first, acceptAll);
-
       const shell = bankStatement().transactions.find((row) => row.name.startsWith('SHELL'))!;
-      const again: OfxStatement = {
+
+      // The same transfer re-downloaded under a new id - one bank does this to
+      // every transfer - is caught on its date, not let in as new.
+      const reissued: OfxStatement = {
         ...bankStatement(),
-        transactions: [{ ...shell, fitId: 'A-DIFFERENT-CHARGE' }],
+        transactions: [{ ...shell, fitId: 'SAME-CHARGE-NEW-ID' }],
       };
-      const preview = await previewImport(db, again, accountId, { categorize: false });
+      const again = await previewImport(db, reissued, accountId, { categorize: false });
+      assert.equal(again.rows[0]!.verdict, 'possible_duplicate');
+
+      // A day later it is a different charge: a banked row's date is the
+      // bank's own, so another record of it would carry the same one.
+      const [year, month, day] = shell.posted.split('-').map(Number) as [number, number, number];
+      const nextDay = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+      const later: OfxStatement = {
+        ...bankStatement(),
+        transactions: [{ ...shell, posted: nextDay, fitId: 'NEXT-DAY-CHARGE' }],
+      };
+      const preview = await previewImport(db, later, accountId, { categorize: false });
       assert.equal(preview.rows[0]!.verdict, 'new');
     });
 

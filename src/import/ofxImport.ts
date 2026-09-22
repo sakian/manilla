@@ -183,10 +183,18 @@ export async function previewImport(
   }
 
   // Existing transactions a new row might be another record of: the same
-  // amount and payee, with no bank id of their own. One that has a bank id came
-  // from this bank already and is a different transaction - last month's bill,
-  // or the second of two identical charges - not this one from another source.
-  const lookAlikes = new Map<string, { id: string; date: string }[]>();
+  // amount and payee, dated close by. How close depends on where the existing
+  // one came from:
+  //
+  //  - With no bank id - migrated, or typed in - it was dated when someone
+  //    entered it, which can be days off the bank's posting date: within the
+  //    window.
+  //  - With a bank id, the bank dated it, so another record of it has the same
+  //    date: that date only. Not "never", because a bank's id is not always
+  //    stable - one bank's re-downloaded statement gave every transfer a new id
+  //    while its purchases kept theirs - and not the window either, which would
+  //    take last week's identical charge for this one.
+  const lookAlikes = new Map<string, { id: string; date: string; banked: boolean }[]>();
   if (incoming.length > 0) {
     const rows = await db
       .select({
@@ -194,23 +202,20 @@ export async function previewImport(
         date: transactions.date,
         amountCents: transactions.amountCents,
         payeeKey: transactions.payeeKey,
+        banked: sql<boolean>`exists (
+          select 1 from ${transactionExternalIds} x
+          where x.transaction_id = ${transactions.id} and x.kind = 'fitid'
+        )`,
       })
       .from(transactions)
-      .where(
-        and(
-          eq(transactions.accountId, accountId),
-          sql`not exists (
-            select 1 from ${transactionExternalIds} x
-            where x.transaction_id = ${transactions.id} and x.kind = 'fitid'
-          )`,
-        ),
-      );
+      .where(eq(transactions.accountId, accountId));
 
     for (const row of rows) {
       const key = `${Number(row.amountCents)}|${row.payeeKey}`;
+      const candidate = { id: row.id, date: row.date, banked: row.banked };
       const list = lookAlikes.get(key);
-      if (list) list.push({ id: row.id, date: row.date });
-      else lookAlikes.set(key, [{ id: row.id, date: row.date }]);
+      if (list) list.push(candidate);
+      else lookAlikes.set(key, [candidate]);
     }
   }
   // Each existing row answers for one new row at most, so a file with four
@@ -280,7 +285,8 @@ export async function previewImport(
       .filter(
         (candidate) =>
           !claimedLookAlikes.has(candidate.id) &&
-          daysApart(candidate.date, transaction.posted) <= LOOKALIKE_WINDOW_DAYS,
+          daysApart(candidate.date, transaction.posted) <=
+            (candidate.banked ? 0 : LOOKALIKE_WINDOW_DAYS),
       )
       .sort(
         (left, right) =>
@@ -297,9 +303,9 @@ export async function previewImport(
         reason:
           `Same amount and payee as a transaction ${
             gap === 0 ? 'on the same day' : `dated ${lookAlike.date}`
-          }, with no bank id of its own. Could be a genuine repeat, or the same transaction ` +
-          'recorded from another source - a migrated history dates things when they were ' +
-          'entered, the bank when they posted.',
+          } and no shared bank id. Could be a genuine repeat, or the same transaction ` +
+          'recorded before - from another source, which dates things when they were entered, ' +
+          'or from this bank under an id it has since changed.',
       };
     }
 
