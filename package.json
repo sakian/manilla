@@ -14,7 +14,7 @@
     "dev:https": "next dev -p ${MANILLA_PORT:-3001} --experimental-https --experimental-https-key ./certs/dev-key.pem --experimental-https-cert ./certs/dev-cert.pem",
     "build": "next build",
     "start": "next start",
-    "test": "node --env-file-if-exists=.env --test 'src/**/*.test.ts'",
+    "test": "node --env-file-if-exists=.env --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs migrate",
