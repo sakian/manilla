@@ -27,6 +27,7 @@ import {
   txnLines,
 } from '../../db/schema.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
+import { localToday } from '../budget/month.ts';
 
 export class LedgerError extends Error {}
 
@@ -448,7 +449,7 @@ export async function openAccount(db: Database, input: NewAccount): Promise<stri
     const accountId = row!.id;
 
     if (input.openingBalanceCents && unallocated) {
-      const date = input.openingDate ?? new Date().toISOString().slice(0, 10);
+      const date = input.openingDate ?? localToday();
       const [opening] = await tx
         .insert(transactions)
         .values({

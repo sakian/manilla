@@ -33,6 +33,7 @@ import { toCsv } from '../csv.ts';
 import { ensureIncomePool } from '../ledger/ledger.ts';
 import { AI_BUDGET_KEY, AI_ENABLED_KEY } from '../ai/ai.ts';
 import { HOME_LEDGER_NAME_KEY } from '../ledgers/config.ts';
+import { localToday } from '../budget/month.ts';
 
 export type ExportedTransaction = {
   id: string;
@@ -372,7 +373,7 @@ export async function eraseAllData(db: Database): Promise<Record<string, number>
  * from different books are a mix-up waiting to happen (LG-1).
  */
 export function exportFilename(kind: string, now: Date = new Date(), ledger?: string): string {
-  const stamp = now.toISOString().slice(0, 10);
+  const stamp = localToday(now);
   const whose = ledger
     ?.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

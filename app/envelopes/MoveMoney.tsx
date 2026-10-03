@@ -21,6 +21,7 @@ import {
   transferAction,
 } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';
+import { localToday } from '../../src/budget/month.ts';
 
 export type EnvelopeChoice = {
   id: string;
@@ -28,13 +29,6 @@ export type EnvelopeChoice = {
   groupName: string;
   balanceCents: number;
 };
-
-function today(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate(),
-  ).padStart(2, '0')}`;
-}
 
 export function TransferDialog({
   envelopes,
@@ -54,7 +48,7 @@ export function TransferDialog({
     envelopes.find((envelope) => envelope.id !== (fromEnvelopeId ?? envelopes[0]?.id))?.id ?? '',
   );
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(today());
+  const [date, setDate] = useState(localToday());
   const [note, setNote] = useState('');
 
   const submit = useCallback(() => {
