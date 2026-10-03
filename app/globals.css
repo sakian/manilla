@@ -83,6 +83,20 @@
   --ledger-3-soft: #15281e;
 }
 
+/* Native controls - date pickers, scrollbars, a select's list - follow the
+   theme on screen rather than the system's when one has been chosen (#45). */
+:root {
+  color-scheme: light dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -256,6 +270,11 @@ button.primary {
   :root:not([data-theme='light']) button.primary {
     color: #1a1710;
   }
+}
+
+/* The same, for dark chosen on a device whose system is light. */
+:root[data-theme='dark'] button.primary {
+  color: #1a1710;
 }
 
 kbd {
@@ -1198,7 +1217,16 @@ details[open] > summary > .group-summary::before {
 
 .segmented button:last-child {
   border-radius: 0 8px 8px 0;
+}
+
+/* One border between neighbours, however many there are. */
+.segmented button + button {
   border-left: none;
+}
+
+.segmented.theme-choice {
+  max-width: 320px;
+  margin-bottom: 0;
 }
 
 .segmented button.active {
