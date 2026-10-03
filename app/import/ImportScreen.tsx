@@ -497,7 +497,6 @@ export default function ImportScreen({
   );
 }
 
-/** What one file would do, or why it cannot. */
 /** What a match does by default, in the words of the row it matched. */
 function matchVerb(row: PreviewRow): string {
   if (row.verdict === 'entered_ahead') return 'Linked to your entry ';
@@ -505,6 +504,7 @@ function matchVerb(row: PreviewRow): string {
   return 'Left out: looks like ';
 }
 
+/** What one file would do, or why it cannot. */
 function StatementCard({
   statement,
   disabled,
