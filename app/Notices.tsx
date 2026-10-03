@@ -46,7 +46,8 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
         ? {
             text: (
               <>
-                {notice.account.name} is <Money cents={Math.abs(cents)} plain />{' '}
+                {/* Inside the notice's link, which cannot hold a copy button. */}
+                {notice.account.name} is <Money cents={Math.abs(cents)} plain copy={false} />{' '}
                 {cents > 0 ? 'over' : 'under'} its last statement
               </>
             ),

@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CURRENCY_SYMBOL, formatCents, formatMoney, parseAmount } from './money.ts';
+import { CURRENCY_SYMBOL, amountToCopy, formatCents, formatMoney, parseAmount } from './money.ts';
 
 test('plain decimals', () => {
   assert.equal(parseAmount('45.20').cents, 4520);
@@ -84,5 +84,20 @@ describe('money as a person reads it', () => {
 
   test('the symbol comes from one place', () => {
     assert.ok(formatMoney(100).startsWith(CURRENCY_SYMBOL));
+  });
+});
+
+describe('money as it is copied (#44)', () => {
+  test('the figure alone: no symbol, no grouping, no sign', () => {
+    assert.equal(amountToCopy(-120455), '1204.55');
+    assert.equal(amountToCopy(554720000), '5547200.00');
+    assert.equal(amountToCopy(5), '0.05');
+    assert.equal(amountToCopy(0), '0.00');
+  });
+
+  test('what is copied parses back to the same cents', () => {
+    for (const cents of [1, 99, 100, 123456, 100000000]) {
+      assert.equal(parseAmount(amountToCopy(-cents)).cents, cents);
+    }
   });
 });

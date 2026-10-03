@@ -36,7 +36,7 @@ import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queu
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
 import { markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
 import { setTransactionNoteAction } from '../transactions/actions.ts';
-import { formatMoney } from '../../src/money.ts';
+import { Money } from '../Money.tsx';
 import { useOverlay } from '../useOverlay.ts';
 import EnvelopeChoices from './EnvelopeChoices.tsx';
 import { displayDate } from '../../src/budget/month.ts';
@@ -341,9 +341,7 @@ export default function ReviewQueue({
                 {transferFor.get(row.id) && <span className="band medium">transfer?</span>}
               </span>
 
-              <span className={`money ${row.amountCents < 0 ? 'neg' : 'pos'}`}>
-                {formatMoney(row.amountCents, { sign: 'incoming' })}
-              </span>
+              <Money cents={row.amountCents} sign="incoming" />
 
               <span className="muted queue-meta">
                 <span>{displayDate(row.date)}</span>
@@ -443,9 +441,7 @@ export default function ReviewQueue({
           <div className="picker" onClick={(event) => event.stopPropagation()}>
             <div className="picker-head">
               <strong>{picking.payeeDisplay}</strong>
-              <span className={`money ${picking.amountCents < 0 ? 'neg' : 'pos'}`}>
-                {formatMoney(picking.amountCents, { sign: 'incoming' })}
-              </span>
+              <Money cents={picking.amountCents} sign="incoming" />
             </div>
 
             {pickingTransfer ? (

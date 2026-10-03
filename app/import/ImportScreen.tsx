@@ -618,7 +618,8 @@ function StatementCard({
                   <span className="import-match-text">
                     <span>
                       {displayDate(row.date)} · {row.payee} ·{' '}
-                      <Money cents={row.amountCents} />
+                      {/* In the checkbox's label, where a button would be a second control. */}
+                      <Money cents={row.amountCents} copy={false} />
                     </span>
                     <span className="muted">
                       {isRefused(row) ? 'Will be added as its own, not ' : matchVerb(row)}

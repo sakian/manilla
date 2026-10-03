@@ -127,3 +127,13 @@ export function formatCents(cents: number): string {
   const abs = Math.abs(cents);
   return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
 }
+
+/**
+ * What pressing an amount copies (#44): the figure you would type into a bank's
+ * amount box - no symbol, no grouping, and no sign, since every banking app asks
+ * which way the money goes separately and a pasted minus is one more thing to
+ * delete. `-$1,204.55` copies as `1204.55`.
+ */
+export function amountToCopy(cents: number): string {
+  return formatCents(Math.abs(cents));
+}
