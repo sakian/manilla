@@ -32,6 +32,11 @@ import {
 } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';
 import { displayDate } from '../../src/budget/month.ts';
+import {
+  fillBlankLine,
+  linesToSave,
+  type LineDraft,
+} from '../../src/transactions/formLines.ts';
 
 export type AccountChoice = { id: string; name: string };
 /** Another ledger the other side of a new transaction could be entered in (LG-6). */
@@ -52,8 +57,6 @@ export type EditingTransaction = {
   source: string;
   lines: { envelopeId: string; amountCents: number }[];
 };
-
-type LineDraft = { envelopeId: string; amount: string };
 
 function today(): string {
   const now = new Date();
@@ -140,9 +143,12 @@ export default function TransactionForm({
     }
   }, [amount]);
 
+  /** What each line will save, the one blank line given the rest (#37). */
+  const filled = useMemo(() => fillBlankLine(lines, totalCents), [lines, totalCents]);
+
   const assignedCents = useMemo(() => {
     let total = 0;
-    for (const line of lines) {
+    for (const line of filled) {
       if (!line.envelopeId || line.amount.trim() === '') continue;
       try {
         total += centsFromInput(line.amount);
@@ -151,9 +157,9 @@ export default function TransactionForm({
       }
     }
     return total;
-  }, [lines]);
+  }, [filled]);
 
-  const usable = lines.filter((line) => line.envelopeId && line.amount.trim() !== '');
+  const usable = linesToSave(lines, totalCents);
   const leftToAssign = totalCents - assignedCents;
 
   const run = useCallback(
@@ -451,7 +457,11 @@ export default function TransactionForm({
                       className="amount"
                       inputMode="decimal"
                       value={line.amount}
-                      placeholder={index === 0 ? inputFromCents(totalCents) : '0.00'}
+                      // What a blank line will save, so leaving it blank is safe.
+                      placeholder={
+                        filled[index]!.amount ||
+                        (index === 0 ? inputFromCents(totalCents) : '0.00')
+                      }
                       onChange={(event) =>
                         setLines((current) =>
                           current.map((row, at) =>
