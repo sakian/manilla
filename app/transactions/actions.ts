@@ -29,7 +29,7 @@ import { centsFromInput } from '../amount.ts';
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
-/** What a new transaction was saved as, signed as stored: the start of its other side (#23). */
+/** What a new transaction was saved as, signed as stored: the start of its other side (LG-6). */
 export type SavedEntry = { amountCents: number; date: string; payee: string };
 
 function failed(error: unknown): { ok: false; error: string } {
@@ -321,7 +321,7 @@ export async function deleteTransferAction(pairId: string): Promise<ActionResult
 }
 
 /**
- * Switch to another ledger with the other side of `saved` ready to enter (#23).
+ * Switch to another ledger with the other side of `saved` ready to enter (LG-6).
  *
  * A POST rather than a link: opening a ledger changes which books every later
  * screen writes to, and a link could be followed from anywhere. Only a ledger

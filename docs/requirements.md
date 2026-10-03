@@ -203,6 +203,23 @@ past envelope *balances* cannot be rebuilt — only past *spending*. The wizard 
 so before writing anything and closes the gap with dated adjustments you read off
 your old app, rather than with a number from nowhere.
 
+## Ledgers
+
+Separate sets of books behind one sign-in — business and household, say —
+that share nothing, so money crossing between them is entered on each side
+([#23](https://github.com/sakian/manilla/issues/23)). Linked transactions across
+ledgers, and business accounting (equity, deductibility), are out of scope.
+
+| ID | Requirement | Pri | Status |
+| --- | --- | --- | --- |
+| LG-1 | Keep up to four ledgers behind one sign-in, each a database of its own with its own accounts, envelopes, rules and history. No query reads two, and each keeps the FR-37 invariant on its own. | S | Built |
+| LG-2 | Open a ledger from Settings and rename any, the first included. None can be closed from the app: a ledger holding money cannot be hidden. | S | Built |
+| LG-3 | With more than one ledger, name the open one on every screen in its own colour, and switch between them. With one, nothing changes. | S | Built |
+| LG-4 | Refuse to import a statement whose bank account belongs to another ledger, saying which; warn when one is mapped in both. | S | Built |
+| LG-5 | One AI switch, call budget and call log for the account, covering every ledger (NF-5); the merchant cache stays with each ledger. | S | Built |
+| LG-6 | After a new transaction is saved, offer to record its other side in another ledger, filled in with the same amount and day in the other direction, as a second save. | S | Built |
+| LG-7 | Migrations and backups cover every ledger, read from the same list the app uses, so a ledger opened in the app is never left out. | M | Built |
+
 ## Non-functional
 
 This is financial data, so correctness, security and control over what reaches a

@@ -295,7 +295,10 @@ migration.
 Each is a database of its own on the same Postgres, named after the home one
 (`manilla_ledger_business`), with its own accounts, envelopes, rules and
 history. Nothing crosses between them, and money that moves from one to the
-other is entered on each side. The header names the open ledger in its own
+other is entered on each side: saving a transaction offers to open the other
+ledger with its other side already filled in, and a transfer typed in before
+the bank has it is matched to the statement row when that arrives, rather than
+counted twice. The header names the open ledger in its own
 colour and switches between them, an import refuses a statement whose bank
 account belongs to another ledger, and one AI budget covers them all. The list
 of ledgers lives in the home database, where migrations and backups read it, so

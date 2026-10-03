@@ -1,5 +1,5 @@
 /**
- * Whether a bank account already belongs to another ledger (#23).
+ * Whether a bank account already belongs to another ledger (LG-4).
  *
  * A statement names its account by number, and each ledger remembers which of
  * its accounts a number maps to (FR-7). With two ledgers, the likeliest mistake

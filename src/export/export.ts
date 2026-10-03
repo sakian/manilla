@@ -324,7 +324,7 @@ export async function exportCsv(db: Database, table: CsvTableName): Promise<stri
  * `ai_calls` survives too, for a different reason: it is a record of money spent
  * with a third party, not a record of your money, and a spend log that can be
  * cleared by the thing doing the spending is not much of a log. So do the AI
- * switch and budget, which belong to the account and cover every ledger (#23),
+ * switch and budget, which belong to the account and cover every ledger (LG-5),
  * and the list of ledgers with the home one's name: erasing one ledger's money
  * is not closing the others.
  *
@@ -369,7 +369,7 @@ export async function eraseAllData(db: Database): Promise<Record<string, number>
 /**
  * A filename that says what it is and when it was taken - and, when there is
  * more than one ledger, whose: two downloads called manilla-ledger-<day>.json
- * from different books are a mix-up waiting to happen (#23).
+ * from different books are a mix-up waiting to happen (LG-1).
  */
 export function exportFilename(kind: string, now: Date = new Date(), ledger?: string): string {
   const stamp = now.toISOString().slice(0, 10);

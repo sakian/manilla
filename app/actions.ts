@@ -101,7 +101,7 @@ export async function pairTransferAction(firstId: string, secondId: string) {
 }
 
 /**
- * Open another ledger (#23).
+ * Open another ledger (LG-3).
  *
  * Only an existing ledger can be chosen: the value is looked up in the list,
  * never used as a database name, so this cannot point the app anywhere new.

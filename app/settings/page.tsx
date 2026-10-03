@@ -56,7 +56,7 @@ export default async function SettingsPage() {
     transferOptions(connection),
     listAccounts(connection),
     exportLedger(connection),
-    // One budget for the account, covering every ledger (#23).
+    // One budget for the account, covering every ledger (LG-5).
     aiSettings(homeDb()),
     aiUsage(homeDb(), undefined, connection),
     accuracy(connection),

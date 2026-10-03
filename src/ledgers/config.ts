@@ -1,5 +1,5 @@
 /**
- * What a ledger is, and the rules for naming one (#23).
+ * What a ledger is, and the rules for naming one (LG-1).
  *
  * A ledger is a whole Manilla's worth of money - accounts, envelopes, history -
  * in a Postgres database of its own on the same server. Ledgers share nothing

@@ -1,7 +1,7 @@
 import 'server-only';
 
 /**
- * The ledger this request is looking at (#23).
+ * The ledger this request is looking at (LG-1).
  *
  * Everything about money goes through `ledgerDb()`; only sign-in uses
  * `homeDb()`. There is deliberately no plain `db()` any more: with two ledgers,

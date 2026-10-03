@@ -127,7 +127,7 @@ export async function loadExamples(
  * with it off (NF-10).
  *
  * `account` holds the switch, the budget and the call log, which cover every
- * ledger (#23); everything else is read from the ledger being categorized.
+ * ledger (LG-5); everything else is read from the ledger being categorized.
  */
 export async function buildCategorizer(
   db: Database,

@@ -9,7 +9,7 @@ export function toneOf(ledgers: Ledger[], ledger: Ledger): string {
 }
 
 /**
- * Which ledger is open, and the way to the others (#23).
+ * Which ledger is open, and the way to the others (LG-3).
  *
  * Shown only when there is more than one. The name sits beside the wordmark in
  * the ledger's own colour, and the header's rule takes the same colour, so the

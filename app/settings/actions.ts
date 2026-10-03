@@ -187,7 +187,7 @@ export async function setAiSettingsAction(update: {
 }): Promise<{ ok: true } | Failure> {
   try {
     await requireUser();
-    // The account's, not the ledger's: one budget covers every ledger (#23).
+    // The account's, not the ledger's: one budget covers every ledger (LG-5).
     await setAiSettings(homeDb(), update);
     revalidatePath('/settings');
     revalidatePath('/import');
@@ -265,7 +265,7 @@ export async function dismissRuleAction(contains: string) {
 }
 
 /**
- * Open a new, empty ledger and switch to it (#23). Its database is created and
+ * Open a new, empty ledger and switch to it (LG-2). Its database is created and
  * brought up to schema before this returns, which takes a moment; four ledgers
  * is the most, and the home one counts.
  */

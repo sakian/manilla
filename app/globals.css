@@ -20,7 +20,7 @@
   --high: #2f6b4f;
   --medium: #8a6a3b;
   --low: #6b665c;
-  /* One colour per ledger (#23), so the books being looked at show on every
+  /* One colour per ledger (LG-3), so the books being looked at show on every
      screen. The first is the brand's amber. Text stays --text: the colour is
      carried by marks, which need 3:1, not by words. */
   --ledger-0: var(--accent);
@@ -1639,7 +1639,7 @@ details[open] > summary > .group-summary::before {
   }
 }
 
-/* --- Which ledger (#23) ---------------------------------------------------- */
+/* --- Which ledger (LG-3) ---------------------------------------------------- */
 
 .ledger-tone-0 { --tone: var(--ledger-0); --tone-soft: var(--ledger-0-soft); }
 .ledger-tone-1 { --tone: var(--ledger-1); --tone-soft: var(--ledger-1-soft); }

@@ -117,7 +117,7 @@ export async function previewImportAction(
     }
 
     // The same bank account in another ledger means this statement is very
-    // likely that ledger's (#23).
+    // likely that ledger's (LG-4).
     const elsewhere = await mappedElsewhere(
       await allLedgers(),
       await currentLedger(),

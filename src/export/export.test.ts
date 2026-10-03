@@ -226,7 +226,7 @@ describe(
       assert.deepEqual(
         await aiSettings(db),
         { enabled: false, monthlyCallBudget: 7 },
-        'the AI switch and budget are the account\'s, covering every ledger (#23)',
+        'the AI switch and budget are the account\'s, covering every ledger (LG-5)',
       );
       assert.equal(await getExpectedIncome(db), null, 'a ledger\'s own settings go with it');
       assert.ok((await checkInvariant(db)).ok, 'and an empty ledger balances');

@@ -334,7 +334,7 @@ describe(
       assert.equal(usage.remaining, 9);
     });
 
-    test('one budget covers every ledger: calls count against the account (#23)', async () => {
+    test('one budget covers every ledger: calls count against the account (LG-5)', async () => {
       // `db` plays the account's home database; a second ledger has its own.
       const ledger = await setupTestDb('ai_second_ledger');
       const savedKey = process.env.ANTHROPIC_API_KEY;
