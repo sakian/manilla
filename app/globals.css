@@ -923,7 +923,8 @@ details[open] > summary > .group-summary::before {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
     'name balance'
-    'figures actions';
+    'figures actions'
+    'bar bar';
   gap: 2px 12px;
   align-items: center;
   padding: 8px 0;
@@ -952,6 +953,50 @@ details[open] > summary > .group-summary::before {
 .envelope-figures {
   grid-area: figures;
   font-size: 12px;
+}
+
+/*
+ * Spent against what the envelope had, with the month's pace as a tick (VW-1,
+ * VW-2, #3). Grey unless it means something: amber when spending is well ahead
+ * of the month, red when overspent - the screen stays as quiet as it was until
+ * there is something to see.
+ */
+.envelope-bar {
+  grid-area: bar;
+  position: relative;
+  height: 4px;
+  margin: 4px 0 1px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.envelope-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: var(--text-dim);
+  opacity: 0.55;
+}
+
+.envelope-bar.ahead .envelope-bar-fill {
+  background: var(--accent);
+  opacity: 1;
+}
+
+.envelope-bar.over .envelope-bar-fill {
+  background: var(--negative);
+  opacity: 1;
+}
+
+.envelope-bar-pace {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
 }
 
 /*
