@@ -297,6 +297,7 @@ export default function HomeScreen({
          * group with ordinary envelopes would all make that harder to see.
          */
         const systemGroup = envelopes.some((envelope) => envelope.isUnallocated);
+        const groupShown = shownGroups.length === 1 && shownGroups[0] === group.id;
 
         return (
           <details key={group.id} className="panel group-panel" open>
@@ -309,9 +310,8 @@ export default function HomeScreen({
                 {/* The heading is a way in too: a whole group's spending is a
                     question people ask more often than one envelope's. */}
                 <Link
-                  className={`group-open${
-                    shownGroups.length === 1 && shownGroups[0] === group.id ? ' selected' : ''
-                  }`}
+                  className={`group-open${groupShown ? ' selected' : ''}`}
+                  aria-current={groupShown ? 'true' : undefined}
                   href={`/transactions?envgroup=${group.id}`}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -359,14 +359,13 @@ export default function HomeScreen({
             {envelopes.map((envelope) => {
               const figure = figures[envelope.id];
               const overspent = envelope.balanceCents < 0;
+              /** The one the pane beside the list is showing. */
+              const shown =
+                !editing && shownEnvelopes.length === 1 && shownEnvelopes[0] === envelope.id;
               return (
                 <div
                   key={envelope.id}
-                  className={`envelope-row${editing ? ' editing' : ''}${
-                    !editing && shownEnvelopes.length === 1 && shownEnvelopes[0] === envelope.id
-                      ? ' selected'
-                      : ''
-                  }`}
+                  className={`envelope-row${editing ? ' editing' : ''}${shown ? ' selected' : ''}`}
                 >
                   <span className="envelope-name">
                     {/* The whole card opens the envelope, done with a real link
@@ -378,6 +377,7 @@ export default function HomeScreen({
                     <Link
                       href={`/transactions?env=${envelope.id}`}
                       className="envelope-open"
+                      aria-current={shown ? 'true' : undefined}
                       onClick={openInPane}
                     >
                       {envelope.name}

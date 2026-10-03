@@ -184,6 +184,7 @@ export default function AccountManager({
       <Split pane={editing ? undefined : pane}>
       {live.map((category, index) => {
         const accounts = category.accounts.filter((account) => account.archivedAt === null);
+        const groupShown = shownGroups.length === 1 && shownGroups[0] === category.id;
 
         return (
           <details key={category.id ?? 'none'} className="panel group-panel" open>
@@ -192,9 +193,8 @@ export default function AccountManager({
                 <span className="group-name">{category.name}</span>
                 {category.id !== null && (
                   <Link
-                  className={`group-open${
-                    shownGroups.length === 1 && shownGroups[0] === category.id ? ' selected' : ''
-                  }`}
+                  className={`group-open${groupShown ? ' selected' : ''}`}
+                  aria-current={groupShown ? 'true' : undefined}
                   href={`/transactions?acctgroup=${category.id}`}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -251,19 +251,20 @@ export default function AccountManager({
               </p>
             )}
 
-            {accounts.map((account) => (
+            {accounts.map((account) => {
+              /** The one the pane beside the list is showing. */
+              const shown =
+                !editing && shownAccounts.length === 1 && shownAccounts[0] === account.id;
+              return (
               <div
                 key={account.id}
-                className={`envelope-row${editing ? ' editing' : ''}${
-                  !editing && shownAccounts.length === 1 && shownAccounts[0] === account.id
-                    ? ' selected'
-                    : ''
-                }`}
+                className={`envelope-row${editing ? ' editing' : ''}${shown ? ' selected' : ''}`}
               >
                 <span className="envelope-name">
                   <Link
                     href={`/transactions?account=${account.id}`}
                     className="envelope-open"
+                    aria-current={shown ? 'true' : undefined}
                     onClick={openInPane}
                   >
                     {account.name}
@@ -344,7 +345,8 @@ export default function AccountManager({
                   )}
                 </span>
               </div>
-            ))}
+              );
+            })}
           </details>
         );
       })}
