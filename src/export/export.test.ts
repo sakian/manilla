@@ -186,6 +186,11 @@ describe(
         exportFilename('ledger', new Date('2026-09-19T12:00:00Z')),
         'manilla-ledger-2026-09-19',
       );
+      assert.equal(
+        exportFilename('ledger', new Date('2026-09-19T12:00:00Z'), 'Side Business!'),
+        'manilla-side-business-ledger-2026-09-19',
+        'with several ledgers, which one it came from',
+      );
     });
 
     // -- erasing (NF-6) -----------------------------------------------------

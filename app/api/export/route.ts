@@ -1,4 +1,4 @@
-import { ledgerDb } from '../../ledger.ts';
+import { ledgerDb, ledgerForFilename } from '../../ledger.ts';
 import {
   CSV_TABLES,
   exportCsv,
@@ -45,7 +45,7 @@ export async function GET(request: Request): Promise<Response> {
     return new Response(await exportCsv(await ledgerDb(), table), {
       headers: {
         'content-type': 'text/csv; charset=utf-8',
-        'content-disposition': `attachment; filename="${exportFilename(table)}.csv"`,
+        'content-disposition': `attachment; filename="${exportFilename(table, undefined, await ledgerForFilename())}.csv"`,
         'cache-control': 'no-store',
       },
     });
@@ -55,7 +55,7 @@ export async function GET(request: Request): Promise<Response> {
   return new Response(JSON.stringify(ledger, null, 2), {
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      'content-disposition': `attachment; filename="${exportFilename('ledger')}.json"`,
+      'content-disposition': `attachment; filename="${exportFilename('ledger', undefined, await ledgerForFilename())}.json"`,
       'cache-control': 'no-store',
     },
   });

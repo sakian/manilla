@@ -1,4 +1,4 @@
-import { ledgerDb } from '../../ledger.ts';
+import { ledgerDb, ledgerForFilename } from '../../ledger.ts';
 import { toCsv } from '../../../src/csv.ts';
 import { exportFilename } from '../../../src/export/export.ts';
 import { searchTransactions } from '../../../src/transactions/search.ts';
@@ -51,7 +51,7 @@ export async function GET(request: Request): Promise<Response> {
   return new Response(csv, {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="${exportFilename('search')}.csv"`,
+      'content-disposition': `attachment; filename="${exportFilename('search', undefined, await ledgerForFilename())}.csv"`,
       'cache-control': 'no-store',
     },
   });

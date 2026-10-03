@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { currentSession } from './auth.ts';
+import { currentLedger } from './ledger.ts';
+import LedgerSwitch, { toneOf } from './LedgerSwitch.tsx';
 import { signOutAction } from './login/actions.ts';
+import { configuredLedgers } from '../src/ledgers/config.ts';
 import './globals.css';
 
 export const metadata = {
@@ -25,12 +28,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // The navigation is only useful once you are in, and the sign-in page has no
   // use for it at all.
   const session = await currentSession();
+  // Named on screen only when there is a choice to make.
+  const ledgers = configuredLedgers();
+  const ledger = session && ledgers.length > 1 ? await currentLedger() : null;
 
   return (
     <html lang="en">
       <body>
         <div className="shell">
-          <header className="topbar">
+          <header className={`topbar${ledger ? ` ${toneOf(ledgers, ledger)}` : ''}`}>
             <h1 className="wordmark">
               {/* Plain <img>: this is a fixed 26px mark from /public, so Next's
                   image pipeline has nothing to optimise and a layout shift to
@@ -41,6 +47,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             </h1>
             {session && (
               <>
+                {ledger && <LedgerSwitch ledgers={ledgers} current={ledger} />}
                 {/*
                   Three places. Seven did not fit across a phone - the bar had no
                   wrap, so it pushed every page sideways - and most of them were

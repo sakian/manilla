@@ -15,8 +15,10 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { homeDb } from '../../db/client.ts';
-import { ledgerDb } from '../ledger.ts';
+import { connectionFor, homeDb } from '../../db/client.ts';
+import { currentLedger, ledgerDb } from '../ledger.ts';
+import { configuredLedgers } from '../../src/ledgers/config.ts';
+import { mappedElsewhere } from '../../src/ledgers/elsewhere.ts';
 import { parseOfx } from '../../src/ofx/parse.ts';
 import {
   commitImport,
@@ -115,7 +117,28 @@ export async function previewImportAction(
       );
     }
 
+    // The same bank account in another ledger means this statement is very
+    // likely that ledger's (#23).
+    const elsewhere = await mappedElsewhere(
+      configuredLedgers(),
+      await currentLedger(),
+      statement.accountId,
+      connectionFor,
+    );
+
     const mapped = accountId ? { id: accountId } : await resolveAccount(connection, statement);
+    if (!mapped && elsewhere.length > 0) {
+      // Refused rather than asked about: whatever account was picked here, the
+      // money would be recorded in two sets of books.
+      const [where] = elsewhere;
+      return {
+        ok: false,
+        error:
+          `This statement is for ${where!.accountName} in your ${where!.ledger.name} ledger. ` +
+          `Switch to ${where!.ledger.name} to import it; importing it here would record the ` +
+          'same money in both.',
+      };
+    }
     if (!mapped) {
       return {
         ok: false,
@@ -123,6 +146,13 @@ export async function previewImportAction(
         statementAccountId: statement.accountId,
         error: `No account is mapped to bank account ${statement.accountId} yet.`,
       };
+    }
+
+    for (const where of elsewhere) {
+      document.warnings.push(
+        `This bank account is also ${where.accountName} in your ${where.ledger.name} ledger, ` +
+          'so these transactions may be recorded there as well.',
+      );
     }
 
     // The AI budget is the account's, whichever ledger this lands in.

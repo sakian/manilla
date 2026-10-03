@@ -1,7 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { ledgerDb } from './ledger.ts';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { LEDGER_COOKIE, ledgerDb } from './ledger.ts';
+import { authConfig } from '../src/auth/config.ts';
+import { configuredLedgers } from '../src/ledgers/config.ts';
 import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
 import { pairTransferHalves, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
@@ -97,4 +101,33 @@ export async function pairTransferAction(firstId: string, secondId: string) {
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * Open another ledger (#23).
+ *
+ * Only a configured ledger can be chosen: the value is looked up in the list,
+ * never used as a database name, so this cannot point the app anywhere new.
+ * Lands on the home screen rather than staying put, because the page being
+ * looked at - one envelope, one transaction - is an id in the other ledger's
+ * books and means nothing in this one.
+ */
+export async function switchLedgerAction(form: FormData) {
+  await requireUser();
+  const wanted = String(form.get('ledger') ?? '');
+  const ledger = configuredLedgers().find((candidate) => candidate.key === wanted);
+  if (!ledger) throw new Error('No such ledger');
+
+  const store = await cookies();
+  store.set(LEDGER_COOKIE, ledger.key, {
+    httpOnly: true,
+    secure: authConfig().origin.startsWith('https:'),
+    sameSite: 'lax',
+    path: '/',
+    // A preference, not a credential: it outlives sessions so signing in again
+    // opens the ledger last used.
+    maxAge: 60 * 60 * 24 * 365,
+  });
+  revalidatePath('/', 'layout');
+  redirect('/');
 }

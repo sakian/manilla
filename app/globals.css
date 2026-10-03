@@ -20,6 +20,17 @@
   --high: #2f6b4f;
   --medium: #8a6a3b;
   --low: #6b665c;
+  /* One colour per ledger (#23), so the books being looked at show on every
+     screen. The first is the brand's amber. Text stays --text: the colour is
+     carried by marks, which need 3:1, not by words. */
+  --ledger-0: var(--accent);
+  --ledger-0-soft: var(--accent-soft);
+  --ledger-1: #2b5f8a;
+  --ledger-1-soft: #e2ecf6;
+  --ledger-2: #6d4a94;
+  --ledger-2-soft: #eee6f7;
+  --ledger-3: #2f6b4f;
+  --ledger-3-soft: #e0f0e7;
   --radius: 10px;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
@@ -40,6 +51,12 @@
     --high: #7fc4a0;
     --medium: #d2ab6d;
     --low: #a09a8c;
+    --ledger-1: #86b6e3;
+    --ledger-1-soft: #172634;
+    --ledger-2: #bea0e6;
+    --ledger-2-soft: #2a2136;
+    --ledger-3: #7fc4a0;
+    --ledger-3-soft: #15281e;
   }
 }
 
@@ -58,6 +75,12 @@
   --high: #7fc4a0;
   --medium: #d2ab6d;
   --low: #a09a8c;
+  --ledger-1: #86b6e3;
+  --ledger-1-soft: #172634;
+  --ledger-2: #bea0e6;
+  --ledger-2-soft: #2a2136;
+  --ledger-3: #7fc4a0;
+  --ledger-3-soft: #15281e;
 }
 
 * {
@@ -1608,6 +1631,105 @@ details[open] > summary > .group-summary::before {
   .envelope-row.editing .envelope-actions {
     justify-content: flex-start;
   }
+}
+
+/* --- Which ledger (#23) ---------------------------------------------------- */
+
+.ledger-tone-0 { --tone: var(--ledger-0); --tone-soft: var(--ledger-0-soft); }
+.ledger-tone-1 { --tone: var(--ledger-1); --tone-soft: var(--ledger-1-soft); }
+.ledger-tone-2 { --tone: var(--ledger-2); --tone-soft: var(--ledger-2-soft); }
+.ledger-tone-3 { --tone: var(--ledger-3); --tone-soft: var(--ledger-3-soft); }
+
+/* The header's rule in the ledger's colour: there on every screen, whether or
+   not anyone looks at the name. */
+.topbar[class*='ledger-tone-'] {
+  border-bottom: 3px solid var(--tone);
+}
+
+.ledger-switch {
+  position: relative;
+  font-size: 14px;
+}
+
+.ledger-switch > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px;
+  border: 1px solid var(--tone);
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--text);
+  font-weight: 560;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ledger-switch > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ledger-switch > summary::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  margin-left: 2px;
+}
+
+.ledger-switch[open] > summary::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+
+.ledger-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tone);
+  flex: none;
+}
+
+.ledger-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+
+.ledger-menu-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 4px 8px;
+}
+
+.ledger-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  font-size: 14px;
+}
+
+.ledger-menu button:hover,
+.ledger-menu button:focus-visible {
+  background: var(--tone-soft);
 }
 
 /* --- The wordmark --------------------------------------------------------- */
