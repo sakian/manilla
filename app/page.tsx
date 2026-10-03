@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { ledgerDb } from './ledger.ts';
 import { budgetMonth, fundingFromBudget } from '../src/budget/budget.ts';
 import { addMonths, currentMonth, monthLabel, shortMonthLabel } from '../src/budget/month.ts';
@@ -6,11 +7,16 @@ import { attention } from '../src/notices/notices.ts';
 import { requireUser } from './auth.ts';
 import HomeScreen, { type MonthFigures } from './HomeScreen.tsx';
 import { Notices } from './Notices.tsx';
+import TransactionsView from './transactions/TransactionsView.tsx';
+import { PaneLoading } from './PaneLoading.tsx';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Home() {
+export default async function Home(props: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireUser();
+  const params = await props.searchParams;
   const connection = await ledgerDb();
   const month = currentMonth();
 
@@ -41,6 +47,12 @@ export default async function Home() {
       lastMonthLabel={shortMonthLabel(addMonths(month, -1))}
       funding={fundingFromBudget(budget)}
       notices={<Notices report={report} />}
+      // Streamed, so the envelopes are not held up by the list beside them.
+      pane={
+        <Suspense fallback={<PaneLoading />}>
+          <TransactionsView params={params} path="/" pane />
+        </Suspense>
+      }
     />
   );
 }

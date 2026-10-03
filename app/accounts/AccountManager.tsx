@@ -9,9 +9,11 @@
  * They are the two halves of the same ledger and learning one should teach the
  * other.
  *
- * What is *not* here is transactions. Every list of transactions is the one
+ * Transactions are not this screen's own. Every list of transactions is the one
  * transactions screen with something filtered, so a card leads there with this
- * account applied. This screen answers "what have I got and what is in it".
+ * account applied - on a phone as a page of its own, and on a wide screen in a
+ * pane beside the list (#35). This screen answers "what have I got and what is
+ * in it".
  *
  * The opening balance is part of creating an account rather than an afterthought,
  * because it is an ordinary transaction landing in the income pool: get it wrong
@@ -23,11 +25,12 @@
  */
 
 import { useCallback, useMemo, useState, useTransition, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ACCOUNT_KINDS, accountKindLabel } from '../../src/accounts/manage.ts';
 import type { AccountCategory } from '../../src/accounts/groups.ts';
 import { Hint } from '../Hint.tsx';
+import { Split, usePaneLink } from '../Split.tsx';
 import { Money } from '../Money.tsx';
 import { centsFromInput } from '../amount.ts';
 import {
@@ -49,11 +52,19 @@ type Result = { ok: true; message?: string } | { ok: false; error: string };
 export default function AccountManager({
   categories,
   notices,
+  pane,
 }: {
   categories: AccountCategory[];
   notices?: ReactNode;
+  /** The transactions beside the list on a wide screen, rendered on the server (#35). */
+  pane?: ReactNode;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const openInPane = usePaneLink('/accounts');
+  /** What the pane is showing, so its row can say so. */
+  const shownAccounts = searchParams.getAll('account');
+  const shownGroups = searchParams.getAll('acctgroup');
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -169,6 +180,8 @@ export default function AccountManager({
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
 
+      {/* Editing gets the whole width, as on the envelopes screen. */}
+      <Split pane={editing ? undefined : pane}>
       {live.map((category, index) => {
         const accounts = category.accounts.filter((account) => account.archivedAt === null);
 
@@ -179,9 +192,14 @@ export default function AccountManager({
                 <span className="group-name">{category.name}</span>
                 {category.id !== null && (
                   <Link
-                  className="group-open"
+                  className={`group-open${
+                    shownGroups.length === 1 && shownGroups[0] === category.id ? ' selected' : ''
+                  }`}
                   href={`/transactions?acctgroup=${category.id}`}
-                  onClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openInPane(event);
+                  }}
                 >
                     transactions
                   </Link>
@@ -236,12 +254,17 @@ export default function AccountManager({
             {accounts.map((account) => (
               <div
                 key={account.id}
-                className={`envelope-row${editing ? ' editing' : ''}`}
+                className={`envelope-row${editing ? ' editing' : ''}${
+                  !editing && shownAccounts.length === 1 && shownAccounts[0] === account.id
+                    ? ' selected'
+                    : ''
+                }`}
               >
                 <span className="envelope-name">
                   <Link
                     href={`/transactions?account=${account.id}`}
                     className="envelope-open"
+                    onClick={openInPane}
                   >
                     {account.name}
                   </Link>
@@ -452,6 +475,7 @@ export default function AccountManager({
           ))}
         </details>
       )}
+      </Split>
     </>
   );
 }
