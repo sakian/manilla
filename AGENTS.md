@@ -62,6 +62,8 @@ npm run build
 
 Tests that need Postgres **skip cleanly when it is absent**, so a green run proves
 nothing unless they actually ran — check the count, don't just look for "0 fail".
+CI (`.github/workflows/test.yml`) sets `REQUIRE_TEST_DATABASE`, which turns that
+skip into a failure; set it locally for the same guarantee.
 
 Every server action is a POST endpoint reachable without the page that renders its
 button, so each one calls `requireUser()` itself. The only exceptions are in

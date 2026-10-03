@@ -4,7 +4,8 @@
  * Ledger tests run against a real Postgres, because the invariant they check is
  * enforced partly by the database and a mock would prove nothing. If no
  * database is reachable, the suite skips rather than fails, so `npm test` still
- * works on a machine without Docker running.
+ * works on a machine without Docker running - except in CI, which sets
+ * `REQUIRE_TEST_DATABASE` so a skip cannot pass for a green run.
  */
 
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -43,13 +44,25 @@ export async function closeDb(db: Database): Promise<void> {
   await (db as unknown as { $client: { end: () => Promise<void> } }).$client.end();
 }
 
+/**
+ * Whether the database suites can run. With `REQUIRE_TEST_DATABASE` set, as CI
+ * sets it, an unreachable database fails the run instead: skipped suites still
+ * leave "0 fail", and a green run that never touched Postgres proves nothing.
+ */
 export async function databaseAvailable(): Promise<boolean> {
   try {
     return await withAdmin(async (admin) => {
       await admin.execute(sql`select 1`);
       return true;
     });
-  } catch {
+  } catch (error) {
+    if (process.env.REQUIRE_TEST_DATABASE) {
+      // The host only: the URL carries the password.
+      const host = new URL(TEST_URL).host;
+      throw new Error(`REQUIRE_TEST_DATABASE is set but no Postgres is reachable at ${host}`, {
+        cause: error,
+      });
+    }
     return false;
   }
 }

@@ -1,0 +1,73 @@
+# Runs the test suite on every push to main and every pull request.
+#
+# The database suites need a real Postgres (see src/ledger/testdb.ts), so one
+# runs as a service container set up the way docker-compose.yml sets up `db`:
+# same image, same collation, same port. REQUIRE_TEST_DATABASE turns "no
+# database" into a failure, since skipped suites would otherwise pass as green.
+
+name: Tests
+
+# Kept small for free-tier minutes: one Linux job, nothing on a change that is
+# only prose, a superseded run cancelled, and a hard stop well past the minute
+# or two a normal run takes.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: manilla
+          POSTGRES_PASSWORD: manilla
+          POSTGRES_DB: manilla
+          # Deterministic collation, as in docker-compose.yml, so ordering
+          # assertions mean the same thing here as on a laptop.
+          POSTGRES_INITDB_ARGS: --locale=C --encoding=UTF8
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U manilla -d manilla"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL_TEST: postgres://manilla:manilla@localhost:5433/manilla_test
+      REQUIRE_TEST_DATABASE: '1'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # The Dockerfile's version; package.json asks for >=24.
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
