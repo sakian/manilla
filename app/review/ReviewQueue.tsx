@@ -38,6 +38,7 @@ import { markAsTransferAction, pairTransferAction, saveReviewAction } from '../a
 import { setTransactionNoteAction } from '../transactions/actions.ts';
 import { formatMoney } from '../../src/money.ts';
 import { useOverlay } from '../useOverlay.ts';
+import EnvelopeChoices from './EnvelopeChoices.tsx';
 import { displayDate } from '../../src/budget/month.ts';
 
 /**
@@ -286,17 +287,6 @@ export default function ReviewQueue({
     [envelopes, picking],
   );
 
-  /** Every envelope under its own heading, in the order the envelopes screen uses. */
-  const grouped = useMemo(() => {
-    const groups: { name: string; envelopes: EnvelopeOption[] }[] = [];
-    for (const envelope of envelopes) {
-      const last = groups.at(-1);
-      if (last && last.name === envelope.groupName) last.envelopes.push(envelope);
-      else groups.push({ name: envelope.groupName, envelopes: [envelope] });
-    }
-    return groups;
-  }, [envelopes]);
-
   if (rows.length === 0) {
     return (
       <div className="empty">
@@ -506,7 +496,12 @@ export default function ReviewQueue({
               </>
             ) : (
               <>
-                <div className="picker-list">
+                <EnvelopeChoices
+                  key={picking.id}
+                  envelopes={envelopes}
+                  activeId={decisionFor(picking.id).envelopeId}
+                  onChoose={(envelopeId, createRule) => choose(picking.id, envelopeId, createRule)}
+                >
                   {/* The guess, offered at the top rather than assumed into the
                       row, and named as a guess. */}
                   {suggested && (
@@ -545,30 +540,7 @@ export default function ReviewQueue({
                     <span className="picker-name">Not spending</span>
                     <span className="muted picker-group">a transfer between my own accounts</span>
                   </button>
-
-                  {/*
-                    Grouped under their own headings and nothing else. There was a
-                    filter box here, which is a way of coping with a list you
-                    cannot read; fifty envelopes under nine headings can be read,
-                    and scanning beats typing when you do not know the exact name.
-                  */}
-                  {grouped.map((group) => (
-                    <div key={group.name} className="picker-group-block">
-                      <div className="picker-group-head">{group.name}</div>
-                      {group.envelopes.map((envelope) => (
-                        <button
-                          key={envelope.id}
-                          className={`picker-option${
-                            envelope.id === decisionFor(picking.id).envelopeId ? ' active' : ''
-                          }`}
-                          onClick={(event) => choose(picking.id, envelope.id, event.shiftKey)}
-                        >
-                          <span className="picker-name">{envelope.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                </EnvelopeChoices>
 
                 <div className="picker-foot muted">
                   Hold <kbd>shift</kbd> while choosing to always use it for this payee

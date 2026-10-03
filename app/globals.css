@@ -2322,6 +2322,50 @@ details[open] > summary > .group-summary::before {
   color: var(--text-dim);
 }
 
+/* The box and the category names stay put above the list as it scrolls. */
+.picker-find {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.picker-find input {
+  width: 100%;
+  /* Under 16px, iOS zooms the page to the field, and a fixed dialog does not
+     come back from that zoom where it was. */
+  font-size: 16px;
+}
+
+.picker-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.picker-jump {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--text-dim);
+}
+
+/* Where Enter lands: the hover colour, and an edge so it reads without a mouse on it. */
+.picker-option.cursor {
+  background: var(--surface-2);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Clear of the sticky heading when a highlighted row is scrolled into view. */
+.picker-group-block .picker-option {
+  scroll-margin-top: 32px;
+}
+
+.picker-none {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
 /* A rule Manilla noticed and is asking about (CA-2). */
 .rule-suggestion {
   display: flex;
