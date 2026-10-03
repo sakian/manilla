@@ -65,6 +65,14 @@ nothing unless they actually ran — check the count, don't just look for "0 fai
 CI (`.github/workflows/test.yml`) sets `REQUIRE_TEST_DATABASE`, which turns that
 skip into a failure; set it locally for the same guarantee.
 
+**Look at every UI change at phone and desktop width.** Anything that changes what
+renders — a page, a component, a style — is checked in a real browser at 390px and
+1280px wide before it is called done. Look at it rather than inferring it from the
+code: text that wraps badly, a control pushed off the edge, horizontal scrolling, or
+spacing unlike the screens around it are all failures that typecheck and tests
+cannot see. Use a scratch database, never the live one, and if a screen could not be
+reached, say so rather than reporting the change as done.
+
 Every server action is a POST endpoint reachable without the page that renders its
 button, so each one calls `requireUser()` itself. The only exceptions are in
 `app/login/actions.ts`, and each says why it is safe to be public.
