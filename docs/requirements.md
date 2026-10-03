@@ -88,10 +88,10 @@ The schema is shaped for this already: `bank_sync` is a transaction source and
 | --- | --- | --- | --- |
 | FR-27 | Set a default monthly amount per envelope. The budget screen shows total planned against expected income. | M | Built |
 | FR-28 | Income transactions land in the income envelope, awaiting allocation. | M | Built |
-| FR-29 | A one-click "fund envelopes" action builds allocations from the budget, with an editable preview. | M | Built |
+| FR-29 | A one-click "fund envelopes" action builds allocations from the budget, with an editable preview. | M | Built. The dialog starts every envelope at zero, and "Fill from plan" builds the allocations from the budget in one press; nothing moves until Apply. |
 | FR-30 | Allocations are stored as records, dated and reversible, so past months stay correct when the budget changes later. | M | Built |
 | FR-31 | Warn when planned amounts exceed income received or expected, and when income is left unallocated. | M | Built |
-| FR-32 | Override the budget for a single month without changing the default. | S | Partial. The data model and the reads support it; no screen writes one. ([#6](https://github.com/sakian/manilla/issues/6)) |
+| FR-32 | Override the budget for a single month without changing the default. | S | Not planned. A different month is funded differently in the Fund dialog instead of planned differently. The data model and reads that support an override remain, unused ([#6](https://github.com/sakian/manilla/issues/6)). |
 | FR-33 | Support annual or irregular bills by budgeting a yearly amount that funds monthly. | S | Not built ([#12](https://github.com/sakian/manilla/issues/12)) |
 
 ## Envelope transfers
