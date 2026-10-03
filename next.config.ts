@@ -1,10 +1,33 @@
+import { execFileSync } from 'node:child_process';
 import type { NextConfig } from 'next';
+
+/** One git answer, or null where there is no git or no repository to ask. */
+function git(...args: string[]): string | null {
+  try {
+    return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return null;
+  }
+}
+
+// Which commit this is, fixed into the build so Settings can say (#20, see
+// src/version.ts). Modified means tracked files differ from it, untracked ones
+// aside: a build of a working copy should not pass for the commit it started from.
+const commit = git('rev-parse', '--short', 'HEAD');
+const committed = commit ? git('log', '-1', '--format=%cs') : null;
+const modified = commit ? Boolean(git('status', '--porcelain', '--untracked-files=no')) : false;
 
 const config: NextConfig = {
   // The app runs behind Nginx on a private Tailscale network, and is packaged
   // as a self-contained server bundle for the Docker image.
   output: 'standalone',
   poweredByHeader: false,
+
+  env: {
+    MANILLA_COMMIT: commit ?? '',
+    MANILLA_COMMITTED: committed ?? '',
+    MANILLA_MODIFIED: modified ? '1' : '',
+  },
 
   experimental: {
     // An OFX statement arrives as the body of a server action, and the default

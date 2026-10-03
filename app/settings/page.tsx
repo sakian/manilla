@@ -22,7 +22,8 @@ import AiPanel from './AiPanel.tsx';
 import DataPanel from './DataPanel.tsx';
 import RuleSuggestions from './RuleSuggestions.tsx';
 import Rules from './Rules.tsx';
-import { displayInstant } from '../../src/budget/month.ts';
+import { displayDate, displayInstant } from '../../src/budget/month.ts';
+import { readVersion } from '../../src/version.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +70,14 @@ export default async function SettingsPage() {
   } catch {
     boundTo = null;
   }
+
+  // Named one by one: the build writes these in where each is spelled out, and
+  // the running server's own environment does not have them.
+  const version = readVersion({
+    MANILLA_COMMIT: process.env.MANILLA_COMMIT,
+    MANILLA_COMMITTED: process.env.MANILLA_COMMITTED,
+    MANILLA_MODIFIED: process.env.MANILLA_MODIFIED,
+  });
 
   return (
     <>
@@ -142,6 +151,22 @@ export default async function SettingsPage() {
         <form action={signOutEverywhereAction} className="signin-actions">
           <button type="submit">Sign out everywhere</button>
         </form>
+      </section>
+
+      {/* What a bug report asks for, and what says whether an update arrived (#20). */}
+      <section className="panel">
+        <h3>Version</h3>
+        {version ? (
+          <p className="muted">
+            Commit <code>{version.commit}</code>
+            {version.committed && <>, made {displayDate(version.committed)}</>}
+            {version.modified && ', built with changes not yet committed'}.
+          </p>
+        ) : (
+          <p className="muted">
+            This build could not tell which commit it is: it was made somewhere without git.
+          </p>
+        )}
       </section>
     </>
   );

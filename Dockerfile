@@ -10,6 +10,9 @@ RUN npm ci
 
 FROM node:24-alpine AS build
 WORKDIR /app
+# Only to read which commit is being built (next.config.ts); it does not reach
+# the runtime image.
+RUN apk add --no-cache git
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
