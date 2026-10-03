@@ -2503,6 +2503,70 @@ details[open] > summary > .group-summary::before {
   width: 100%;
 }
 
+/*
+ * Two cards to a line where there is room (#33). Full-width rows on a desktop put
+ * the amount 700px from the payee it explains, with nothing in between; a card
+ * keeps them together and the width gets used. Two, not three: at three the
+ * names wrap and the controls fall onto a line of their own. And not from 721px
+ * like the rest of the app's wide layouts, because two cards there are 340px
+ * each, which is the width that wrapped.
+ *
+ * Headings, messages and the Save bar take a whole line, so one account's cards
+ * still read as a run under its name. After every other review-queue rule, so
+ * none of the base ones it overrides can win on order.
+ */
+@media (min-width: 900px) {
+  .queue {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    border: none;
+    border-radius: 0;
+    background: none;
+    overflow: visible;
+  }
+
+  .queue > .queue-account,
+  .queue > .queue-note,
+  .queue > .queue-save,
+  .queue > .signin-error {
+    grid-column: 1 / -1;
+  }
+
+  .queue-account,
+  .queue-account:first-child {
+    padding: 14px 2px 0;
+    border-bottom: none;
+  }
+
+  .queue-account:first-child {
+    padding-top: 0;
+  }
+
+  /* Cards on a line share a height; what is in them stays at the top. */
+  .queue-row,
+  .queue-row:last-child {
+    align-content: start;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* Alone, so `.queue-row.decided` still outranks it on the tint. */
+  .queue-row {
+    background: var(--surface);
+  }
+
+  /* The decided edge drawn inside the card, where the row's 3px left border
+     would leave every undecided card with a heavier side than the rest. */
+  .queue-row.decided {
+    box-shadow: inset 3px 0 0 var(--positive);
+  }
+
+  .queue-save {
+    margin-top: 4px;
+  }
+}
+
 /* Your note on a transaction, under the rest of the row and only when there
    is one: the same quoted look as in the review queue. */
 .txn-note {
