@@ -19,7 +19,7 @@ export async function register(): Promise<void> {
 }
 
 /**
- * Bring every ledger's database up to schema (NF-12, #23).
+ * Bring every ledger's database up to schema (NF-12, LG-7).
  *
  * The Dockerfile has always shipped the migrations and the drizzle runtime into
  * the image "so the container can bring the database up to date on start" -

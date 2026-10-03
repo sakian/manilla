@@ -1,5 +1,5 @@
 /**
- * `npm run db:migrate`: bring every ledger up to schema in development (#23).
+ * `npm run db:migrate`: bring every ledger up to schema in development (LG-7).
  *
  * The same work the server does at boot in production (instrumentation.ts),
  * run by hand here because `next dev` restarts too often for a migration to

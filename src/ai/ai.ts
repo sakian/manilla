@@ -48,7 +48,7 @@ export type AiSettings = {
 
 /*
  * The switch, the budget and the log of calls against it belong to the
- * account, not to a ledger (#23): there is one API key and one bill however
+ * account, not to a ledger (LG-5): there is one API key and one bill however
  * many ledgers are kept, so a budget per ledger would let the total run to
  * several times what was set. Callers pass the home database for these. The
  * merchant cache stays with each ledger, because its answers name that

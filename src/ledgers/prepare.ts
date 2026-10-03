@@ -1,5 +1,5 @@
 /**
- * Bring every ledger's database into being and up to schema (#23).
+ * Bring every ledger's database into being and up to schema (LG-7).
  *
  * When a ledger is opened from Settings, and for every ledger at boot in
  * production and in `npm run db:migrate` (`prepareEveryLedger` in registry.ts):

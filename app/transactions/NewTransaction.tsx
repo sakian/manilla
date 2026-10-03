@@ -8,7 +8,7 @@
  * when the server action refreshes the route. Open-ness lives in the URL as
  * `?new=transaction`, so back closes it like anything else. Arriving from
  * another ledger with the other side of a transaction to enter, the draft rides
- * along in the same URL and fills the form (#23).
+ * along in the same URL and fills the form (LG-6).
  */
 
 import { useCallback } from 'react';

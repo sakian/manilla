@@ -66,7 +66,7 @@ else
   exit 1
 fi
 
-# Every ledger is a database of its own (#23), so each gets its own dump:
+# Every ledger is a database of its own (LG-7), so each gets its own dump:
 # <database>-<stamp>.dump. The home one is the database above; the others are
 # the ones opened in Settings, listed in its `ledgers` table - read here rather
 # than kept in a list of this script's own, since a ledger left out would be one

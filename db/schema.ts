@@ -91,7 +91,7 @@ export const externalIdKind = pgEnum('external_id_kind', [
 // ---------------------------------------------------------------------------
 
 /**
- * The ledgers this account keeps besides the home one (#23).
+ * The ledgers this account keeps besides the home one (LG-2).
  *
  * Each is a Postgres database of its own; this is the list of them, and it is
  * read only from the home database - the one in DATABASE_URL - which is the

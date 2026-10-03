@@ -34,7 +34,7 @@ import { formatMoney } from '../../src/money.ts';
 import { displayDate } from '../../src/budget/month.ts';
 
 export type AccountChoice = { id: string; name: string };
-/** Another ledger the other side of a new transaction could be entered in (#23). */
+/** Another ledger the other side of a new transaction could be entered in (LG-6). */
 export type OtherLedger = { key: string; name: string };
 export type EnvelopeChoice = { id: string; name: string; groupName: string };
 

@@ -1,5 +1,5 @@
 /**
- * The ledgers this account keeps, and opening another (#23).
+ * The ledgers this account keeps, and opening another (LG-2).
  *
  * Read from the home database only. The home ledger is always first and is
  * not a row: it is the database in DATABASE_URL, named by an app setting. The

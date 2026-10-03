@@ -1,5 +1,5 @@
 /**
- * The other side of money that crossed between ledgers (#23).
+ * The other side of money that crossed between ledgers (LG-6).
  *
  * Ledgers share nothing, so an owner's draw is two transactions: out of the
  * business ledger and into the household one, each entered where it belongs.

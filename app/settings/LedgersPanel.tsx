@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The ledgers this account keeps, and opening another (#23).
+ * The ledgers this account keeps, and opening another (LG-2).
  *
  * Always here, even with one ledger: the header only names ledgers once there
  * is a choice to make, so this is where the first second one comes from.
