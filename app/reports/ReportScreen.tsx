@@ -1,12 +1,13 @@
 'use client';
 
 /**
- * Reports (RP-1, RP-2, RP-6).
+ * Reports (RP-1, RP-2, RP-6, VW-4).
  *
- * Tables rather than charts, deliberately for now: the numbers are the point,
- * and a table can be read, sorted by eye, and downloaded. A trend does eventually
- * want a shape rather than a grid, but that is a drawing problem to solve once
- * the figures are right.
+ * Tables first: the numbers are the point, and a table can be read, sorted by
+ * eye, and downloaded. The one chart is an envelope's balance over the period,
+ * shown when an envelope is opened here, because a balance's shape over a year
+ * - draining, accumulating, spiking every February - is what a column of
+ * figures does not show (VW-4).
  *
  * The period lives in the URL, so a report can be bookmarked, reloaded and
  * linked, and the CSV downloads carry the same dates rather than a second idea
@@ -22,6 +23,8 @@ import type {
   SpendingReport,
   TrendReport,
 } from '../../src/reports/reports.ts';
+import type { BalanceSeries } from '../../src/reports/balance.ts';
+import { BalanceChart } from './BalanceChart.tsx';
 import { Hint } from '../Hint.tsx';
 import { Money } from '../Money.tsx';
 import { formatMoney } from '../../src/money.ts';
@@ -48,6 +51,7 @@ export default function ReportScreen({
   trend,
   drilldown,
   drilldownEnvelopeId,
+  balance,
 }: {
   period: Period;
   preset: string | null;
@@ -55,6 +59,8 @@ export default function ReportScreen({
   trend: TrendReport;
   drilldown: ReportTransaction[];
   drilldownEnvelopeId: string | null;
+  /** The opened envelope's balance over the period, for its chart (VW-4). */
+  balance: BalanceSeries | null;
 }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -204,6 +210,8 @@ export default function ReportScreen({
               </button>
             </span>
           </div>
+
+          {balance && <BalanceChart series={balance} name={openEnvelope?.name ?? 'This envelope'} />}
 
           {drilldown.length === 0 && <p className="muted">Nothing in this period.</p>}
 

@@ -7,6 +7,7 @@ import {
   transactionsInPeriod,
   type Period,
 } from '../../src/reports/reports.ts';
+import { envelopeBalanceSeries } from '../../src/reports/balance.ts';
 import { requireUser } from '../auth.ts';
 import ReportScreen from './ReportScreen.tsx';
 
@@ -36,12 +37,13 @@ export default async function ReportsPage(props: {
   const envelopeId = one(params.envelope);
   const connection = await ledgerDb();
 
-  const [spending, trend, drilldown] = await Promise.all([
+  const [spending, trend, drilldown, balance] = await Promise.all([
     spendingByEnvelope(connection, period),
     monthlyTrend(connection, period, { limit: 12 }),
     envelopeId
       ? transactionsInPeriod(connection, period, { envelopeId, limit: 200 })
       : Promise.resolve([]),
+    envelopeId ? envelopeBalanceSeries(connection, envelopeId, period, today) : Promise.resolve(null),
   ]);
 
   return (
@@ -52,6 +54,7 @@ export default async function ReportsPage(props: {
       trend={trend}
       drilldown={drilldown}
       drilldownEnvelopeId={envelopeId ?? null}
+      balance={balance}
     />
   );
 }
