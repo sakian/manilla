@@ -19,6 +19,7 @@ import { checkInvariant } from '../ledger/ledger.ts';
 import { pendingCount } from '../queue/queue.ts';
 import { ruleSuggestionCount } from '../rules/rules.ts';
 import { statementMismatches } from '../import/ofxImport.ts';
+import { unusualCharges, type Insight } from '../insights/insights.ts';
 
 export type AttentionKind =
   /** The two sides of the ledger disagree, which should be impossible (FR-37). */
@@ -42,7 +43,9 @@ export type AttentionKind =
    * work. Not raised by `attention` - finding them is too expensive to do on
    * every screen - but the settings page raises it where the suggestions are.
    */
-  | 'rules_to_suggest';
+  | 'rules_to_suggest'
+  /** AI-1: a steady payee charging well above its usual, or a large first charge. */
+  | 'unusual_charge';
 
 export type Attention = {
   kind: AttentionKind;
@@ -55,6 +58,8 @@ export type Attention = {
   count?: number;
   /** The one account a notice is about, so it can lead straight there. */
   account?: { id: string; name: string };
+  /** What an `unusual_charge` found, with the figures behind it (AI-2). */
+  insight?: Insight;
 };
 
 export type AttentionReport = {
@@ -115,7 +120,7 @@ export async function attention(
   db: Database,
   month: MonthKey = currentMonth(),
 ): Promise<AttentionReport> {
-  const [balances, invariant, waiting, received, expected, average, suggestions, mismatched] =
+  const [balances, invariant, waiting, received, expected, average, suggestions, mismatched, unusual] =
     await Promise.all([
       balancesForNotices(db, month),
       checkInvariant(db),
@@ -125,6 +130,7 @@ export async function attention(
       suggestExpectedIncome(db, month),
       ruleSuggestionCount(db),
       statementMismatches(db),
+      unusualCharges(db),
     ]);
 
   const notices: Attention[] = [];
@@ -177,6 +183,11 @@ export async function attention(
       cents: exceeds.plannedCents,
       againstCents: exceeds.incomeCents,
     });
+  }
+
+  // One line each, since each is about one charge and is put away on its own.
+  for (const insight of unusual) {
+    notices.push({ kind: 'unusual_charge', severity: 'warn', cents: insight.cents, insight });
   }
 
   if (waiting > 0) {

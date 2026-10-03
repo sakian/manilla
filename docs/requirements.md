@@ -171,12 +171,12 @@ is built.
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
-| AI-1 | Anomaly detection against the payee's or envelope's own history — a utility bill more than 30% above its trailing 12-month average, or an unusually large charge from a new payee. | S | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
-| AI-2 | Each insight states the finding, the numbers behind it, and a suggested next step. | S | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
+| AI-1 | Anomaly detection against the payee's or envelope's own history — a utility bill more than 30% above its trailing 12-month average, or an unusually large charge from a new payee. | S | Partial, by payee. A steady payee (four or more charges in the year, varying by under 25%) charging over 30% and $10 above its average, and a first charge from a payee bigger than 95% of the year's charges and at least $100, within the last 31 days. Not yet by envelope ([#11](https://github.com/sakian/manilla/issues/11)). |
+| AI-2 | Each insight states the finding, the numbers behind it, and a suggested next step. | S | Built, by template with no model: a notice with the charge, its date, its usual or the threshold it passed, and what to check. |
 | AI-3 | Trend detection: an envelope rising or falling steadily over several months, adjusted for seasonality once a year of data exists. | S | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
 | AI-4 | Recurring-charge detection: new subscriptions, price increases, and charges that stopped or doubled. | C | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
 | AI-5 | Budget suggestions: an envelope consistently over or under budget gets a proposed new amount, applied only if accepted. | C | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
-| AI-6 | An insights inbox where each item can be dismissed, snoozed, or marked "expected" to teach the detector. | S | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
+| AI-6 | An insights inbox where each item can be dismissed, snoozed, or marked "expected" to teach the detector. | S | Partial. Each finding has an "Expected" button that puts it away for good; no inbox, snoozing or learning ([#11](https://github.com/sakian/manilla/issues/11)). |
 | AI-7 | Natural-language questions about your own data, answered from computed queries, with the underlying rows shown. | C | Not built ([#11](https://github.com/sakian/manilla/issues/11)) |
 
 ## Migration
