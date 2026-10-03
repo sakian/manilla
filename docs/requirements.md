@@ -145,8 +145,8 @@ flowchart LR
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
-| VW-1 | Dashboard for the current month: every envelope as a progress bar of spent against available, grouped, with a month selector. | M | Partial. Figures yes, bars and the month selector no. ([#3](https://github.com/sakian/manilla/issues/3)) |
-| VW-2 | Pace marker on each bar showing how far through the month you are. | S | Not built ([#3](https://github.com/sakian/manilla/issues/3)) |
+| VW-1 | Dashboard for the current month: every envelope as a progress bar of spent against available, grouped, with a month selector. | M | Built, without the month selector. Each envelope card has a bar of this month's spending against what it had (spent plus what is left), grey until it is well ahead of the month (amber) or overspent (red). The home screen is this month; past months are in Reports ([#3](https://github.com/sakian/manilla/issues/3)). |
+| VW-2 | Pace marker on each bar showing how far through the month you are. | S | Built. A tick on each bar; a part-spent envelope more than ten points past it turns amber. A bill paid in full early is done, not ahead. |
 | VW-3 | Dashboard callouts: overspent envelopes, unallocated income, transactions awaiting review, and the FR-37 balance check. | M | Built, as one ranked list shown on every main screen. |
 | VW-4 | Envelope view: envelopes in groups with balance, budgeted and spent. Opening one shows its transactions, transfers, allocations and a balance-over-time chart. | M | Partial. Everything but the chart. ([#4](https://github.com/sakian/manilla/issues/4)) |
 | VW-5 | Account view: accounts with balances, and each account's transactions filterable by status, date, payee and envelope. | M | Built, unified. One `/transactions` screen behind every filter. On a wide screen it also sits beside the envelope and account lists, showing whichever row was chosen ([#35](https://github.com/sakian/manilla/issues/35)). |

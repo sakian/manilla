@@ -46,6 +46,7 @@ import { useCallback, useMemo, useState, useTransition, type ReactNode } from 'r
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { FundingPlan } from '../src/budget/budget.ts';
+import { envelopeProgress, type Progress } from '../src/budget/progress.ts';
 import type { ManagedGroup } from '../src/envelopes/manage.ts';
 import { Hint } from './Hint.tsx';
 import { Split, usePaneLink } from './Split.tsx';
@@ -94,6 +95,7 @@ export default function HomeScreen({
   monthLabel,
   lastMonthLabel,
   month,
+  pace,
   funding,
   notices,
   pane,
@@ -104,6 +106,8 @@ export default function HomeScreen({
   /** Short form of the month before this one, for the per-row history figure. */
   lastMonthLabel: string;
   month: string;
+  /** The share of this month gone, for each bar's pace marker (VW-2). */
+  pace: number;
   funding: FundingPlan;
   /** The notices list, rendered on the server and slotted in under the heading. */
   notices?: ReactNode;
@@ -442,6 +446,16 @@ export default function HomeScreen({
                     )}
                   </span>
 
+                  {!editing && !envelope.isUnallocated && figure && (
+                    <ProgressBar
+                      progress={envelopeProgress(
+                        { spentCents: figure.spentCents, balanceCents: envelope.balanceCents },
+                        pace,
+                      )}
+                      pace={pace}
+                    />
+                  )}
+
                   <span className="envelope-actions">
                     {overspent && !editing && (
                       <button
@@ -617,5 +631,27 @@ export default function HomeScreen({
         />
       )}
     </>
+  );
+}
+
+/**
+ * Spent against what the envelope had this month, with a tick for how far
+ * through the month we are (VW-1, VW-2). The figures beside it say the same in
+ * numbers; the bar is for seeing at a glance which envelope is running ahead of
+ * the month, which a column of figures does not show.
+ */
+function ProgressBar({ progress, pace }: { progress: Progress | null; pace: number }) {
+  if (!progress) return null;
+  const tone = progress.overspent ? ' over' : progress.ahead ? ' ahead' : '';
+  const spent = Math.round(progress.share * 100);
+  const through = Math.round(pace * 100);
+  const label = progress.overspent
+    ? `Overspent, ${through}% through the month`
+    : `${spent}% of ${formatMoney(progress.availableCents)} spent, ${through}% through the month`;
+  return (
+    <span className={`envelope-bar${tone}`} role="img" aria-label={label} title={label}>
+      <span className="envelope-bar-fill" style={{ width: `${progress.share * 100}%` }} />
+      <span className="envelope-bar-pace" style={{ left: `${pace * 100}%` }} />
+    </span>
   );
 }

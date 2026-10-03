@@ -1,7 +1,8 @@
 import { Suspense } from 'react';
 import { ledgerDb } from './ledger.ts';
 import { budgetMonth, fundingFromBudget } from '../src/budget/budget.ts';
-import { addMonths, currentMonth, monthLabel, shortMonthLabel } from '../src/budget/month.ts';
+import { addMonths, currentMonth, localToday, monthLabel, shortMonthLabel } from '../src/budget/month.ts';
+import { monthPace } from '../src/budget/progress.ts';
 import { listEnvelopes } from '../src/envelopes/manage.ts';
 import { attention } from '../src/notices/notices.ts';
 import { requireUser } from './auth.ts';
@@ -43,6 +44,8 @@ export default async function Home(props: {
       groups={groups}
       figures={figures}
       month={month}
+      // Worked out here, so the server and the browser draw the same marker.
+      pace={monthPace(localToday())}
       monthLabel={monthLabel(month)}
       lastMonthLabel={shortMonthLabel(addMonths(month, -1))}
       funding={fundingFromBudget(budget)}
