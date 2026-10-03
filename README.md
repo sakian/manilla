@@ -234,7 +234,8 @@ Tailscale node, and the only people there are the ones on your tailnet.
 
 ```bash
 # 1. A reusable auth key from login.tailscale.com/admin/settings/keys
-cp .env.example .env            # then fill in TS_AUTHKEY, POSTGRES_PASSWORD and the two below
+cp .env.example .env            # then fill in TS_AUTHKEY, POSTGRES_PASSWORD, MANILLA_TIMEZONE
+#                                 and the two below
 #    MANILLA_RP_ID=manilla.your-tailnet.ts.net
 #    MANILLA_ORIGIN=https://manilla.your-tailnet.ts.net
 

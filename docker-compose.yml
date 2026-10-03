@@ -87,6 +87,11 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-manilla}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env - see .env.example}@db:5432/${POSTGRES_DB:-manilla}
       NODE_ENV: production
+      # Calendar dates - today, this month, the day a funding is dated - are the
+      # server's local ones (src/budget/month.ts), and a container's local zone
+      # is UTC. Without this, every evening in the Americas is already tomorrow
+      # on the server, and the last evening of a month is already next month.
+      TZ: ${MANILLA_TIMEZONE:-UTC}
       # Next's standalone server binds to whatever HOSTNAME says, and Docker sets
       # that to the container's name - so without this the app listens on the
       # compose network address and `tailscale serve`, which proxies to
