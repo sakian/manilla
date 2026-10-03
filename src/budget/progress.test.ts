@@ -54,15 +54,15 @@ test('an envelope that had nothing and spent nothing draws no bar', () => {
   assert.equal(envelopeProgress({ spentCents: 0, balanceCents: 0 }, 0.5), null);
 });
 
-test('money held but not yet spent is an empty bar', () => {
-  assert.deepEqual(envelopeProgress({ spentCents: 0, balanceCents: 50000 }, 0.5), {
-    share: 0,
-    availableCents: 50000,
-    overspent: false,
-    ahead: false,
-  });
+test('money held but not yet spent draws no bar, so the 3rd of the month is not a row of empty tracks', () => {
+  assert.equal(envelopeProgress({ spentCents: 0, balanceCents: 50000 }, 0.1), null);
 });
 
-test('refunds beyond spending draw as nothing spent', () => {
-  assert.equal(envelopeProgress({ spentCents: -2000, balanceCents: 12000 }, 0.5)!.share, 0);
+test('refunds beyond spending are nothing spent, and draw no bar', () => {
+  assert.equal(envelopeProgress({ spentCents: -2000, balanceCents: 12000 }, 0.5), null);
+});
+
+test('overspent with nothing spent this month - moved out, say - still says so', () => {
+  const moved = envelopeProgress({ spentCents: 0, balanceCents: -3000 }, 0.5)!;
+  assert.deepEqual([moved.share, moved.overspent], [1, true]);
 });

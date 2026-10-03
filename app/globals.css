@@ -989,14 +989,16 @@ details[open] > summary > .group-summary::before {
   opacity: 1;
 }
 
+/* A notch in the bar, its own height and no more: a mark that stood proud of
+   the track read as a slider's handle, asking to be dragged. */
 .envelope-bar-pace {
   position: absolute;
-  top: -3px;
-  bottom: -3px;
+  top: 0;
+  bottom: 0;
   width: 2px;
   margin-left: -1px;
-  border-radius: 1px;
   background: var(--text);
+  opacity: 0.75;
 }
 
 /*
