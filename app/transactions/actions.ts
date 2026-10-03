@@ -25,7 +25,7 @@ import {
   updateTransfer,
 } from '../../src/transactions/manage.ts';
 import { requireUser } from '../auth.ts';
-import { centsFromInput } from '../amount.ts';
+import { centsFromInput } from '../../src/amount.ts';
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 

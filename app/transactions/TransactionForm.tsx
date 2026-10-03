@@ -15,7 +15,7 @@
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { centsFromInput, inputFromCents } from '../amount.ts';
+import { centsFromInput, inputFromCents } from '../../src/amount.ts';
 import type { OtherSideDraft } from '../../src/ledgers/otherSide.ts';
 import {
   createTransactionAction,

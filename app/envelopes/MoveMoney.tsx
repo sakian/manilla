@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoverPlan } from '../../src/envelopes/transfer.ts';
-import { inputFromCents } from '../amount.ts';
+import { inputFromCents } from '../../src/amount.ts';
 import {
   archiveEnvelopeAction,
   coverAction,

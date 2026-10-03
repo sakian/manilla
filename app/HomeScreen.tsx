@@ -51,7 +51,7 @@ import { Hint } from './Hint.tsx';
 import { Split, usePaneLink } from './Split.tsx';
 import { useOverlay } from './useOverlay.ts';
 import { Money, Spend } from './Money.tsx';
-import { inputFromCents } from './amount.ts';
+import { inputFromCents } from '../src/amount.ts';
 import {
   archiveGroupAction,
   createEnvelopeAction,

@@ -36,7 +36,7 @@
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { FundingPlan } from '../../src/budget/budget.ts';
-import { AmountError, centsFromInput, inputFromCents } from '../amount.ts';
+import { AmountError, centsFromInput, inputFromCents } from '../../src/amount.ts';
 import { Hint } from '../Hint.tsx';
 import { fundEnvelopesAction } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';

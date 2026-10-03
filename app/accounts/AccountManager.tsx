@@ -32,7 +32,7 @@ import type { AccountCategory } from '../../src/accounts/groups.ts';
 import { Hint } from '../Hint.tsx';
 import { Split, usePaneLink } from '../Split.tsx';
 import { Money } from '../Money.tsx';
-import { centsFromInput } from '../amount.ts';
+import { centsFromInput } from '../../src/amount.ts';
 import {
   archiveAccountAction,
   archiveAccountGroupAction,
