@@ -2949,3 +2949,96 @@ details[open] > summary > .group-summary::before {
 .txn-move .txn-payee {
   font-style: italic;
 }
+
+/* --- An envelope's balance over time (VW-4) ------------------------------- */
+
+/*
+ * One line in the accent, on hairline gridlines one step off the surface; text
+ * in text colours, never the line's. Zero gets a firmer rule when the balance
+ * crosses it, since which side of zero it is on is the first thing to read.
+ */
+.balance-chart {
+  margin: 4px 0 14px;
+}
+
+.balance-chart-frame {
+  position: relative;
+  outline-offset: 4px;
+  touch-action: pan-y;
+}
+
+.balance-chart-frame svg {
+  display: block;
+  overflow: visible;
+}
+
+.balance-chart .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.balance-chart .zero {
+  stroke: var(--text-dim);
+  stroke-width: 1;
+}
+
+.balance-chart .axis {
+  fill: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-chart .line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.balance-chart .end {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.balance-chart .end-label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.balance-chart .crosshair line {
+  stroke: var(--text-dim);
+  stroke-width: 1;
+}
+
+.balance-chart .crosshair circle {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.balance-chart-readout {
+  margin: 0 0 2px;
+  min-height: 20px;
+  font-size: 13px;
+}
+
+.balance-chart-readout strong {
+  color: var(--text);
+}
+
+.balance-chart-table {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.balance-chart-table summary {
+  cursor: pointer;
+  color: var(--text-dim);
+}
+
+.balance-chart-table table {
+  margin-top: 6px;
+}
