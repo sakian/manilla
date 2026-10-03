@@ -229,7 +229,7 @@ model rank above features.
 | --- | --- | --- | --- |
 | NF-1 | Money accuracy | Store amounts as integers in the currency's smallest unit, never floating point. Balances must always be reproducible from the transaction, allocation and transfer records. | Built |
 | NF-2 | Integrity | Imports and migrations are atomic: they fully apply or not at all. Edits and deletions keep an audit trail. | Partial. Atomic yes; no audit trail. ([#8](https://github.com/sakian/manilla/issues/8)) |
-| NF-3 | Authentication | Strong sign-in: passkeys, with session timeouts. | Built. Passkeys plus single-use recovery codes; sessions lapse after 12 idle hours and end after 30 days. |
+| NF-3 | Authentication | Strong sign-in: passkeys, with session timeouts. | Built. Passkeys plus single-use recovery codes; sessions lapse after 12 idle hours and end after 30 days. After five wrong recovery codes each try waits longer, up to 15 minutes, and each is logged. |
 | NF-4 | Data protection | Encrypt in transit and at rest. No bank credentials are ever stored. | Partial. TLS via the Tailscale node, and no credentials exist to store; at-rest encryption is the host's disk, not the app's. |
 | NF-5 | AI data minimization | Send the model only what the task needs. Settings show exactly what is sent, with an off switch. | Built. Payee text, amount, date, memo and envelope names — see the note in the README about what a bank writes into a memo. |
 | NF-6 | Data ownership | Full export of all data as CSV and JSON at any time, and a delete-everything option. | Built |

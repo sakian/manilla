@@ -70,9 +70,10 @@ credentials, not records of your money.
   unchanged, because 68% of transactions happen at merchants used for more than one
   envelope. This was measured, not guessed, and it is why the review queue matters
   more than the classifier.
-- **No rate limiting** on recovery-code sign-in. 60 bits of entropy per code makes
-  brute force impractical, and the app is meant to sit behind a tailnet, but it is
-  worth knowing.
+- **Recovery-code sign-in slows down rather than locks.** After five wrong codes
+  each try waits longer, doubling to 15 minutes, and every wrong one is logged.
+  It counts per install, not per person, so someone hammering it delays your own
+  recovery too — a passkey still works.
 - **No audit trail** for edits and deletions yet (NF-2). Undo is a contra entry
   rather than a delete, so envelope history survives, but a changed transaction does
   not record what it used to say.
@@ -246,7 +247,11 @@ docker compose logs -f app      # "database is up to schema", then the origin
 # 4. Clear TS_AUTHKEY from .env - the node keeps its identity in a volume.
 ```
 
-Then open `https://manilla.your-tailnet.ts.net` from any device on the tailnet.
+Then open `https://manilla.your-tailnet.ts.net` from any device on the tailnet,
+**and register your passkey straight away.** Until the first passkey exists, the
+install belongs to whoever registers one, and anyone on your tailnet can reach it.
+Bring it up when nobody else could beat you to it, or with the node shared with
+nobody yet.
 
 **Your existing passkey will not work there.** A passkey is bound to an exact
 host, so moving off `manilla.lan` invalidates it — which is the intended
