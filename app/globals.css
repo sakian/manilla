@@ -446,6 +446,12 @@ kbd {
   font-size: 14px;
 }
 
+/* A status line rather than prose: the measure is for reading paragraphs, and
+   one sentence broken before its last word for it reads as a mistake (#47). */
+.page-head p.page-status {
+  max-width: none;
+}
+
 .callouts {
   display: flex;
   gap: 10px;

@@ -83,10 +83,9 @@ export default async function SettingsPage() {
     <>
       <div className="page-head">
         <h2>Settings</h2>
-        <p className="muted">
+        <p className="muted page-status">
           Signed in as {session.userName}. This session lapses if unused, and ends for good on{' '}
-          {displayInstant(session.endsAt)}
-          .
+          {displayInstant(session.endsAt)}.
         </p>
       </div>
 
