@@ -18,8 +18,10 @@ import {
   applyReconciliation,
   commitMigration,
   planMigration,
+  migrationDate,
   reconcile,
   revertMigration,
+  settleReconciliation,
   type MigrationMapping,
 } from './migrate.ts';
 import {
@@ -30,7 +32,7 @@ import {
   truncateAll,
   type Fixture,
 } from '../ledger/testdb.ts';
-import { envelopeMoves, envelopes, transactions } from '../../db/schema.ts';
+import { envelopeMoves, envelopes, transactions, txnLines } from '../../db/schema.ts';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -769,6 +771,80 @@ describe(
       // it is read in the envelope's own history by the user (#11).
       assert.equal(adjustment.description, CARRIED_OVER_NOTE);
       assert.doesNotMatch(adjustment.description, /goodbudget/i);
+    });
+
+    test('the migration date is the last day the export covers', async () => {
+      assert.equal(await migrationDate(db), null, 'nothing migrated yet');
+      const { batchId } = await commitMigration(db, planMigration([EXPORT]), mappingFor());
+      assert.equal(await migrationDate(db), '2026-09-19');
+
+      await revertMigration(db, batchId);
+      assert.equal(await migrationDate(db), null, 'an undone migration no longer counts');
+    });
+
+    test('balances are compared as of the migration, not as of today', async () => {
+      await commitMigration(db, planMigration([EXPORT]), mappingFor());
+      const chequing = (await listAccounts(db)).find((account) => account.name === 'Chequing')!;
+
+      // Spending recorded in Manilla after the export was taken.
+      const [later] = await db
+        .insert(transactions)
+        .values({
+          accountId: chequing.id,
+          date: '2026-10-05',
+          amountCents: -3000,
+          payeeRaw: 'SHELL',
+          payeeKey: 'SHELL',
+          kind: 'spending',
+          status: 'confirmed',
+          source: 'manual',
+        })
+        .returning({ id: transactions.id });
+      await db.insert(txnLines).values({ transactionId: later!.id, envelopeId: env.gasId, amountCents: -3000 });
+
+      const report = await reconcile(
+        db,
+        { [env.gasId]: 15000 },
+        { asOf: '2026-09-19', accounts: { [chequing.id]: 253235 } },
+      );
+      const gas = report.lines.find((line) => line.envelopeId === env.gasId)!;
+      assert.equal(gas.computedCents, -11020, 'the October fuel is not part of the comparison');
+      assert.equal(gas.differenceCents, 26020);
+
+      const account = report.accounts.find((line) => line.accountId === chequing.id)!;
+      assert.equal(account.computedCents, 253235);
+      assert.equal(account.differenceCents, 0, 'the account rebuilt exactly');
+      const visa = report.accounts.find((line) => line.name === 'Visa')!;
+      assert.equal(visa.expectedCents, null);
+      assert.equal(visa.computedCents, 40000);
+    });
+
+    test('settling works out the differences itself, and a second submit writes nothing', async () => {
+      await commitMigration(db, planMigration([EXPORT]), mappingFor());
+      const typed = { [env.gasId]: 15000, [env.groceriesId]: 22000 };
+
+      const [first, second] = await Promise.all([
+        settleReconciliation(db, typed, { date: '2026-09-19' }),
+        settleReconciliation(db, typed, { date: '2026-09-19' }),
+      ]);
+      assert.equal(first + second, 2, 'one submission adjusted both envelopes, the other found nothing');
+
+      assert.equal(await balanceOf(env.gasId), 15000);
+      assert.equal(await balanceOf(env.groceriesId), 22000);
+      const moves = await db.select().from(envelopeMoves).where(eq(envelopeMoves.note, CARRIED_OVER_NOTE));
+      assert.deepEqual(
+        moves.map((move) => move.date),
+        ['2026-09-19', '2026-09-19'],
+        'dated on the migration day, before anything recorded since',
+      );
+      assert.ok((await checkInvariant(db)).ok);
+    });
+
+    test('settling refuses a figure that is not whole cents', async () => {
+      await assert.rejects(
+        () => settleReconciliation(db, { [env.gasId]: 150.5 }, { date: '2026-09-19' }),
+        MigrationError,
+      );
     });
   },
 );

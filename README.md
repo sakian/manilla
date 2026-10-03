@@ -109,7 +109,7 @@ app/                    the web app (Next.js App Router)
   review/               the review queue: decide, then save in one go (RQ-1 to RQ-5)
   budget/               funding envelopes out of Available, and the plan's writes (FR-27 to FR-31)
   import/               OFX/QFX import: preview, decide, commit (FR-7 to FR-14)
-  migrate/              the migration wizard (MG-1 to MG-7)
+  migrate/              the migration wizard, and reconciling it afterwards (MG-1 to MG-7)
   reports/              spending by envelope, month by month, with CSV (RP-1 to RP-6)
   transactions/         every transaction, filtered however you like, and manual
                         entry, correction and deletion (VW-5, VW-6, FR-2, FR-4, FR-5)

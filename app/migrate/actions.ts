@@ -16,11 +16,11 @@ import { revalidatePath } from 'next/cache';
 import { ledgerDb } from '../ledger.ts';
 import type { Database } from '../../db/client.ts';
 import {
-  applyReconciliation,
   commitMigration,
+  migrationDate,
   planMigration,
-  reconcile,
   revertMigration,
+  settleReconciliation,
   type MigrationMapping,
   type Unrepresentable,
 } from '../../src/migrate/migrate.ts';
@@ -30,7 +30,6 @@ import {
   type MigrationSourceId,
 } from '../../src/migrate/sources.ts';
 import { refreshRuleSuggestionCount } from '../../src/rules/rules.ts';
-import { localToday } from '../../src/budget/month.ts';
 import { requireUser } from '../auth.ts';
 
 export type Failure = { ok: false; error: string };
@@ -41,6 +40,7 @@ function failed(error: unknown): Failure {
 
 function refreshed(): void {
   revalidatePath('/migrate');
+  revalidatePath('/migrate/reconcile');
   revalidatePath('/accounts');
   revalidatePath('/transactions');
   revalidatePath('/');
@@ -193,35 +193,20 @@ export async function commitMigrationAction(
   }
 }
 
-export async function reconcileAction(
-  expected: Record<string, number> = {},
-): Promise<
-  | {
-      ok: true;
-      lines: Awaited<ReturnType<typeof reconcile>>['lines'];
-      differenceCents: number;
-      unanswered: number;
-    }
-  | Failure
-> {
-  try {
-    await requireUser();
-    const report = await reconcile(await ledgerDb(), expected);
-    return { ok: true, ...report };
-  } catch (error) {
-    return failed(error);
-  }
-}
-
+/**
+ * MG-7: the figures typed off the old app, per envelope, in cents. The
+ * differences are worked out on the server against the balances on the
+ * migration date, and dated that day - neither is taken from the browser.
+ */
 export async function applyReconciliationAction(
-  adjustments: { envelopeId: string; differenceCents: number }[],
-  date?: string,
+  expected: Record<string, number>,
 ): Promise<{ ok: true; written: number } | Failure> {
   try {
     await requireUser();
-    const written = await applyReconciliation(await ledgerDb(), adjustments, {
-      date: date ?? localToday(),
-    });
+    const connection = await ledgerDb();
+    const date = await migrationDate(connection);
+    if (!date) throw new Error('There is no migrated history to reconcile against.');
+    const written = await settleReconciliation(connection, expected, { date });
     refreshed();
     return { ok: true, written };
   } catch (error) {

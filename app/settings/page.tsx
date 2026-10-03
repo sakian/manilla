@@ -112,6 +112,10 @@ export default async function SettingsPage() {
           transfers. Nothing is written until you have seen what it would do, and the whole thing can
           be undone in one step.
         </p>
+        <p className="muted">
+          Already brought one in? <Link href="/migrate/reconcile">Reconcile its balances</Link>{' '}
+          against what your old app showed.
+        </p>
       </section>
 
       <DataPanel

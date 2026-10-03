@@ -33,7 +33,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import {
   accounts,
@@ -57,6 +57,8 @@ import {
 import { parseAmount } from '../money.ts';
 import { DEFAULT_SOURCE, migrationSource, type MigrationSourceId } from './sources.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
+import { localToday } from '../budget/month.ts';
+import type { Executor } from '../ledger/ledger.ts';
 
 export class MigrationError extends Error {}
 
@@ -1099,13 +1101,54 @@ export type ReconcileLine = {
   differenceCents: number;
 };
 
+/**
+ * An account compared the same way. Accounts rebuild exactly from the export in
+ * principle, so a difference here is not something to adjust away: it means
+ * transactions are missing, and writing a figure to cover them would invent
+ * money the bank never moved.
+ */
+export type AccountReconcileLine = {
+  accountId: string;
+  name: string;
+  computedCents: number;
+  expectedCents: number | null;
+  differenceCents: number;
+};
+
 export type Reconciliation = {
+  /** The day the balances are as of, or null for everything recorded so far. */
+  asOf: string | null;
   lines: ReconcileLine[];
+  accounts: AccountReconcileLine[];
   /** Total across every envelope the user gave a figure for. */
   differenceCents: number;
   /** Envelopes still without a figure, so the report can say it is incomplete. */
   unanswered: number;
 };
+
+/**
+ * The last day the migrated history covers, or null when none is in.
+ *
+ * Reconciliation compares against what the old app showed when the export was
+ * taken, so that is the day to read Manilla's balances on and to date the
+ * adjustments - before anything recorded here since, which is where an opening
+ * balance belongs in an envelope's history.
+ */
+export async function migrationDate(db: Executor): Promise<string | null> {
+  const [row] = await db
+    .select({
+      last: sql<string | null>`greatest(
+        (select max(t.date) from transactions t
+          join import_batches b on b.id = t.import_batch_id
+          where b.source = 'goodbudget' and b.reverted_at is null),
+        (select max(m.date) from envelope_moves m
+          join import_batches b on b.id = m.import_batch_id
+          where b.source = 'goodbudget' and b.reverted_at is null)
+      )`,
+    })
+    .from(sql`(select 1) as one`);
+  return row?.last ?? null;
+}
 
 /**
  * Compare migrated balances with the ones GoodBudget shows (MG-7).
@@ -1115,31 +1158,80 @@ export type Reconciliation = {
  * because "Fill Envelopes" rows carry no amounts. So every envelope whose fills
  * did not come across in an envelope export comes out short by exactly what it
  * was filled with over the years. This is the report
- * that says so per envelope, and `applyReconciliation` is the one step that
+ * that says so per envelope, and `settleReconciliation` is the one step that
  * closes it - as a dated, visible adjustment, not a silent correction.
+ *
+ * With `asOf`, balances are read on that day, so a reconciliation done weeks
+ * after the migration is not thrown off by everything imported since.
  */
 export async function reconcile(
-  db: Database,
+  db: Executor,
   expected: Record<string, number> = {},
+  options: { asOf?: string; accounts?: Record<string, number> } = {},
 ): Promise<Reconciliation> {
-  const { envelopeBalances } = await import('../ledger/ledger.ts');
-  const balances = await envelopeBalances(db);
+  const cutoff = options.asOf ?? '9999-12-31';
 
-  const lines = balances.map((balance): ReconcileLine => {
-    const stated = expected[balance.envelopeId];
-    return {
-      envelopeId: balance.envelopeId,
-      name: balance.name,
-      groupName: balance.groupName,
-      isUnallocated: balance.isUnallocated,
-      computedCents: balance.balanceCents,
-      expectedCents: stated === undefined ? null : stated,
-      differenceCents: stated === undefined ? 0 : stated - balance.balanceCents,
-    };
+  const [envelopeRows, accountRows] = await Promise.all([
+    db
+      .select({
+        envelopeId: envelopes.id,
+        name: envelopes.name,
+        groupName: envelopeGroups.name,
+        isUnallocated: envelopes.isUnallocated,
+        balanceCents: sql<string>`(
+          coalesce((select sum(l.amount_cents) from txn_lines l
+            join transactions t on t.id = l.transaction_id
+            where l.envelope_id = ${envelopes.id} and t.date <= ${cutoff}::date), 0)
+          + coalesce((select sum(m.amount_cents) from envelope_moves m
+            where m.to_envelope_id = ${envelopes.id} and m.date <= ${cutoff}::date), 0)
+          - coalesce((select sum(m.amount_cents) from envelope_moves m
+            where m.from_envelope_id = ${envelopes.id} and m.date <= ${cutoff}::date), 0)
+        )::bigint`,
+      })
+      .from(envelopes)
+      .innerJoin(envelopeGroups, eq(envelopes.groupId, envelopeGroups.id))
+      .orderBy(envelopeGroups.position, envelopeGroups.name, envelopes.name),
+    db
+      .select({
+        accountId: accounts.id,
+        name: accounts.name,
+        // Spelled out: on a one-table select drizzle leaves `${accounts.id}`
+        // unqualified, and inside the subquery `id` would be the transaction's.
+        balanceCents: sql<string>`coalesce((select sum(t.amount_cents) from transactions t
+          where t.account_id = "accounts"."id" and t.date <= ${cutoff}::date), 0)::bigint`,
+      })
+      .from(accounts)
+      .orderBy(accounts.position, accounts.name),
+  ]);
+
+  const compared = (computed: number, stated: number | undefined) => ({
+    computedCents: computed,
+    expectedCents: stated === undefined ? null : stated,
+    differenceCents: stated === undefined ? 0 : stated - computed,
   });
 
+  const lines = envelopeRows.map(
+    (row): ReconcileLine => ({
+      envelopeId: row.envelopeId,
+      name: row.name,
+      groupName: row.groupName,
+      isUnallocated: row.isUnallocated,
+      ...compared(Number(row.balanceCents), expected[row.envelopeId]),
+    }),
+  );
+
+  const accountLines = accountRows.map(
+    (row): AccountReconcileLine => ({
+      accountId: row.accountId,
+      name: row.name,
+      ...compared(Number(row.balanceCents), options.accounts?.[row.accountId]),
+    }),
+  );
+
   return {
+    asOf: options.asOf ?? null,
     lines,
+    accounts: accountLines,
     differenceCents: lines.reduce((sum, line) => sum + line.differenceCents, 0),
     unanswered: lines.filter((line) => line.expectedCents === null && !line.isUnallocated).length,
   };
@@ -1159,9 +1251,9 @@ export async function reconcile(
  * accounts actually hold.
  */
 export async function applyReconciliation(
-  db: Database,
+  db: Executor,
   adjustments: { envelopeId: string; differenceCents: number }[],
-  options: { date: string; batchId?: string } = { date: new Date().toISOString().slice(0, 10) },
+  options: { date: string; batchId?: string } = { date: localToday() },
 ): Promise<number> {
   const real = adjustments.filter((adjustment) => adjustment.differenceCents !== 0);
   if (real.length === 0) return 0;
@@ -1190,4 +1282,42 @@ export async function applyReconciliation(
   );
 
   return real.length;
+}
+
+/**
+ * Take the figures someone read off their old app and make the balances match
+ * them, as of `date`.
+ *
+ * The differences are worked out here, from the balances in the database at the
+ * moment of writing, rather than accepted from the browser: a figure computed
+ * against a page loaded an hour ago - or sent twice by a double-click - would
+ * otherwise be written as given, and the envelope would end up adjusted twice.
+ * The pool is locked for the length of it so a second submission waits and then
+ * finds nothing left to do.
+ */
+export async function settleReconciliation(
+  db: Database,
+  expected: Record<string, number>,
+  options: { date: string },
+): Promise<number> {
+  for (const [envelopeId, cents] of Object.entries(expected)) {
+    if (!Number.isSafeInteger(cents)) {
+      throw new MigrationError(`Not an amount in cents for envelope ${envelopeId}: ${cents}`);
+    }
+  }
+
+  return db.transaction(async (tx) => {
+    await tx
+      .select({ id: envelopes.id })
+      .from(envelopes)
+      .where(eq(envelopes.isUnallocated, true))
+      .for('update');
+
+    const report = await reconcile(tx, expected, { asOf: options.date });
+    return applyReconciliation(
+      tx,
+      report.lines.map((line) => ({ envelopeId: line.envelopeId, differenceCents: line.differenceCents })),
+      { date: options.date },
+    );
+  });
 }
