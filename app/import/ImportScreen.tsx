@@ -39,6 +39,7 @@ type Preview = {
     duplicate: number;
     possible_duplicate: number;
     transfer_half: number;
+    entered_ahead: number;
   };
   balance?: { statedCents: number; projectedCents: number; matches: boolean; asOf?: string };
   warnings: string[];
@@ -66,11 +67,14 @@ type Statement = {
 /**
  * What each row does if nobody touches it. A transfer half links, because the
  * money is already recorded on both accounts and what this statement adds is
- * the bank's id for it (FR-5).
+ * the bank's id for it (FR-5). Something entered ahead links for the same
+ * reason: it was recorded by hand before the bank had it.
  */
 function defaultDecision(row: PreviewRow): Decision {
   if (row.verdict === 'new') return 'add';
-  if (row.verdict === 'transfer_half' && row.existingId) return 'link';
+  if ((row.verdict === 'transfer_half' || row.verdict === 'entered_ahead') && row.existingId) {
+    return 'link';
+  }
   return 'skip';
 }
 
@@ -485,6 +489,11 @@ function StatementCard({ statement }: { statement: Statement }) {
             {preview.counts.transfer_half > 0 && (
               <div className="callout">
                 <strong>{preview.counts.transfer_half}</strong> the other half of a transfer
+              </div>
+            )}
+            {preview.counts.entered_ahead > 0 && (
+              <div className="callout">
+                <strong>{preview.counts.entered_ahead}</strong> you entered already
               </div>
             )}
             <div className="callout">into {preview.accountName}</div>

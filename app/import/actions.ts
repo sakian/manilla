@@ -49,7 +49,7 @@ export type PreviewRow = {
   payee: string;
   amountCents: number;
   memo: string | null;
-  verdict: 'new' | 'duplicate' | 'possible_duplicate' | 'transfer_half';
+  verdict: 'new' | 'duplicate' | 'possible_duplicate' | 'transfer_half' | 'entered_ahead';
   reason: string;
   /** The transaction it matched, when it matched one. */
   existingId?: string;
@@ -74,6 +74,7 @@ export type PreviewResult =
         duplicate: number;
         possible_duplicate: number;
         transfer_half: number;
+        entered_ahead: number;
       };
       balance?: { statedCents: number; projectedCents: number; matches: boolean; asOf?: string };
       warnings: string[];
