@@ -173,16 +173,19 @@ function TransactionRow({
   onOpen: () => void;
 }) {
   const partOf = shareCents !== undefined && shareCents !== row.amountCents;
+  // The row opens from its payee, stretched over the whole row by CSS - not a
+  // button around the row, because the amounts in it are buttons of their own
+  // (they copy, #44) and a button cannot hold another.
   return (
-    <button
+    <div
       className={`txn txn-button${row.status === 'pending_review' ? ' unreviewed' : ''}${
         balance ? ' with-balance' : ''
       }`}
-      onClick={onOpen}
-      disabled={disabled}
     >
       <span className="txn-payee">
-        {row.payeeRaw}
+        <button className="txn-open" onClick={onOpen} disabled={disabled}>
+          {row.payeeRaw}
+        </button>
         {row.kind === 'account_transfer' && <span className="tag">transfer</span>}
       </span>
       <Money cents={shareCents ?? row.amountCents} />
@@ -217,7 +220,7 @@ function TransactionRow({
         </span>
       )}
       {row.note && <span className="txn-note">{row.note}</span>}
-    </button>
+    </div>
   );
 }
 
@@ -243,10 +246,18 @@ function MoveRow({
     : coming
       ? `From ${move.otherEnvelopeName}`
       : `To ${move.otherEnvelopeName}`;
-  const body = (
-    <>
+  // As a transaction row: the link is on the words and stretched by CSS, so the
+  // amounts can be copied without following it.
+  return (
+    <div className="txn txn-move with-balance">
       <span className="txn-payee">
-        {what}
+        {href ? (
+          <Link href={href} className="txn-open">
+            {what}
+          </Link>
+        ) : (
+          what
+        )}
         <span className="tag">{move.otherIsPool ? 'fill' : 'transfer'}</span>
       </span>
       <Money cents={move.amountCents} />
@@ -257,13 +268,6 @@ function MoveRow({
       <span className="txn-balance" title="The envelope's balance after this">
         <Money cents={balanceAfterCents} />
       </span>
-    </>
-  );
-  return href ? (
-    <Link href={href} className="txn txn-move with-balance">
-      {body}
-    </Link>
-  ) : (
-    <div className="txn txn-move with-balance">{body}</div>
+    </div>
   );
 }
