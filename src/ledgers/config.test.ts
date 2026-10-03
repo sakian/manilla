@@ -3,78 +3,70 @@ import assert from 'node:assert/strict';
 import {
   LedgerConfigError,
   chooseLedger,
-  configuredLedgers,
+  cleanLedgerName,
+  databaseNameFor,
   databaseOf,
-  parseLedgers,
   urlFor,
+  type Ledger,
 } from './config.ts';
 
 const HOME = 'postgres://manilla:secret@db:5432/manilla';
 
-describe('ledger configuration', () => {
-  test('unset, there is one ledger: the database in DATABASE_URL', () => {
-    assert.deepEqual(parseLedgers(undefined, 'manilla'), [
-      { key: 'manilla', name: 'Manilla', database: 'manilla' },
-    ]);
-    assert.equal(parseLedgers('  ', 'manilla').length, 1, 'blank is the same as unset');
+describe('naming ledgers', () => {
+  test('a name is trimmed, and has to be there and short enough to show', () => {
+    assert.equal(cleanLedgerName('  Side   business '), 'Side business');
+    assert.throws(() => cleanLedgerName('   '), LedgerConfigError);
+    assert.throws(() => cleanLedgerName('x'.repeat(41)), LedgerConfigError);
   });
 
-  test('each entry is a name to show and the database it lives in', () => {
-    assert.deepEqual(parseLedgers(' Personal = manilla , Business=manilla_business,', 'manilla'), [
-      { key: 'manilla', name: 'Personal', database: 'manilla' },
-      { key: 'manilla_business', name: 'Business', database: 'manilla_business' },
-    ]);
-  });
-
-  test('the home database has to be one of them, so nothing recorded so far is hidden', () => {
-    assert.throws(
-      () => parseLedgers('Business=manilla_business', 'manilla'),
-      (error: unknown) =>
-        error instanceof LedgerConfigError && /must include manilla/.test(error.message),
+  test('a new ledger gets <home>_ledger_<name>, clear of restore and test databases', () => {
+    const none = new Set<string>();
+    assert.equal(databaseNameFor('manilla', 'Business', none), 'manilla_ledger_business');
+    assert.equal(databaseNameFor('manilla', 'Café & Co.', none), 'manilla_ledger_cafe_co');
+    assert.equal(databaseNameFor('manilla', 'Restore check', none), 'manilla_ledger_restore_check');
+    assert.equal(databaseNameFor('manilla', '!!!', none), 'manilla_ledger_book', 'nothing usable');
+    assert.equal(
+      databaseNameFor('Not-A-Valid-Name', 'Business', none),
+      'manilla_ledger_business',
+      'an odd home database name is not copied into a new one',
     );
   });
 
-  test('anything ambiguous is refused rather than guessed', () => {
-    const refused = (spec: string) =>
-      assert.throws(() => parseLedgers(spec, 'manilla'), LedgerConfigError, spec);
-
-    refused('manilla'); // no name
-    refused('=manilla'); // empty name
-    refused('Personal=manilla,Business=Manilla_Business'); // not lowercase
-    refused('Personal=manilla,Business=manilla-business'); // hyphen: ambiguous backup names
-    refused('Personal=manilla,Business=1business'); // starts with a digit
-    refused('Personal=manilla,Other=manilla'); // one database twice
-    refused('Personal=manilla,personal=manilla_two'); // two names alike
-    refused(`${'x'.repeat(41)}=manilla`); // a name too long to show
+  test('an existing database is never adopted: a clash gets a number', () => {
+    const taken = new Set(['manilla_ledger_business', 'manilla_ledger_business_2']);
+    assert.equal(databaseNameFor('manilla', 'Business', taken), 'manilla_ledger_business_3');
   });
 
+  test('a long name still makes a name Postgres accepts', () => {
+    const name = databaseNameFor('manilla', 'b'.repeat(40), new Set());
+    assert.ok(name.length <= 60);
+    assert.match(name, /^[a-z][a-z0-9_]*$/);
+  });
+});
+
+describe('choosing and reaching a ledger', () => {
+  const ledgers: Ledger[] = [
+    { key: 'manilla', name: 'Personal', database: 'manilla' },
+    { key: 'manilla_ledger_business', name: 'Business', database: 'manilla_ledger_business' },
+  ];
+
   test('the cookie only ever picks from the list', () => {
-    const ledgers = parseLedgers('Personal=manilla,Business=manilla_business', 'manilla');
-    assert.equal(chooseLedger(ledgers, 'manilla_business').name, 'Business');
-    assert.equal(chooseLedger(ledgers, undefined).name, 'Personal', 'no cookie: the first');
-    assert.equal(chooseLedger(ledgers, 'postgres').name, 'Personal', 'not listed: the first');
+    assert.equal(chooseLedger(ledgers, 'manilla_ledger_business').name, 'Business');
+    assert.equal(chooseLedger(ledgers, undefined).name, 'Personal', 'no cookie: the home one');
+    assert.equal(chooseLedger(ledgers, 'postgres').name, 'Personal', 'not listed: the home one');
     assert.equal(chooseLedger(ledgers, 'Business').name, 'Personal', 'a name is not a key');
   });
 
   test('another ledger is the same server and credentials, another database', () => {
     assert.equal(databaseOf(HOME), 'manilla');
-    assert.equal(urlFor(HOME, 'manilla_business'), 'postgres://manilla:secret@db:5432/manilla_business');
     assert.equal(
-      urlFor('postgres://manilla:secret@db:5432/manilla?sslmode=require', 'manilla_business'),
-      'postgres://manilla:secret@db:5432/manilla_business?sslmode=require',
+      urlFor(HOME, 'manilla_ledger_business'),
+      'postgres://manilla:secret@db:5432/manilla_ledger_business',
+    );
+    assert.equal(
+      urlFor(`${HOME}?sslmode=require`, 'manilla_ledger_business'),
+      'postgres://manilla:secret@db:5432/manilla_ledger_business?sslmode=require',
       'connection options carry over',
     );
-  });
-
-  test('read from the environment, DATABASE_URL naming the home ledger', () => {
-    const ledgers = configuredLedgers({
-      DATABASE_URL: HOME,
-      MANILLA_LEDGERS: 'Personal=manilla,Business=manilla_business',
-    });
-    assert.deepEqual(
-      ledgers.map((ledger) => ledger.database),
-      ['manilla', 'manilla_business'],
-    );
-    assert.throws(() => configuredLedgers({}), /DATABASE_URL is not set/);
   });
 });

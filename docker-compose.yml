@@ -107,9 +107,6 @@ services:
       MANILLA_RP_ID: ${MANILLA_RP_ID:-localhost}
       MANILLA_ORIGIN: ${MANILLA_ORIGIN:-http://localhost:3000}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      # Separate ledgers, if any: see .env.example. Each one's database is
-      # created and migrated on start.
-      MANILLA_LEDGERS: ${MANILLA_LEDGERS:-}
     healthcheck:
       test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
       interval: 30s

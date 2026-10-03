@@ -43,52 +43,59 @@ DB_USER="${POSTGRES_USER:-manilla}"
 mkdir -p "$DIR"
 STAMP="$(date +%Y-%m-%d-%H%M%S)"
 
-# Every ledger is a database of its own (#23), so each gets its own dump:
-# <database>-<stamp>.dump. MANILLA_LEDGERS is read from the environment, or
-# from .env where the app reads it; without one there is a single ledger, and
-# its dump is named as it always was. A ledger left out of here would be one
-# that is never backed up, with nothing to say so - so this reads the same
-# setting the app does rather than a list of its own.
-LEDGER_SPEC="${MANILLA_LEDGERS-}"
-if [[ -z "$LEDGER_SPEC" && -f .env ]]; then
-  LEDGER_SPEC="$(sed -n 's/^MANILLA_LEDGERS=//p' .env | tail -n 1 | tr -d "\"'")"
-fi
-DATABASES=()
-if [[ -n "${LEDGER_SPEC//[[:space:],]/}" ]]; then
-  IFS=',' read -ra ENTRIES <<<"$LEDGER_SPEC"
-  for entry in "${ENTRIES[@]}"; do
-    database="${entry##*=}"
-    database="${database//[[:space:]]/}"
-    [[ -n "$database" ]] || continue
-    # The rule the app enforces (src/ledgers/config.ts), which also keeps one
-    # ledger's dumps from matching another's names.
-    if [[ ! "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
-      echo "backup: \"$database\" in MANILLA_LEDGERS is not a ledger database name" >&2
-      exit 1
-    fi
-    DATABASES+=("$database")
-  done
-else
-  DATABASES=("$DB_NAME")
-fi
-
 # Postgres runs in Compose here, so its own client tools are used rather than
 # asking the host to have a matching version installed - a dump written by an
 # older pg_dump than the server is a restore that fails when it is needed.
 if docker compose ps --status running --services 2>/dev/null | grep -qx "$CONTAINER"; then
   dump() { docker compose exec -T "$CONTAINER" \
     pg_dump --format=custom --compress=6 --username="$DB_USER" "$1" > "$2"; }
+  query() { docker compose exec -T "$CONTAINER" \
+    psql --username="$DB_USER" --dbname="$DB_NAME" --no-align --tuples-only --command "$1"; }
   VERIFY=(docker compose exec -T "$CONTAINER" pg_restore --list)
 elif command -v pg_dump >/dev/null; then
   : "${DATABASE_URL:?Set DATABASE_URL, or start the database with docker compose up -d db}"
   # The same server and credentials, another database; any ?options carry over.
   URL_BASE="${DATABASE_URL%%\?*}"
   URL_QUERY="${DATABASE_URL#"$URL_BASE"}"
+  DB_NAME="${URL_BASE##*/}"
   dump() { pg_dump --format=custom --compress=6 --file="$2" "${URL_BASE%/*}/$1$URL_QUERY"; }
+  query() { psql --no-align --tuples-only --command "$1" "$DATABASE_URL"; }
   VERIFY=(pg_restore --list)
 else
   echo "backup: no running database container and no pg_dump on this machine" >&2
   exit 1
+fi
+
+# Every ledger is a database of its own (#23), so each gets its own dump:
+# <database>-<stamp>.dump. The home one is the database above; the others are
+# the ones opened in Settings, listed in its `ledgers` table - read here rather
+# than kept in a list of this script's own, since a ledger left out would be one
+# never backed up with nothing to say so. A home database from before that
+# table existed has only itself.
+FAILED=()
+DATABASES=("$DB_NAME")
+if HAS_TABLE=$(query "select to_regclass('public.ledgers') is not null" 2>/dev/null); then
+  if [[ "$HAS_TABLE" == "t" ]]; then
+    if OPENED=$(query "select database from ledgers order by position, created_at" 2>/dev/null); then
+      while IFS= read -r database; do
+        [[ -n "$database" ]] || continue
+        # The rule the app enforces (src/ledgers/config.ts), which also keeps
+        # one ledger's dumps from matching another's names.
+        if [[ ! "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
+          echo "backup: \"$database\" in the ledgers table is not a ledger database name" >&2
+          FAILED+=("$database")
+          continue
+        fi
+        DATABASES+=("$database")
+      done <<<"$OPENED"
+    else
+      echo "backup: could not read the list of ledgers - backing up the home one only" >&2
+      FAILED+=("the list of ledgers")
+    fi
+  fi
+else
+  echo "backup: could not ask $DB_NAME which ledgers there are - backing up it only" >&2
+  FAILED+=("the list of ledgers")
 fi
 
 # One ledger. Every step is checked by hand: this runs as an `if` condition,
@@ -130,7 +137,6 @@ backup_ledger() {
 
 # A ledger that fails does not stop the others being backed up; the run still
 # fails at the end, loudly, so a scheduled backup that half-worked is noticed.
-FAILED=()
 for database in "${DATABASES[@]}"; do
   backup_ledger "$database" || FAILED+=("$database")
 done

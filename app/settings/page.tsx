@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { homeDb } from '../../db/client.ts';
-import { ledgerDb } from '../ledger.ts';
+import { allLedgers, currentLedger, ledgerDb } from '../ledger.ts';
+import LedgersPanel from './LedgersPanel.tsx';
+import { MAX_LEDGERS } from '../../src/ledgers/config.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
 import {
@@ -27,6 +29,7 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const session = await requireUser();
   const connection = await ledgerDb();
+  const [ledgers, current] = await Promise.all([allLedgers(), currentLedger()]);
 
   const [
     devices,
@@ -83,6 +86,8 @@ export default async function SettingsPage() {
         total={suggestionTotal}
         capped={suggestionTotal >= SUGGESTION_COUNT_CAP}
       />
+
+      <LedgersPanel ledgers={ledgers} currentKey={current.key} max={MAX_LEDGERS} />
 
       {/* Migration happens once, so it does not need a place in the navigation -
           but it does need to be findable a second time, which is what a settings

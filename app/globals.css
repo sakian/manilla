@@ -1732,6 +1732,62 @@ details[open] > summary > .group-summary::before {
   background: var(--tone-soft);
 }
 
+.ledger-menu-new {
+  margin-top: 4px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.ledger-menu-new:hover {
+  color: var(--text);
+}
+
+/* Settings' list of ledgers: a dot in each one's colour, the same as the header. */
+.ledger-list {
+  margin: 10px 0 14px;
+}
+
+.ledger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 0 6px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.ledger-row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ledger-rename,
+.ledger-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.ledger-rename input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.ledger-open .field {
+  flex: 1 1 200px;
+  margin: 0;
+}
+
 /* --- The wordmark --------------------------------------------------------- */
 
 .wordmark {

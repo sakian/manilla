@@ -25,8 +25,8 @@ export async function register(): Promise<void> {
  * the image "so the container can bring the database up to date on start" -
  * which nothing then did. A first deploy would have come up against an empty
  * database and failed somewhere far from the cause, and every later migration
- * would have been a step someone had to remember. A ledger listed in
- * MANILLA_LEDGERS that has no database yet gets one here.
+ * would have been a step someone had to remember. Every ledger opened from
+ * Settings is migrated too, the home one first since it holds the list.
  *
  * Only in production, and only with a database URL. In development migrations
  * are `npm run db:migrate`, run deliberately, because `next dev` restarts on
@@ -35,19 +35,14 @@ export async function register(): Promise<void> {
 async function migrateIfNeeded(production: boolean): Promise<void> {
   if (!production || !process.env.DATABASE_URL) return;
 
-  const { configuredLedgers } = await import('./src/ledgers/config.ts');
-  const { prepareLedgers } = await import('./src/ledgers/prepare.ts');
+  const { prepareEveryLedger } = await import('./src/ledgers/registry.ts');
 
   try {
-    await prepareLedgers(process.env.DATABASE_URL, configuredLedgers(), (line) =>
-      console.log(`[manilla] ${line}`),
-    );
+    await prepareEveryLedger(process.env.DATABASE_URL, (line) => console.log(`[manilla] ${line}`));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Serving against a schema we could not bring up to date is how a ledger
-    // ends up half-written, so this is fatal rather than a warning. So is a
-    // MANILLA_LEDGERS that cannot be read: guessing which books someone meant
-    // is worse than not starting.
+    // ends up half-written, so this is fatal rather than a warning.
     throw new Error(`Manilla refuses to start: ${message}`);
   }
 }

@@ -16,8 +16,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { connectionFor, homeDb } from '../../db/client.ts';
-import { currentLedger, ledgerDb } from '../ledger.ts';
-import { configuredLedgers } from '../../src/ledgers/config.ts';
+import { allLedgers, currentLedger, ledgerDb } from '../ledger.ts';
 import { mappedElsewhere } from '../../src/ledgers/elsewhere.ts';
 import { parseOfx } from '../../src/ofx/parse.ts';
 import {
@@ -120,7 +119,7 @@ export async function previewImportAction(
     // The same bank account in another ledger means this statement is very
     // likely that ledger's (#23).
     const elsewhere = await mappedElsewhere(
-      configuredLedgers(),
+      await allLedgers(),
       await currentLedger(),
       statement.accountId,
       connectionFor,

@@ -15,7 +15,8 @@ import type {
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { homeDb } from '../../db/client.ts';
-import { ledgerDb } from '../ledger.ts';
+import { homeDatabase, ledgerDb, rememberLedger } from '../ledger.ts';
+import { openLedger, renameLedger } from '../../src/ledgers/registry.ts';
 import {
   beginRegistration,
   finishRegistration,
@@ -260,5 +261,37 @@ export async function dismissRuleAction(contains: string) {
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Open a new, empty ledger and switch to it (#23). Its database is created and
+ * brought up to schema before this returns, which takes a moment; four ledgers
+ * is the most, and the home one counts.
+ */
+export async function openLedgerAction(
+  name: string,
+): Promise<{ ok: true; name: string } | Failure> {
+  try {
+    await requireUser();
+    const ledger = await openLedger(homeDb(), process.env.DATABASE_URL ?? '', homeDatabase(), name);
+    // The person who just opened it is about to set it up.
+    await rememberLedger(ledger.key);
+    revalidatePath('/', 'layout');
+    return { ok: true, name: ledger.name };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** Rename a ledger, the home one included. Its database keeps its name. */
+export async function renameLedgerAction(key: string, name: string): Promise<{ ok: true } | Failure> {
+  try {
+    await requireUser();
+    await renameLedger(homeDb(), homeDatabase(), key, name);
+    revalidatePath('/', 'layout');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
   }
 }

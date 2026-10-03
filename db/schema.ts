@@ -90,6 +90,29 @@ export const externalIdKind = pgEnum('external_id_kind', [
 // Identity. Single user for now, but keyed by row so multi-user is additive.
 // ---------------------------------------------------------------------------
 
+/**
+ * The ledgers this account keeps besides the home one (#23).
+ *
+ * Each is a Postgres database of its own; this is the list of them, and it is
+ * read only from the home database - the one in DATABASE_URL - which is the
+ * home ledger itself and is never a row here. Opened from Settings, at most
+ * three of them (four ledgers in all), and never removed by the app: dropping
+ * one would drop the money in it.
+ *
+ * `database` is fixed when the ledger is opened; `name` is what the screens
+ * call it and can change. The home ledger's own name is an app setting.
+ */
+export const ledgers = pgTable(
+  'ledgers',
+  {
+    database: text('database').primaryKey(),
+    name: text('name').notNull(),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('ledgers_name_idx').on(sql`lower(${table.name})`)],
+);
+
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
@@ -575,3 +598,4 @@ export type BudgetLine = typeof budgetLines.$inferSelect;
 export type Rule = typeof rules.$inferSelect;
 export type Credential = typeof credentials.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type LedgerRow = typeof ledgers.$inferSelect;

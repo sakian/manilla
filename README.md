@@ -287,21 +287,21 @@ secret it always was, or set `MANILLA_BACKUP_ENV=0` to leave the file out.
 
 ### Separate ledgers
 
-Business and household books — or any two sets of money that must not mix —
-can be kept as separate ledgers behind one sign-in:
+Business and household books — or any sets of money that must not mix — can be
+kept as separate ledgers behind one sign-in, up to four. Open one from
+**Settings → Ledgers**; it starts empty, ready for its own accounts or a
+migration.
 
-```bash
-MANILLA_LEDGERS=Personal=manilla,Business=manilla_business
-```
-
-Each is a database of its own on the same Postgres, with its own accounts,
-envelopes, rules and history; nothing crosses between them, and money that moves
-from one to the other is entered on each side. The database in `DATABASE_URL`
-must be one of them, since it holds sign-in. A new ledger's database is created
-the next time migrations run — on start in production, `npm run db:migrate` in
-development. The header names the open ledger in its own colour and switches
-between them, an import refuses a statement whose bank account belongs to the
-other ledger, and one AI budget covers them all.
+Each is a database of its own on the same Postgres, named after the home one
+(`manilla_ledger_business`), with its own accounts, envelopes, rules and
+history. Nothing crosses between them, and money that moves from one to the
+other is entered on each side. The header names the open ledger in its own
+colour and switches between them, an import refuses a statement whose bank
+account belongs to another ledger, and one AI budget covers them all. The list
+of ledgers lives in the home database, where migrations and backups read it, so
+a ledger opened in the app is migrated on every start and backed up with the
+rest. Ledgers are never closed from the app: closing one would take its money
+with it.
 
 ## Backups (NF-7)
 
@@ -318,8 +318,8 @@ ledger restored under a name nobody can sign in to is not a restore.
 
 `scripts/backup.sh` writes to `backups/` (gitignored), reads the archive back to
 prove it is not a half-written file, and keeps the last 14. With separate
-ledgers each gets its own dump, `<database>-<stamp>.dump`, read from the same
-`MANILLA_LEDGERS` the app uses; restore one by passing its file. It runs Postgres's
+ledgers each gets its own dump, `<database>-<stamp>.dump`, listed from the home
+database as the app lists them; restore one by passing its file. It runs Postgres's
 own `pg_dump` inside the container rather than the host's, because a dump written
 by an older client than the server is a restore that fails on the day it matters.
 

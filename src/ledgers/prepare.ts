@@ -1,12 +1,10 @@
 /**
  * Bring every ledger's database into being and up to schema (#23).
  *
- * Run at boot in production and by `npm run db:migrate` in development, so a
- * ledger added to MANILLA_LEDGERS is ready the next time either runs: its
- * database is created if it does not exist, migrated, and given the income pool
- * every budget screen needs (#21). A ledger that cannot be brought up stops the
- * whole run, since serving one ledger against a half-migrated other is how a
- * ledger ends up half-written.
+ * When a ledger is opened from Settings, and for every ledger at boot in
+ * production and in `npm run db:migrate` (`prepareEveryLedger` in registry.ts):
+ * its database is created if it does not exist, migrated, and given the income
+ * pool every budget screen needs (#21).
  */
 
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -63,23 +61,5 @@ export async function prepareLedger(
     log(`${ledger.name} (${ledger.database}) is up to schema`);
   } finally {
     await close(db);
-  }
-}
-
-/** Every ledger, in order; the first failure stops the rest. */
-export async function prepareLedgers(
-  homeUrl: string,
-  ledgers: Ledger[],
-  log: (line: string) => void = () => {},
-): Promise<void> {
-  for (const ledger of ledgers) {
-    try {
-      await prepareLedger(homeUrl, ledger, log);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`${ledger.name} (${ledger.database}) could not be brought up: ${message}`, {
-        cause: error,
-      });
-    }
   }
 }

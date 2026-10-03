@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { currentSession } from './auth.ts';
-import { currentLedger } from './ledger.ts';
+import { allLedgers, currentLedger } from './ledger.ts';
 import LedgerSwitch, { toneOf } from './LedgerSwitch.tsx';
 import { signOutAction } from './login/actions.ts';
-import { configuredLedgers } from '../src/ledgers/config.ts';
 import './globals.css';
 
 export const metadata = {
@@ -29,8 +28,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // use for it at all.
   const session = await currentSession();
   // Named on screen only when there is a choice to make.
-  const ledgers = configuredLedgers();
-  const ledger = session && ledgers.length > 1 ? await currentLedger() : null;
+  const ledgers = session ? await allLedgers() : [];
+  const ledger = ledgers.length > 1 ? await currentLedger() : null;
 
   return (
     <html lang="en">
