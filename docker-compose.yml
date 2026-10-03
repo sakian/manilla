@@ -26,7 +26,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-manilla}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-manilla}
+      # No default (#15). A password that works without being set is one nobody
+      # sets, on the one machine where it matters; compose refuses to start
+      # instead. Postgres reads it only when the volume is first created.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env - see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-manilla}
       # Deterministic collation, so ordering does not change under a base image bump.
       POSTGRES_INITDB_ARGS: '--locale=C --encoding=UTF8'
@@ -82,7 +85,7 @@ services:
       tailscale:
         condition: service_started
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-manilla}:${POSTGRES_PASSWORD:-manilla}@db:5432/${POSTGRES_DB:-manilla}
+      DATABASE_URL: postgres://${POSTGRES_USER:-manilla}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env - see .env.example}@db:5432/${POSTGRES_DB:-manilla}
       NODE_ENV: production
       # Next's standalone server binds to whatever HOSTNAME says, and Docker sets
       # that to the container's name - so without this the app listens on the

@@ -73,8 +73,6 @@ credentials, not records of your money.
 - **No rate limiting** on recovery-code sign-in. 60 bits of entropy per code makes
   brute force impractical, and the app is meant to sit behind a tailnet, but it is
   worth knowing.
-- **`docker-compose.yml` defaults the Postgres password to `manilla`.** It is bound
-  to loopback and never published, but set `POSTGRES_PASSWORD` anyway.
 - **No audit trail** for edits and deletions yet (NF-2). Undo is a contra entry
   rather than a delete, so envelope history survives, but a changed transaction does
   not record what it used to say.
@@ -163,8 +161,8 @@ data/private/           your real exports - gitignored
 ## Running it
 
 ```bash
+cp .env.example .env             # then set POSTGRES_PASSWORD, DATABASE_URL and the passkey host
 docker compose up -d db          # Postgres on 5433
-cp .env.example .env             # then fill in DATABASE_URL and the passkey host
 npm run db:migrate
 npm run seed                     # a starting chart of envelopes and one account
 npm run dev                      # http://localhost:3001
@@ -235,7 +233,7 @@ Tailscale node, and the only people there are the ones on your tailnet.
 
 ```bash
 # 1. A reusable auth key from login.tailscale.com/admin/settings/keys
-cp .env.example .env            # then fill in TS_AUTHKEY and the two below
+cp .env.example .env            # then fill in TS_AUTHKEY, POSTGRES_PASSWORD and the two below
 #    MANILLA_RP_ID=manilla.your-tailnet.ts.net
 #    MANILLA_ORIGIN=https://manilla.your-tailnet.ts.net
 
@@ -271,10 +269,11 @@ of that is needed for this one service.
 Nothing about your deployment belongs in a tracked file, and nothing here needs
 it to be. Everything in `docker-compose.yml` that varies is an environment
 variable with a working default — `${MANILLA_TS_HOSTNAME:-manilla}`,
-`${MANILLA_RP_ID:-localhost}`, `${POSTGRES_PASSWORD:-manilla}` — and
+`${MANILLA_RP_ID:-localhost}` — except `POSTGRES_PASSWORD`, which has none on
+purpose and stops `docker compose up` until it is set. And
 `deploy/tailscale-serve.json` uses Tailscale's own `${TS_CERT_DOMAIN}` rather
 than a name. So a clone gets defaults that work, and your `.env` (gitignored)
-gets your tailnet.
+gets your tailnet and your database password.
 
 For anything that is not a value — an extra volume, a different image tag, a
 published port you do want — write a `docker-compose.override.yml`. Compose reads
