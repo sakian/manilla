@@ -16,6 +16,32 @@ export async function register(): Promise<void> {
 
   await migrateIfNeeded(production);
   await checkAuthConfig(production);
+  await checkTimeZone(production);
+}
+
+/**
+ * Say whose calendar "today" is. Dates are calendar days read off the server's
+ * local clock (src/budget/month.ts), and a container's local zone is UTC unless
+ * MANILLA_TIMEZONE says otherwise - which in the Americas makes every evening
+ * tomorrow and the last evening of a month next month. A warning rather than a
+ * refusal: it is wrong by hours, not wrong about money, and a server that will
+ * not start is worse.
+ */
+async function checkTimeZone(production: boolean): Promise<void> {
+  const { localToday } = await import('./src/budget/month.ts');
+  // A name the runtime does not know leaves no zone at all, and the clock on UTC.
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone as string | undefined;
+  if (!zone) {
+    console.warn(`[manilla] "${process.env.TZ}" is not a timezone name, so calendar days are UTC's`);
+    return;
+  }
+  console.log(`[manilla] calendar days are ${zone}'s; today is ${localToday()}`);
+  if (production && /^(Etc\/)?(UTC|GMT|Universal|Zulu)$/.test(zone)) {
+    console.warn(
+      '[manilla] the server is on UTC, so evenings fall on the next day. ' +
+        'Set MANILLA_TIMEZONE in .env to your own zone, e.g. America/Toronto.',
+    );
+  }
 }
 
 /**
