@@ -268,11 +268,15 @@ The schema is `db/schema.ts`, and it is the authority; this table is the summary
 
 Version 1 is a single-household tool for one primary user.
 
-**Assumptions.** One budget, one primary user — a second login is a later phase.
+**Assumptions.** One primary user — a second login is a later phase. One or more
+independent ledgers behind that sign-in (business and household books, say),
+each a separate database that shares nothing with the others; money moving
+between them is entered on both sides ([#23](https://github.com/sakian/manilla/issues/23)).
 One currency. A responsive web app, usable on phone and desktop. Bank data enters
 by file import. AI features call a hosted model, so a cost and privacy control is
 required.
 
 **Out of scope for now.** Investment tracking, net worth, debt payoff planning,
-bill payment. Multi-currency, tax reporting, business or multi-budget use. Shared
-budgets with separate permissions for many users.
+bill payment. Multi-currency, tax reporting, business accounting (equity, deductible
+expenses), and transactions linked across ledgers. Shared budgets with separate
+permissions for many users.

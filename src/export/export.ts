@@ -361,8 +361,16 @@ export async function eraseAllData(db: Database): Promise<Record<string, number>
   return before;
 }
 
-/** A filename that says what it is and when it was taken. */
-export function exportFilename(kind: string, now: Date = new Date()): string {
+/**
+ * A filename that says what it is and when it was taken - and, when there is
+ * more than one ledger, whose: two downloads called manilla-ledger-<day>.json
+ * from different books are a mix-up waiting to happen (#23).
+ */
+export function exportFilename(kind: string, now: Date = new Date(), ledger?: string): string {
   const stamp = now.toISOString().slice(0, 10);
-  return `manilla-${kind}-${stamp}`;
+  const whose = ledger
+    ?.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `manilla-${whose ? `${whose}-` : ''}${kind}-${stamp}`;
 }

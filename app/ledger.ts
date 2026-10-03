@@ -26,6 +26,11 @@ export const currentLedger = cache(async (): Promise<Ledger> => {
   return chooseLedger(configuredLedgers(), store.get(LEDGER_COOKIE)?.value);
 });
 
+/** The open ledger's name for a download's filename, when there is more than one. */
+export async function ledgerForFilename(): Promise<string | undefined> {
+  return configuredLedgers().length > 1 ? (await currentLedger()).name : undefined;
+}
+
 /** The current ledger's database. */
 export async function ledgerDb(): Promise<Database> {
   return connectionFor((await currentLedger()).database);
