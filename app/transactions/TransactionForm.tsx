@@ -533,12 +533,14 @@ export default function TransactionForm({
             {pending ? 'Saving…' : editing ? 'Save' : 'Record it'}
           </button>
           {/* Nothing to take back on a row that is already waiting, or on an
-              opening balance nobody categorized (#9). */}
+              opening balance nobody categorized (#9). "Send to", not "Back to":
+              this dialog opens from every list, and "Back to review" read as a
+              way back to a screen you had never been on (#51). */}
           {editing &&
             editing.source !== 'opening_balance' &&
             !(editing.kind === 'spending' && editing.status === 'pending_review') && (
               <button onClick={sendBack} disabled={pending}>
-                {editing.kind === 'account_transfer' ? 'Not a transfer' : 'Back to review'}
+                {editing.kind === 'account_transfer' ? 'Not a transfer' : 'Send to review'}
               </button>
             )}
           {editing && (
