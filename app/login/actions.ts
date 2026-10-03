@@ -9,7 +9,8 @@
  *  - `beginSetup` / `finishSetup` work only while no passkey exists at all. Once
  *    one does, registration needs a session and happens in Settings.
  *  - `beginSignIn` / `finishSignIn` prove possession of a registered passkey.
- *  - `signInWithRecoveryCode` spends a single-use code that only the user has.
+ *  - `signInWithRecoveryCode` spends a single-use code that only the user has,
+ *    and after a few wrong ones makes each further try wait longer (#14).
  *
  * Failures come back as values rather than exceptions, because a thrown error in
  * a server action reaches the browser as a blank "something went wrong" in
@@ -22,6 +23,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { homeDb } from '../../db/client.ts';
 import {
@@ -32,6 +34,7 @@ import {
   redeemRecoveryCode,
   setupState,
 } from '../../src/auth/passkeys.ts';
+import { describeWait, recoveryThrottle } from '../../src/auth/throttle.ts';
 import { currentSession, endSession, startSession } from '../auth.ts';
 
 export type Failure = { ok: false; error: string };
@@ -120,15 +123,45 @@ export async function finishSignInAction(input: {
  */
 export async function recoveryCodeSignInAction(code: string): Promise<SignInResult> {
   try {
+    // Checked before the code is: while the wait runs, no code is looked at or
+    // spent, right or wrong, or the wait would be no wait at all.
+    const wait = recoveryThrottle.waitFor(RECOVERY);
+    if (wait > 0) {
+      return {
+        ok: false,
+        error: `Too many recovery codes that did not match. Try again in ${describeWait(wait)}, or sign in with a passkey.`,
+      };
+    }
+
     const userId = await redeemRecoveryCode(homeDb(), code);
     if (!userId) {
+      const { failures, waitMs } = recoveryThrottle.failed(RECOVERY);
+      console.warn(
+        `[manilla] a recovery code did not match (${failures} in a row) from ${await who()}` +
+          (waitMs > 0 ? `; the next try waits ${describeWait(waitMs)}` : ''),
+      );
       return { ok: false, error: 'That recovery code is not one of yours, or has been used already.' };
     }
+    recoveryThrottle.succeeded(RECOVERY);
     await startSession(userId);
     return { ok: true };
   } catch (error) {
     return failed(error);
   }
+}
+
+const RECOVERY = 'recovery-code';
+
+/**
+ * Who tried, for the log: the tailnet login `tailscale serve` puts on every
+ * request it proxies, else the forwarded address. For a person to read only -
+ * the throttle never trusts either, since a header is what the sender wrote.
+ */
+async function who(): Promise<string> {
+  const request = await headers();
+  const named =
+    request.get('tailscale-user-login') ?? request.get('x-forwarded-for')?.split(',')[0] ?? null;
+  return named ? JSON.stringify(named.trim().slice(0, 100)) : 'an unnamed client';
 }
 
 export async function signOutAction(): Promise<void> {
