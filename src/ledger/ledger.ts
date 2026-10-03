@@ -172,7 +172,7 @@ export async function unallocatedEnvelope(db: Database) {
 }
 
 /** A connection or an open transaction; drizzle types them apart. */
-type Executor = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
+export type Executor = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
 
 /**
  * Make sure the income pool exists (FR-28), creating it if not.

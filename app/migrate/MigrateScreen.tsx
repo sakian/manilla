@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
   AccountChoice,
@@ -29,16 +30,14 @@ import {
   migrationSource,
   type MigrationSourceId,
 } from '../../src/migrate/sources.ts';
-import { centsFromInput, inputFromCents } from '../../src/amount.ts';
 import { Hint } from '../Hint.tsx';
+import { ReconcileBalances, type ReconcileData } from './ReconcileBalances.tsx';
 import {
-  applyReconciliationAction,
   commitMigrationAction,
   planMigrationAction,
   revertMigrationAction,
   type PlanSummary,
 } from './actions.ts';
-import { formatMoney } from '../../src/money.ts';
 import { displayDate } from '../../src/budget/month.ts';
 
 type Step = 'files' | 'mapping' | 'report' | 'done';
@@ -86,15 +85,17 @@ function splitName(full: string): { group: string; name: string } {
 export default function MigrateScreen({
   envelopes,
   accounts,
+  reconciliation,
 }: {
   envelopes: {
     id: string;
     name: string;
     groupName: string;
     isUnallocated: boolean;
-    balanceCents: number;
   }[];
   accounts: { id: string; name: string }[];
+  /** MG-7, once a migration is in: what to reconcile, as of its last day. */
+  reconciliation: ReconcileData | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -133,10 +134,6 @@ export default function MigrateScreen({
     transfers: number;
     fills: number;
   } | null>(null);
-
-  // Reconciliation, once the history is in.
-  const [expected, setExpected] = useState<Record<string, string>>({});
-  const [reconciled, setReconciled] = useState<number | null>(null);
 
   const readFiles = useCallback(
     async (chosen: FileList) => {
@@ -241,35 +238,6 @@ export default function MigrateScreen({
       router.refresh();
     });
   }, [result, router]);
-
-  const applyAdjustments = useCallback(() => {
-    setError(null);
-    startTransition(async () => {
-      const adjustments: { envelopeId: string; differenceCents: number }[] = [];
-      for (const envelope of envelopes) {
-        if (envelope.isUnallocated) continue;
-        const typed = expected[envelope.id];
-        if (typed === undefined || typed.trim() === '') continue;
-        try {
-          adjustments.push({
-            envelopeId: envelope.id,
-            differenceCents: centsFromInput(typed) - envelope.balanceCents,
-          });
-        } catch {
-          setError(`"${typed}" is not an amount`);
-          return;
-        }
-      }
-
-      const applied = await applyReconciliationAction(adjustments);
-      if (!applied.ok) {
-        setError(applied.error);
-        return;
-      }
-      setReconciled(applied.written);
-      router.refresh();
-    });
-  }, [envelopes, expected, router]);
 
   return (
     <>
@@ -694,58 +662,14 @@ export default function MigrateScreen({
             </div>
           </section>
 
-          <section className="panel">
-            <h3>Reconcile the balances (MG-7)</h3>
+          {reconciliation ? (
+            <ReconcileBalances data={reconciliation} fills={result.fills} />
+          ) : (
             <p className="muted">
-              {result.fills > 0
-                ? 'Envelopes whose fills came across should already match your old app. Any other '
-                : 'Every '}
-              envelope is short by whatever was filled into it over the years, because the full
-              export does not record that. Type what your old app shows for each one today and the
-              difference is written as a dated adjustment out of the income pool — visible in the
-              envelope&rsquo;s history, not a number from nowhere. Leave one blank to skip it.
+              Loading the balances to reconcile… They are also on their own page, at{' '}
+              <Link href="/migrate/reconcile">Reconcile a migration</Link>.
             </p>
-
-            {reconciled === null ? (
-              <>
-                <div className="map-table">
-                  {envelopes
-                    .filter((envelope) => !envelope.isUnallocated)
-                    .map((envelope) => (
-                      <div key={envelope.id} className="map-row reconcile">
-                        <span className="map-name">
-                          <span className="muted">{envelope.groupName}</span> {envelope.name}
-                          <span className="muted"> · now {formatMoney(envelope.balanceCents)}</span>
-                        </span>
-                        <input
-                          className="amount"
-                          inputMode="decimal"
-                          placeholder={inputFromCents(envelope.balanceCents)}
-                          value={expected[envelope.id] ?? ''}
-                          onChange={(event) =>
-                            setExpected((current) => ({
-                              ...current,
-                              [envelope.id]: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    ))}
-                </div>
-                <div className="signin-actions">
-                  <button className="primary" onClick={applyAdjustments} disabled={pending}>
-                    {pending ? 'Adjusting…' : 'Make the balances match'}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p className="queue-note">
-                {reconciled} {reconciled === 1 ? 'envelope' : 'envelopes'} adjusted. Check the
-                dashboard: envelopes and accounts should still agree, and the income pool holds
-                whatever is left over.
-              </p>
-            )}
-          </section>
+          )}
         </>
       )}
     </>

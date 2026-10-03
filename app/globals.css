@@ -1331,7 +1331,28 @@ details[open] > summary > .group-summary::before {
 }
 
 .map-row.reconcile {
-  grid-template-columns: minmax(0, 1fr) 120px;
+  grid-template-columns: minmax(0, 1fr) 120px 96px;
+}
+
+.reconcile-diff {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The balance never breaks across lines, and on a phone it has a line of its
+   own: beside a wrapped name it was cut short, which hides the one figure the
+   row is there to compare. */
+.reconcile-here {
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .reconcile-here {
+    display: block;
+  }
+  .reconcile-here > .muted {
+    display: none;
+  }
 }
 
 .map-name {
@@ -1356,7 +1377,7 @@ details[open] > summary > .group-summary::before {
     white-space: normal;
   }
   .map-row.reconcile {
-    grid-template-columns: minmax(0, 1fr) 110px;
+    grid-template-columns: minmax(0, 1fr) 96px 80px;
   }
   .map-row.reconcile .map-name {
     grid-column: 1;

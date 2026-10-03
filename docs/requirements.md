@@ -194,7 +194,7 @@ rewrite; one is implemented.
 | MG-4 | Reproduce income, envelope-to-envelope transfers, account transfers and splits, so historical envelope balances come out right. Anything the export cannot represent is listed rather than guessed. | M | Built |
 | MG-5 | Imported history is marked with its source and pre-set to confirmed, since it was already categorized. | M | Built |
 | MG-6 | Run into a staging area first. Commit only after the reconciliation check, and allow the whole migration to be undone. | S | Built |
-| MG-7 | Reconciliation report: compare envelope and account balances at the migration date with the balances you enter from the old app, and list every difference. | M | Partial. The comparison and the dated adjustments are implemented and tested; no screen reaches them. ([#7](https://github.com/sakian/manilla/issues/7)) |
+| MG-7 | Reconciliation report: compare envelope and account balances at the migration date with the balances you enter from the old app, and list every difference. | M | Built. Offered at the end of the wizard and on its own page from Settings. Balances are read on the export's last day and adjustments dated then; the server works out each difference itself. Accounts are compared but never adjusted. |
 | MG-8 | Migrated history seeds the payee history and AI examples immediately. | M | Built |
 | MG-9 | The first bank import will overlap the last weeks of migrated history. Match on account, date and amount and attach the bank's transaction ID to the existing row instead of adding a duplicate. | M | Built |
 
