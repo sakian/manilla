@@ -74,9 +74,9 @@ credentials, not records of your money.
   each try waits longer, doubling to 15 minutes, and every wrong one is logged.
   It counts per install, not per person, so someone hammering it delays your own
   recovery too — a passkey still works.
-- **No audit trail** for edits and deletions yet (NF-2). Undo is a contra entry
-  rather than a delete, so envelope history survives, but a changed transaction does
-  not record what it used to say.
+- **The audit trail has no screen yet** (NF-2). Every edit and deletion of a
+  transaction, envelope line or envelope move is recorded, but it is read from the
+  JSON export or the `audit_log` table, not from the app.
 
 ## Documentation
 
