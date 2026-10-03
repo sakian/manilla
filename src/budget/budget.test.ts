@@ -1,6 +1,9 @@
 import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
+import { budgetLines } from '../../db/schema.ts';
+import { attention } from '../notices/notices.ts';
 import { envelopeBalances, openAccount, recordTransaction } from '../ledger/ledger.ts';
 import {
   BudgetError,
@@ -87,6 +90,27 @@ describe(
         assert.equal(gas.plannedCents, 20000, `${month} inherits the default`);
         assert.equal(gas.plannedIsOverride, false);
       }
+    });
+
+    // A null month is not equal to another null month, so the unique index on
+    // (envelope, month) never saw a conflict for a default: every change after
+    // the first added a row, and the next screen to read the plan stopped with
+    // "more than one row returned by a subquery".
+    test('changing a default replaces it rather than adding a second', async () => {
+      await setPlanned(db, env.gasId, 5000);
+      await setPlanned(db, env.gasId, 10000);
+
+      const defaults = await db
+        .select()
+        .from(budgetLines)
+        .where(and(eq(budgetLines.envelopeId, env.gasId), isNull(budgetLines.month)));
+      assert.equal(defaults.length, 1);
+      assert.equal(defaults[0]!.plannedCents, 10000);
+
+      const budget = await budgetMonth(db, '2026-10', { today: '2026-10-03' });
+      assert.equal(budget.rows.find((row) => row.envelopeId === env.gasId)!.plannedCents, 10000);
+      // The home screen's notices read the plan too; it was this that failed first.
+      await attention(db, '2026-10');
     });
 
     test('a month override replaces the default for that month alone (FR-32)', async () => {

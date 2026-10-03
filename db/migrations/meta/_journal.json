@@ -71,6 +71,13 @@
       "when": 1791042827930,
       "tag": "0009_shocking_santa_claus",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791050463235,
+      "tag": "0010_flashy_punisher",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,7 @@ import {
   real,
   index,
   uniqueIndex,
+  unique,
   primaryKey,
   check,
 } from 'drizzle-orm/pg-core';
@@ -447,7 +448,13 @@ export const budgetLines = pgTable(
     month: date('month'),
     plannedCents: cents('planned_cents').notNull(),
   },
-  (table) => [uniqueIndex('budget_lines_envelope_month_idx').on(table.envelopeId, table.month)],
+  // NULLS NOT DISTINCT, or the default - the null month - is never a conflict:
+  // Postgres counts no two nulls as equal, so each change to a default added a
+  // second row instead of replacing the first, and every read of the plan then
+  // failed on a subquery returning two rows.
+  (table) => [
+    unique('budget_lines_envelope_month_key').on(table.envelopeId, table.month).nullsNotDistinct(),
+  ],
 );
 
 /**
