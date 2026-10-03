@@ -31,7 +31,7 @@ import {
   type TransactionFields,
 } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';
-import { displayDate } from '../../src/budget/month.ts';
+import { displayDate, localToday } from '../../src/budget/month.ts';
 import {
   fillBlankLine,
   linesToSave,
@@ -57,13 +57,6 @@ export type EditingTransaction = {
   source: string;
   lines: { envelopeId: string; amountCents: number }[];
 };
-
-function today(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate(),
-  ).padStart(2, '0')}`;
-}
 
 export default function TransactionForm({
   accounts,
@@ -105,7 +98,7 @@ export default function TransactionForm({
   const [toAccountId, setToAccountId] = useState(
     accounts.find((account) => account.id !== (editing?.accountId ?? accounts[0]?.id))?.id ?? '',
   );
-  const [date, setDate] = useState(editing?.date ?? draft?.date ?? today());
+  const [date, setDate] = useState(editing?.date ?? draft?.date ?? localToday());
   const [direction, setDirection] = useState<Direction>(
     editing ? (editing.amountCents > 0 ? 'in' : 'out') : (draft?.direction ?? 'out'),
   );
