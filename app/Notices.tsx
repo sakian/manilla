@@ -15,6 +15,9 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { Attention, AttentionReport } from '../src/notices/notices.ts';
 import { Money } from './Money.tsx';
+import { DismissInsight } from './DismissInsight.tsx';
+import { displayDate } from '../src/budget/month.ts';
+import { jumpShare } from '../src/insights/insights.ts';
 
 const RANK = { bad: 0, warn: 1, info: 2 } as const;
 
@@ -80,6 +83,34 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
       };
     case 'nothing_recorded':
       return { text: 'Nothing recorded yet — bring your history in', href: '/migrate' };
+    case 'unusual_charge': {
+      // AI-2: what was found, the numbers behind it, and what to do about it.
+      // Inside the notice's link, so no amount here can be a copy button.
+      const insight = notice.insight!;
+      const href = `/transactions?txn=${insight.transactionId}`;
+      if (insight.kind === 'charge_jumped') {
+        return {
+          text: (
+            <>
+              {insight.payee} charged <Money cents={insight.cents} plain copy={false} /> on{' '}
+              {displayDate(insight.date)}, {Math.round(jumpShare(insight.cents, insight.usualCents) * 100)}%
+              above its usual <Money cents={insight.usualCents} plain copy={false} />. Worth checking
+              the bill.
+            </>
+          ),
+          href,
+        };
+      }
+      return {
+        text: (
+          <>
+            First charge from {insight.payee}: <Money cents={insight.cents} plain copy={false} /> on{' '}
+            {displayDate(insight.date)}, bigger than 95% of your charges this past year. Recognise it?
+          </>
+        ),
+        href,
+      };
+    }
   }
 }
 
@@ -94,9 +125,14 @@ export function Notices({ report }: { report: AttentionReport }) {
     <ul className="notices">
       {ordered.map((notice) => {
         const { text, href } = describe(notice);
+        const insight = notice.insight;
         return (
-          <li key={notice.kind} className={`notice ${notice.severity}`}>
+          <li
+            key={insight ? `${notice.kind}-${insight.transactionId}` : notice.kind}
+            className={`notice ${notice.severity}${insight ? ' with-action' : ''}`}
+          >
             {href ? <Link href={href}>{text}</Link> : text}
+            {insight && <DismissInsight transactionId={insight.transactionId} payee={insight.payee} />}
           </li>
         );
       })}

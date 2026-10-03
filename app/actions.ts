@@ -7,6 +7,7 @@ import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
 import { pairTransferHalves, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
 import { createTransferRule } from '../src/rules/rules.ts';
+import { dismissInsight } from '../src/insights/insights.ts';
 import { requireUser } from './auth.ts';
 
 // A server action is a POST endpoint, reachable without going through the page
@@ -118,4 +119,12 @@ export async function switchLedgerAction(form: FormData) {
   await rememberLedger(ledger.key);
   revalidatePath('/', 'layout');
   redirect('/');
+}
+
+/** AI-6, in part: "that charge was expected", so it is not mentioned again. */
+export async function dismissInsightAction(transactionId: string) {
+  await requireUser();
+  await dismissInsight(await ledgerDb(), transactionId);
+  revalidatePath('/', 'layout');
+  return { ok: true as const };
 }

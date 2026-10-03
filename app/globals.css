@@ -2228,6 +2228,26 @@ details[open] > summary > .group-summary::before {
   text-decoration: underline;
 }
 
+/* An unusual charge: the line still opens it, and "Expected" sits at the end. */
+.notice.with-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notice.with-action a {
+  flex: 1;
+  min-width: 0;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.notice-action {
+  flex: none;
+  font-size: 12px;
+  padding: 4px 9px;
+}
+
 .notice.info {
   border-left-color: var(--border);
 }
