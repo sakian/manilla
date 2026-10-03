@@ -19,14 +19,16 @@ import { db } from '../../db/client.ts';
 import { parseOfx } from '../../src/ofx/parse.ts';
 import {
   commitImport,
+  decisionsFor,
+  MATCHED,
   previewImport,
   rememberAccountMapping,
   resolveAccount,
   revertImport,
-  type RowDecision,
+  type Refusal,
 } from '../../src/import/ofxImport.ts';
 import { bandOf, type Band } from '../../src/categorize/pipeline.ts';
-import { envelopes } from '../../db/schema.ts';
+import { envelopes, transactions } from '../../db/schema.ts';
 import { inArray } from 'drizzle-orm';
 import { requireUser } from '../auth.ts';
 
@@ -53,6 +55,8 @@ export type PreviewRow = {
   reason: string;
   /** The transaction it matched, when it matched one. */
   existingId?: string;
+  /** What that transaction says, so a person can tell whether it is the same one. */
+  matched?: { payee: string; date: string };
   envelopeName?: string;
   confidence?: number;
   band?: Band;
@@ -140,6 +144,25 @@ export async function previewImportAction(
       for (const row of rows) names.set(row.id, row.name);
     }
 
+    // What each matched row was matched to, likewise in one query.
+    const matchedIds = preview.rows
+      .filter((row) => MATCHED.has(row.verdict) && row.existingId)
+      .map((row) => row.existingId!);
+    const matched = new Map<string, NonNullable<PreviewRow['matched']>>();
+    if (matchedIds.length > 0) {
+      const rows = await connection
+        .select({
+          id: transactions.id,
+          payeeRaw: transactions.payeeRaw,
+          date: transactions.date,
+        })
+        .from(transactions)
+        .where(inArray(transactions.id, matchedIds));
+      for (const row of rows) {
+        matched.set(row.id, { payee: row.payeeRaw, date: row.date });
+      }
+    }
+
     return {
       ok: true,
       statementAccountId: statement.accountId,
@@ -169,6 +192,9 @@ export async function previewImportAction(
           verdict: row.verdict,
           reason: row.reason,
           ...(row.existingId ? { existingId: row.existingId } : {}),
+          ...(row.existingId && matched.has(row.existingId)
+            ? { matched: matched.get(row.existingId)! }
+            : {}),
           ...(row.transferTo ? { transferToName: row.transferTo.name } : {}),
           ...(envelopeId && row.suggestion
             ? {
@@ -193,14 +219,15 @@ export type CommitResult =
 /**
  * Write the accepted rows (FR-10 to FR-12).
  *
- * `decisions` only names the rows the user changed their mind about; everything
- * else takes the default the preview proposed - new rows are added, look-alikes
- * are skipped until someone says otherwise.
+ * Every row takes the default the preview proposed - new rows are added,
+ * transfer halves and entries made ahead are linked, look-alikes are skipped -
+ * except the matches a person refused, which are added as their own. A refusal
+ * is all the browser can say: it never names a row to write of its own.
  */
 export async function commitImportAction(
   fileText: string,
   accountId: string,
-  decisions: { index: number; action: 'add' | 'skip' | 'link'; transactionId?: string }[],
+  refusals: Refusal[],
   meta: { filename?: string; rememberMapping?: boolean } = {},
 ): Promise<CommitResult> {
   try {
@@ -216,22 +243,7 @@ export async function commitImportAction(
 
     const preview = await previewImport(connection, statement, accountId);
 
-    const chosen = new Map<number, RowDecision>();
-    for (const decision of decisions) {
-      if (decision.action === 'link') {
-        if (!decision.transactionId) {
-          return { ok: false, error: 'A row was marked as linked without saying to what.' };
-        }
-        chosen.set(decision.index, {
-          action: 'link',
-          transactionId: decision.transactionId,
-        });
-      } else {
-        chosen.set(decision.index, { action: decision.action });
-      }
-    }
-
-    const result = await commitImport(connection, preview, chosen, {
+    const result = await commitImport(connection, preview, decisionsFor(preview, refusals), {
       ...(meta.filename ? { filename: meta.filename } : {}),
     });
 

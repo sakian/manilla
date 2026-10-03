@@ -1080,6 +1080,57 @@ details[open] > summary > .group-summary::before {
   margin: 4px 0 8px;
 }
 
+.import-matches {
+  margin: 10px 0 4px;
+}
+
+.import-matches > summary {
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 0;
+}
+
+.import-matches > .footnote {
+  margin: 4px 0 6px;
+}
+
+/* Text takes what is left; the choice keeps its width, so a long payee wraps
+   rather than pushing the checkbox off a phone screen. */
+.import-match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.import-match-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.import-match-text .muted {
+  font-size: 13px;
+}
+
+.import-match-choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.import-match-choice input {
+  width: 18px;
+  height: 18px;
+}
+
 .budget-warning.ok {
   border-color: var(--high);
   color: var(--high);

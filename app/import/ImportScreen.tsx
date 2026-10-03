@@ -9,14 +9,17 @@
  * one already here is a question, never an answer.
  *
  * Defaults do the obvious thing: new rows are added, exact duplicates and
- * look-alikes are left alone. Every row can be overridden, and a look-alike can
- * be linked to the transaction it matches, which attaches the bank's id to the
- * existing row so the next import recognises it (MG-9).
+ * look-alikes are left alone, and a row that is the other half of a transfer or
+ * something entered ahead is linked to it, which attaches the bank's id to the
+ * existing row so the next import recognises it (MG-9). Every one of those
+ * matches is listed, and any of them can be refused and the row added as its
+ * own: a match on amount and date is a proposal, not a fact.
  */
 
 import { useCallback, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Hint } from '../Hint.tsx';
+import { Money } from '../Money.tsx';
 import {
   commitImportAction,
   previewImportAction,
@@ -25,7 +28,7 @@ import {
 } from './actions.ts';
 import type { ImportRecord } from '../../src/import/ofxImport.ts';
 import { formatMoney } from '../../src/money.ts';
-import { displayInstant } from '../../src/budget/month.ts';
+import { displayDate, displayInstant } from '../../src/budget/month.ts';
 
 type Decision = 'add' | 'skip' | 'link';
 
@@ -61,25 +64,40 @@ type Statement = {
   unmapped?: string;
   /** Set when a person picked the account, so the mapping is remembered. */
   pickedAccount?: string;
+  /** Matches a person said are not the same: row index to the id it matched. */
+  refused?: Record<number, string>;
   error?: string;
 };
 
 /**
- * What each row does if nobody touches it. A transfer half links, because the
- * money is already recorded on both accounts and what this statement adds is
- * the bank's id for it (FR-5). Something entered ahead links for the same
- * reason: it was recorded by hand before the bank had it.
+ * What each row does. A transfer half links, because the money is already
+ * recorded on both accounts and what this statement adds is the bank's id for
+ * it (FR-5). Something entered ahead links for the same reason: it was recorded
+ * by hand before the bank had it. A refused match is added as its own.
  */
-function defaultDecision(row: PreviewRow): Decision {
+function decisionOf(row: PreviewRow, refused: Record<number, string> = {}): Decision {
   if (row.verdict === 'new') return 'add';
+  if (row.existingId && refused[row.index] === row.existingId) return 'add';
   if ((row.verdict === 'transfer_half' || row.verdict === 'entered_ahead') && row.existingId) {
     return 'link';
   }
   return 'skip';
 }
 
-function tallyOf(preview: Preview): number {
-  return preview.rows.filter((row) => defaultDecision(row) !== 'skip').length;
+/** Rows a statement writes, and how many of those go to the queue. */
+function tallyOf(statement: Statement): { writes: number; reviews: number } {
+  const decisions = statement.preview!.rows.map((row) => decisionOf(row, statement.refused));
+  return {
+    writes: decisions.filter((decision) => decision !== 'skip').length,
+    // A linked row keeps the envelope it already had, so only added rows are
+    // left to review.
+    reviews: decisions.filter((decision) => decision === 'add').length,
+  };
+}
+
+/** Rows that matched something already here, which a person can refuse. */
+function matchesOf(preview: Preview): PreviewRow[] {
+  return preview.rows.filter((row) => row.existingId && row.matched);
 }
 
 export default function ImportScreen({
@@ -188,7 +206,8 @@ export default function ImportScreen({
 
   const ready = statements.filter((statement) => statement.state === 'ready');
   const unanswered = statements.filter((statement) => statement.state === 'needs_account');
-  const total = ready.reduce((sum, statement) => sum + tallyOf(statement.preview!), 0);
+  const total = ready.reduce((sum, statement) => sum + tallyOf(statement).writes, 0);
+  const reviews = ready.reduce((sum, statement) => sum + tallyOf(statement).reviews, 0);
   const sharedAccount =
     new Set(ready.map((statement) => statement.preview!.accountId)).size < ready.length;
   // A statement with nothing new still states a dated balance worth keeping as
@@ -209,10 +228,19 @@ export default function ImportScreen({
       // one account that overlap are matched by the bank's ids as they land, so
       // the rows they share are added once (FR-10).
       for (const statement of ready) {
-        const result = await commitImportAction(statement.text, statement.preview!.accountId, [], {
-          filename: statement.filename,
-          rememberMapping: statement.pickedAccount !== undefined,
-        });
+        const refusals = Object.entries(statement.refused ?? {}).map(([index, existingId]) => ({
+          index: Number(index),
+          existingId,
+        }));
+        const result = await commitImportAction(
+          statement.text,
+          statement.preview!.accountId,
+          refusals,
+          {
+            filename: statement.filename,
+            rememberMapping: statement.pickedAccount !== undefined,
+          },
+        );
         if (!result.ok) {
           update(statement.key, { state: 'failed', error: result.error });
           setError(`${statement.filename}: ${result.error}`);
@@ -372,7 +400,17 @@ export default function ImportScreen({
       {statements
         .filter((statement) => statement.state !== 'needs_account')
         .map((statement) => (
-          <StatementCard key={statement.key} statement={statement} />
+          <StatementCard
+            key={statement.key}
+            statement={statement}
+            disabled={pending}
+            onRefuse={(row, refuse) => {
+              const refused = { ...statement.refused };
+              if (refuse) refused[row.index] = row.existingId!;
+              else delete refused[row.index];
+              update(statement.key, { refused });
+            }}
+          />
         ))}
 
       {statements.length > 0 && (
@@ -402,11 +440,13 @@ export default function ImportScreen({
                   : balancesOnly
                     ? `Nothing new - record the statement balance${ready.length === 1 ? '' : 's'}`
                     : ready.length === 1
-                    ? `Import ${total} and review ${total}`
+                    ? `Import ${total}${reviews > 0 ? ` and review ${reviews}` : ''}`
                     : sharedAccount
                       ? // Rows two files share are only known once the first is in.
                         `Import ${ready.length} statements`
-                      : `Import ${ready.length} statements and review ${total}`}
+                      : `Import ${ready.length} statements${
+                          reviews > 0 ? ` and review ${reviews}` : ''
+                        }`}
               </button>
             )}
             <button onClick={reset} disabled={pending}>
@@ -458,8 +498,36 @@ export default function ImportScreen({
 }
 
 /** What one file would do, or why it cannot. */
-function StatementCard({ statement }: { statement: Statement }) {
+/** What a match does by default, in the words of the row it matched. */
+function matchVerb(row: PreviewRow): string {
+  if (row.verdict === 'entered_ahead') return 'Linked to your entry ';
+  if (row.verdict === 'transfer_half') return 'Linked to the transfer ';
+  return 'Left out: looks like ';
+}
+
+function StatementCard({
+  statement,
+  disabled,
+  onRefuse,
+}: {
+  statement: Statement;
+  disabled: boolean;
+  onRefuse: (row: PreviewRow, refuse: boolean) => void;
+}) {
   const { preview } = statement;
+  const matches = preview ? matchesOf(preview) : [];
+  const isRefused = (row: PreviewRow) => statement.refused?.[row.index] === row.existingId;
+
+  // The server projected the balance from the default decisions; a refused
+  // match is added, so its money is in the account too.
+  const balance = preview?.balance && {
+    ...preview.balance,
+    projectedCents:
+      preview.balance.projectedCents +
+      matches.filter(isRefused).reduce((sum, row) => sum + row.amountCents, 0),
+  };
+  const balanceOff = balance ? balance.statedCents - balance.projectedCents : 0;
+
   return (
     <section className="panel statement">
       <div className="panel-head">
@@ -512,16 +580,13 @@ function StatementCard({ statement }: { statement: Statement }) {
             </p>
           )}
 
-          {preview.balance && !preview.balance.matches && (
+          {balance && balanceOff !== 0 && (
             <p className="budget-warning">
-              Balance off by{' '}
-              {formatMoney(preview.balance.statedCents - preview.balance.projectedCents)}: the statement
-              says {formatMoney(preview.balance.statedCents)}, this leaves{' '}
-              {formatMoney(preview.balance.projectedCents)}.{' '}
+              Balance off by {formatMoney(balanceOff)}: the statement says{' '}
+              {formatMoney(balance.statedCents)}, this leaves {formatMoney(balance.projectedCents)}.{' '}
               <Hint label="What a balance difference means">
                 Usually history from before this file is missing (FR-14). On a first import,
-                setting the account&rsquo;s opening balance{' '}
-                {formatMoney(preview.balance.statedCents - preview.balance.projectedCents)} higher, as of
+                setting the account&rsquo;s opening balance {formatMoney(balanceOff)} higher, as of
                 the day before the earliest row here, makes the two agree. The import works either
                 way; the check is only telling you what it sees.
               </Hint>
@@ -529,17 +594,49 @@ function StatementCard({ statement }: { statement: Statement }) {
           )}
 
           {/*
-            There is no per-row table. Deciding add-or-skip on each of two hundred
-            rows before knowing where any of them belong is a review, and the
-            review queue is the screen for that - this one only has to say what is
-            in the file and whether it has seen it before.
+            There is no table of every row. Deciding add-or-skip on each of two
+            hundred rows before knowing where any of them belong is a review, and
+            the review queue is the screen for that. Matches are the exception:
+            whether a row is the same money as something already here is a
+            question only this screen can ask, so those are listed. A first
+            import after a migration can match hundreds, so a long list starts
+            folded.
           */}
-          {preview.counts.possible_duplicate > 0 && (
-            <p className="muted footnote">
-              {preview.counts.possible_duplicate} row
-              {preview.counts.possible_duplicate === 1 ? '' : 's'} match something already here
-              closely enough to look like a repeat, and will be left out.
-            </p>
+          {matches.length > 0 && (
+            <details className="import-matches" open={matches.length <= 10}>
+              <summary>
+                {matches.length} {matches.length === 1 ? 'row matches' : 'rows match'} something
+                already here
+              </summary>
+              <p className="muted footnote">
+                A linked row adds the bank&rsquo;s id to what you have, rather than recording the
+                money twice; a look-alike is left out. If one is a different transaction, tick it
+                and it is added as its own.
+              </p>
+              {matches.map((row) => (
+                <label key={row.index} className="import-match">
+                  <span className="import-match-text">
+                    <span>
+                      {displayDate(row.date)} · {row.payee} ·{' '}
+                      <Money cents={row.amountCents} />
+                    </span>
+                    <span className="muted">
+                      {isRefused(row) ? 'Will be added as its own, not ' : matchVerb(row)}
+                      &ldquo;{row.matched!.payee}&rdquo;, {displayDate(row.matched!.date)}
+                    </span>
+                  </span>
+                  <span className="import-match-choice">
+                    <input
+                      type="checkbox"
+                      checked={isRefused(row)}
+                      disabled={disabled || statement.state !== 'ready'}
+                      onChange={(event) => onRefuse(row, event.target.checked)}
+                    />
+                    Not the same
+                  </span>
+                </label>
+              ))}
+            </details>
           )}
         </>
       )}
