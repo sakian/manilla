@@ -16,8 +16,10 @@
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { centsFromInput, inputFromCents } from '../amount.ts';
+import type { OtherSideDraft } from '../../src/ledgers/otherSide.ts';
 import {
   createTransactionAction,
+  recordOtherSideAction,
   createTransferAction,
   deleteTransactionAction,
   deleteTransferAction,
@@ -25,11 +27,15 @@ import {
   updateTransactionAction,
   updateTransferAction,
   type Direction,
+  type SavedEntry,
   type TransactionFields,
 } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';
+import { displayDate } from '../../src/budget/month.ts';
 
 export type AccountChoice = { id: string; name: string };
+/** Another ledger the other side of a new transaction could be entered in (#23). */
+export type OtherLedger = { key: string; name: string };
 export type EnvelopeChoice = { id: string; name: string; groupName: string };
 
 export type EditingTransaction = {
@@ -61,6 +67,9 @@ export default function TransactionForm({
   envelopes,
   editing,
   defaultAccountId,
+  draft,
+  ledgerName,
+  otherLedgers = [],
   onClose,
 }: {
   accounts: AccountChoice[];
@@ -68,6 +77,14 @@ export default function TransactionForm({
   /** Absent when entering something new. */
   editing?: EditingTransaction;
   defaultAccountId?: string;
+  /** The other side of a transaction saved in another ledger, to start from. */
+  draft?: OtherSideDraft;
+  ledgerName?: string;
+  /**
+   * With more than one ledger, a new transaction offers to open each of these
+   * with its other side filled in, once it is saved.
+   */
+  otherLedgers?: OtherLedger[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -85,15 +102,21 @@ export default function TransactionForm({
   const [toAccountId, setToAccountId] = useState(
     accounts.find((account) => account.id !== (editing?.accountId ?? accounts[0]?.id))?.id ?? '',
   );
-  const [date, setDate] = useState(editing?.date ?? today());
+  const [date, setDate] = useState(editing?.date ?? draft?.date ?? today());
   const [direction, setDirection] = useState<Direction>(
-    editing && editing.amountCents > 0 ? 'in' : 'out',
+    editing ? (editing.amountCents > 0 ? 'in' : 'out') : (draft?.direction ?? 'out'),
   );
   const [amount, setAmount] = useState(
-    editing ? inputFromCents(Math.abs(editing.amountCents)) : '',
+    editing
+      ? inputFromCents(Math.abs(editing.amountCents))
+      : draft
+        ? inputFromCents(draft.amountCents)
+        : '',
   );
-  const [payeeRaw, setPayeeRaw] = useState(editing?.payeeRaw ?? '');
-  const [note, setNote] = useState(editing?.note ?? '');
+  const [payeeRaw, setPayeeRaw] = useState(editing?.payeeRaw ?? draft?.payee ?? '');
+  const [note, setNote] = useState(editing?.note ?? draft?.note ?? '');
+  /** Just saved, with other ledgers its other side could go in. */
+  const [saved, setSaved] = useState<SavedEntry | null>(null);
   const [lines, setLines] = useState<LineDraft[]>(
     editing && editing.lines.length > 0
       ? editing.lines.map((line) => ({
@@ -173,18 +196,40 @@ export default function TransactionForm({
       note,
       lines: usable,
     } satisfies TransactionFields;
-    run(() =>
-      editing ? updateTransactionAction(editing.id, fields) : createTransactionAction(fields),
-    );
+    if (editing) {
+      run(() => updateTransactionAction(editing.id, fields));
+      return;
+    }
+    // With nowhere else to record it, or when this already is the other side -
+    // whose own other side is the transaction it came from.
+    if (otherLedgers.length === 0 || draft) {
+      run(() => createTransactionAction(fields));
+      return;
+    }
+    // Stays open once saved, to offer the other side - the one moment the
+    // amount and date are in front of the person and need not be typed twice.
+    setError(null);
+    startTransition(async () => {
+      const result = await createTransactionAction(fields);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setSaved(result.saved);
+      router.refresh();
+    });
   }, [
     accountId,
     amount,
     date,
     direction,
     editing,
+    draft,
     note,
     mode,
+    otherLedgers.length,
     payeeRaw,
+    router,
     run,
     toAccountId,
     transferPairId,
@@ -219,11 +264,61 @@ export default function TransactionForm({
     run(() => sendBackToReviewAction(editing.id));
   }, [editing, run]);
 
+  if (saved) {
+    const arriving = saved.amountCents < 0;
+    return (
+      <div className="picker-backdrop" onClick={onClose}>
+        <div className="picker dialog" onClick={(event) => event.stopPropagation()}>
+          <div className="picker-head">
+            <strong>Recorded in {ledgerName}</strong>
+          </div>
+          <div className="dialog-body">
+            <p>
+              {saved.payee}, {displayDate(saved.date)}:{' '}
+              <span className="money">{formatMoney(saved.amountCents)}</span>
+            </p>
+            <p className="muted">
+              If this money {arriving ? 'went to' : 'came from'} another ledger, record its other
+              side there too: {formatMoney(Math.abs(saved.amountCents))}{' '}
+              {arriving ? 'coming in' : 'going out'} on the same day. It opens with that filled in,
+              for you to give it an account and an envelope.
+            </p>
+            {error && <p className="signin-error">{error}</p>}
+          </div>
+          <div className="picker-foot dialog-foot other-side-foot">
+            <button className="primary" onClick={onClose} disabled={pending} autoFocus>
+              Done
+            </button>
+            {otherLedgers.map((ledger) => (
+              <button
+                key={ledger.key}
+                disabled={pending}
+                onClick={() => {
+                  setError(null);
+                  startTransition(async () => {
+                    try {
+                      await recordOtherSideAction(ledger.key, saved);
+                    } catch (failure) {
+                      setError(failure instanceof Error ? failure.message : String(failure));
+                    }
+                  });
+                }}
+              >
+                Record the other side in {ledger.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker dialog" onClick={(event) => event.stopPropagation()}>
         <div className="picker-head">
           <strong>{editing ? 'Edit transaction' : 'New transaction'}</strong>
+          {draft && !editing && <span className="tag">other side</span>}
           {editing?.source === 'file_import' && <span className="tag">imported</span>}
         </div>
 

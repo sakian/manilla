@@ -10,7 +10,9 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { ledgerDb } from '../ledger.ts';
+import { redirect } from 'next/navigation';
+import { allLedgers, currentLedger, ledgerDb, rememberLedger } from '../ledger.ts';
+import { draftQuery, otherSideOf } from '../../src/ledgers/otherSide.ts';
 import {
   createManualTransaction,
   createTransfer,
@@ -26,6 +28,9 @@ import { requireUser } from '../auth.ts';
 import { centsFromInput } from '../amount.ts';
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
+
+/** What a new transaction was saved as, signed as stored: the start of its other side (#23). */
+export type SavedEntry = { amountCents: number; date: string; payee: string };
 
 function failed(error: unknown): { ok: false; error: string } {
   return { ok: false, error: error instanceof Error ? error.message : String(error) };
@@ -127,15 +132,16 @@ function linesFrom(fields: TransactionFields): { envelopeId: string; amountCents
 
 export async function createTransactionAction(
   fields: TransactionFields,
-): Promise<ActionResult> {
+): Promise<{ ok: true; message: string; saved: SavedEntry } | { ok: false; error: string }> {
   try {
     await requireUser();
     const lines = linesFrom(fields);
+    const amountCents = signed(fields.amount, fields.direction);
 
     await createManualTransaction(await ledgerDb(), {
       accountId: fields.accountId,
       date: fields.date,
-      amountCents: signed(fields.amount, fields.direction),
+      amountCents,
       payeeRaw: fields.payeeRaw,
       ...(fields.note ? { note: fields.note } : {}),
       ...(lines.length > 0 ? { lines } : {}),
@@ -144,6 +150,7 @@ export async function createTransactionAction(
     refreshed();
     return {
       ok: true,
+      saved: { amountCents, date: fields.date, payee: fields.payeeRaw.trim() },
       message:
         lines.length > 0
           ? 'Recorded.'
@@ -311,4 +318,24 @@ export async function deleteTransferAction(pairId: string): Promise<ActionResult
   } catch (error) {
     return failed(error);
   }
+}
+
+/**
+ * Switch to another ledger with the other side of `saved` ready to enter (#23).
+ *
+ * A POST rather than a link: opening a ledger changes which books every later
+ * screen writes to, and a link could be followed from anywhere. Only a ledger
+ * that exists, and not the one already open; the draft is rebuilt here from
+ * what was saved, and checked again when the form reads it.
+ */
+export async function recordOtherSideAction(ledgerKey: string, saved: SavedEntry): Promise<void> {
+  await requireUser();
+  const from = await currentLedger();
+  const to = (await allLedgers()).find((ledger) => ledger.key === ledgerKey);
+  if (!to || to.key === from.key) throw new Error('No such ledger to record it in');
+
+  const draft = otherSideOf(saved, from.name);
+  await rememberLedger(to.key);
+  revalidatePath('/', 'layout');
+  redirect(`/transactions?${new URLSearchParams({ new: 'transaction', ...draftQuery(draft) })}`);
 }

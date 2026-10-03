@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ledgerDb } from '../ledger.ts';
+import { allLedgers, currentLedger, ledgerDb } from '../ledger.ts';
 import { budgetMonth } from '../../src/budget/budget.ts';
 import { currentMonth } from '../../src/budget/month.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
@@ -46,6 +46,10 @@ export default async function TransactionsPage(props: {
   const query = readQuery(params);
   const page = readPage(params);
   const connection = await ledgerDb();
+  const [ledgers, ledger] = await Promise.all([allLedgers(), currentLedger()]);
+  const otherLedgers = ledgers
+    .filter((other) => other.key !== ledger.key)
+    .map(({ key, name }) => ({ key, name }));
 
   const [found, choices, envelopes, report, categories, budget] = await Promise.all([
     searchTransactions(connection, query),
@@ -142,6 +146,8 @@ export default async function TransactionsPage(props: {
               accounts={liveAccounts}
               envelopes={envelopeChoices}
               {...(onlyAccount ? { defaultAccountId: onlyAccount.id } : {})}
+              ledgerName={ledger.name}
+              otherLedgers={otherLedgers}
             />
           </div>
         </div>

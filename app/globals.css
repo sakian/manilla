@@ -955,6 +955,12 @@ details[open] > summary > .group-summary::before {
   gap: 8px;
 }
 
+/* One button per other ledger beside Done, so they wrap on a phone rather
+   than squeezing "Record the other side in Business" onto three lines. */
+.other-side-foot {
+  flex-wrap: wrap;
+}
+
 @media (max-width: 720px) {
   .budget-row,
   .budget-row.cover {
