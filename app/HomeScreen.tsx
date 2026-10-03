@@ -399,7 +399,7 @@ export default function HomeScreen({
 
                   <Money cents={envelope.balanceCents} />
 
-                  <span className="envelope-figures muted">
+                  <span className={`envelope-figures muted${editing ? ' editing' : ''}`}>
                     {/* A balance that is part fact and part proposal has to say
                         so, or it is a figure nobody can act on. */}
                     {figure && figure.pendingCents !== 0 && (
