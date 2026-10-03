@@ -30,6 +30,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { closingChanges, openingChanges, overlayUrl } from '../src/overlay.ts';
 
 export type Overlay = {
   /** The param's value, or null when the overlay is shut. */
@@ -59,22 +60,14 @@ export function useOverlay(
   }, [value]);
 
   const urlWith = useCallback(
-    (changes: Record<string, string | null>) => {
-      const query = new URLSearchParams(params.toString());
-      for (const [key, next] of Object.entries(changes)) {
-        if (next === null) query.delete(key);
-        else query.set(key, next);
-      }
-      const text = query.toString();
-      return text ? `${pathname}?${text}` : pathname;
-    },
+    (changes: Record<string, string | null>) => overlayUrl(pathname, params.toString(), changes),
     [params, pathname],
   );
 
   const open = useCallback(
     (next: string, extra: Record<string, string> = {}) => {
       ours.current = true;
-      window.history.pushState(null, '', urlWith({ [name]: next, ...extra }));
+      window.history.pushState(null, '', urlWith(openingChanges(name, next, extra)));
     },
     [name, urlWith],
   );
@@ -89,9 +82,7 @@ export function useOverlay(
       window.history.back();
       return;
     }
-    const cleared: Record<string, null> = { [name]: null };
-    for (const extra of extraNames) cleared[extra] = null;
-    window.history.replaceState(null, '', urlWith(cleared));
+    window.history.replaceState(null, '', urlWith(closingChanges(name, extraNames)));
     // A replace fires no popstate, so nothing else will notice; the router's
     // patched replaceState is what updates `useSearchParams` for us.
   }, [closeWith, extraNames, name, urlWith]);

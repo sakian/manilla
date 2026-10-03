@@ -29,7 +29,7 @@ import {
   migrationSource,
   type MigrationSourceId,
 } from '../../src/migrate/sources.ts';
-import { centsFromInput, inputFromCents } from '../amount.ts';
+import { centsFromInput, inputFromCents } from '../../src/amount.ts';
 import { Hint } from '../Hint.tsx';
 import {
   applyReconciliationAction,

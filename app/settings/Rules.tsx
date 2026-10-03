@@ -16,7 +16,7 @@
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ListedRule } from '../../src/rules/rules.ts';
-import { centsFromInput, inputFromCents } from '../amount.ts';
+import { centsFromInput, inputFromCents } from '../../src/amount.ts';
 import { deleteRuleAction, undismissRuleAction, updateRuleAction } from './actions.ts';
 
 function money(cents: number): string {

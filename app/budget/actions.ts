@@ -17,7 +17,7 @@ import {
 } from '../../src/budget/budget.ts';
 import { assertMonth } from '../../src/budget/month.ts';
 import { requireUser } from '../auth.ts';
-import { centsFromInput } from '../amount.ts';
+import { centsFromInput } from '../../src/amount.ts';
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 

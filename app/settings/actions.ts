@@ -36,7 +36,7 @@ import {
 } from '../../src/rules/rules.ts';
 import { eraseAllData } from '../../src/export/export.ts';
 import { clearAnswerCache, setAiSettings } from '../../src/ai/ai.ts';
-import { currentSession, endSession, requireUser } from '../auth.ts';
+import { endSession, requireUser } from '../auth.ts';
 import type { BeginResult, Failure } from '../login/actions.ts';
 
 function failed(error: unknown): Failure {
@@ -226,11 +226,9 @@ export async function regenerateRecoveryCodesAction(): Promise<
  * them, which is why it ends at the sign-in page.
  */
 export async function signOutEverywhereAction(): Promise<void> {
-  const session = await currentSession();
-  if (session) {
-    await destroyAllSessions(homeDb(), session.userId);
-    await endSession();
-  }
+  const session = await requireUser();
+  await destroyAllSessions(homeDb(), session.userId);
+  await endSession();
   redirect('/login');
 }
 
