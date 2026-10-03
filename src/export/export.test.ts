@@ -8,7 +8,8 @@ import {
   recordTransaction,
   unallocatedEnvelope,
 } from '../ledger/ledger.ts';
-import { setPlanned } from '../budget/budget.ts';
+import { getExpectedIncome, setExpectedIncome, setPlanned } from '../budget/budget.ts';
+import { aiSettings, setAiSettings } from '../ai/ai.ts';
 import { createTransferRule } from '../rules/rules.ts';
 import { parseCsv, toRecords } from '../csv.ts';
 import { eraseAllData, exportCsv, exportFilename, exportLedger, isCsvTable } from './export.ts';
@@ -199,6 +200,8 @@ describe(
       });
       await aSplit();
       await setPlanned(db, env.gasId, 20000);
+      await setAiSettings(db, { enabled: false, monthlyCallBudget: 7 });
+      await setExpectedIncome(db, 500000);
 
       const before = await eraseAllData(db);
       assert.equal(before.transactions, 1);
@@ -215,6 +218,12 @@ describe(
         1,
         'the passkey survives: clearing your data is not locking yourself out',
       );
+      assert.deepEqual(
+        await aiSettings(db),
+        { enabled: false, monthlyCallBudget: 7 },
+        'the AI switch and budget are the account\'s, covering every ledger (#23)',
+      );
+      assert.equal(await getExpectedIncome(db), null, 'a ledger\'s own settings go with it');
       assert.ok((await checkInvariant(db)).ok, 'and an empty ledger balances');
     });
   },

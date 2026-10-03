@@ -16,7 +16,7 @@ import {
   rememberAnswers,
   setAiSettings,
 } from './ai.ts';
-import { loadExamples } from '../categorize/fromDb.ts';
+import { buildCategorizer, loadExamples } from '../categorize/fromDb.ts';
 import {
   closeDb,
   databaseAvailable,
@@ -332,6 +332,50 @@ describe(
       assert.equal(usage.transactions, 25);
       assert.equal(usage.costMilliCents, 1110);
       assert.equal(usage.remaining, 9);
+    });
+
+    test('one budget covers every ledger: calls count against the account (#23)', async () => {
+      // `db` plays the account's home database; a second ledger has its own.
+      const ledger = await setupTestDb('ai_second_ledger');
+      const savedKey = process.env.ANTHROPIC_API_KEY;
+      try {
+        await truncateAll(ledger);
+        const ledgerEnv = await seedEnvelopes(ledger);
+        // An answer the model gave in that ledger, naming that ledger's envelope.
+        await rememberAnswers(
+          ledger,
+          new Map([
+            ['COFFEE', { envelope: ledgerEnv.gasId, confidence: 0.9, layer: 'ai', reason: 'cached', alternatives: [] }],
+          ]),
+          'claude-opus-5',
+        );
+
+        await setAiSettings(db, { enabled: true, monthlyCallBudget: 1 });
+        await recordAiCall(db, {
+          model: 'claude-opus-5',
+          transactions: 3,
+          inputTokens: 100,
+          cachedInputTokens: 0,
+          outputTokens: 20,
+          costMilliCents: 50,
+        });
+
+        // The ledger's own settings say nothing, which would mean the default
+        // budget of 40 with none used - and that is the point: they are not
+        // what is asked.
+        const usage = await aiUsage(db, undefined, ledger);
+        assert.equal(usage.remaining, 0, 'the account has spent its one call');
+        assert.equal(usage.cachedMerchants, 1, 'the cache counted is the ledger\'s');
+
+        process.env.ANTHROPIC_API_KEY = 'sk-test-not-used';
+        const built = await buildCategorizer(ledger, { account: db });
+        assert.equal(built.ai, undefined, 'no model layer once the account is out of calls');
+        assert.match(built.aiOff ?? '', /budget of 1 calls is used up/);
+      } finally {
+        if (savedKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+        else process.env.ANTHROPIC_API_KEY = savedKey;
+        await closeDb(ledger);
+      }
     });
 
     test('a failed call is counted apart from a successful one', async () => {

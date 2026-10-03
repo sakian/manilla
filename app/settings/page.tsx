@@ -53,8 +53,9 @@ export default async function SettingsPage() {
     transferOptions(connection),
     listAccounts(connection),
     exportLedger(connection),
-    aiSettings(connection),
-    aiUsage(connection),
+    // One budget for the account, covering every ledger (#23).
+    aiSettings(homeDb()),
+    aiUsage(homeDb(), undefined, connection),
     accuracy(connection),
     unknownMerchantEstimate(connection),
   ]);

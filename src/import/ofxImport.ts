@@ -158,7 +158,7 @@ export async function previewImport(
   db: Database,
   statement: OfxStatement,
   accountId: string,
-  options: { categorize?: boolean; useAi?: boolean } = {},
+  options: { categorize?: boolean; useAi?: boolean; account?: Database } = {},
 ): Promise<ImportPreview> {
   const [account] = await db
     .select({ id: accounts.id, name: accounts.name })
@@ -392,7 +392,10 @@ export async function previewImport(
   let aiNote: string | undefined;
 
   if (options.categorize !== false) {
-    const built = await buildCategorizer(db, { useAi: options.useAi });
+    const built = await buildCategorizer(db, {
+      useAi: options.useAi,
+      ...(options.account ? { account: options.account } : {}),
+    });
     const { categorizer } = built;
     const fresh = rows.filter((row) => row.verdict === 'new' && !row.transferTo);
     const suggestions = await categorizer.suggestAll(

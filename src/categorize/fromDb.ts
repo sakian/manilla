@@ -125,11 +125,15 @@ export async function loadExamples(
  * Assemble the pipeline. The AI layer is included only when it is switched on,
  * a key is present and the monthly budget has room, so imports work unchanged
  * with it off (NF-10).
+ *
+ * `account` holds the switch, the budget and the call log, which cover every
+ * ledger (#23); everything else is read from the ledger being categorized.
  */
 export async function buildCategorizer(
   db: Database,
-  options: { useAi?: boolean } = {},
+  options: { useAi?: boolean; account?: Database } = {},
 ): Promise<BuiltCategorizer> {
+  const account = options.account ?? db;
   const [history, rules, names] = await Promise.all([
     loadHistory(db).then((rows) => new HistoryIndex(rows)),
     loadRules(db),
@@ -137,7 +141,7 @@ export async function buildCategorizer(
   ]);
 
   const keyPresent = Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN);
-  const settings = await aiSettings(db);
+  const settings = await aiSettings(account);
   const wanted = options.useAi ?? settings.enabled;
 
   let ai: AiCategorizer | undefined;
@@ -148,7 +152,7 @@ export async function buildCategorizer(
   } else if (!keyPresent) {
     aiOff = 'No ANTHROPIC_API_KEY is set, so the AI layer cannot be used.';
   } else {
-    const usage = await aiUsage(db);
+    const usage = await aiUsage(account);
     if (usage.remaining <= 0) {
       aiOff = `The monthly budget of ${usage.budget} calls is used up.`;
     } else {
@@ -162,8 +166,8 @@ export async function buildCategorizer(
         .where(isNull(envelopes.archivedAt));
 
       ai = new AiCategorizer(live, examples, {
-        onCall: (record) => recordAiCall(db, record),
-        canCall: async () => (await aiUsage(db)).remaining > 0,
+        onCall: (record) => recordAiCall(account, record),
+        canCall: async () => (await aiUsage(account)).remaining > 0,
       });
       ai.seed(answered);
     }

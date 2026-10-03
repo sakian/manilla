@@ -15,6 +15,7 @@
  */
 
 import { revalidatePath } from 'next/cache';
+import { homeDb } from '../../db/client.ts';
 import { ledgerDb } from '../ledger.ts';
 import { parseOfx } from '../../src/ofx/parse.ts';
 import {
@@ -124,7 +125,8 @@ export async function previewImportAction(
       };
     }
 
-    const preview = await previewImport(connection, statement, mapped.id);
+    // The AI budget is the account's, whichever ledger this lands in.
+    const preview = await previewImport(connection, statement, mapped.id, { account: homeDb() });
 
     // Every suggested envelope's name in one query, rather than one per row: a
     // statement proposes the same handful of envelopes over and over.
@@ -241,7 +243,7 @@ export async function commitImportAction(
       await rememberAccountMapping(connection, accountId, statement.accountId);
     }
 
-    const preview = await previewImport(connection, statement, accountId);
+    const preview = await previewImport(connection, statement, accountId, { account: homeDb() });
 
     const result = await commitImport(connection, preview, decisionsFor(preview, refusals), {
       ...(meta.filename ? { filename: meta.filename } : {}),
