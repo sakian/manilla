@@ -491,6 +491,49 @@ export type RowDecision =
    */
   | { action: 'link'; transactionId: string };
 
+/**
+ * A person saying a matched row is not the transaction it matched: add it as
+ * its own. Names what it refuses as well as the row, because the commit
+ * re-runs the preview and has to be sure it is refusing the same pairing.
+ */
+export type Refusal = { index: number; existingId: string };
+
+/** Verdicts that pair a statement row with a transaction already here. */
+export const MATCHED: ReadonlySet<RowVerdict> = new Set([
+  'possible_duplicate',
+  'transfer_half',
+  'entered_ahead',
+]);
+
+
+/**
+ * Turn refusals into decisions for `commitImport`.
+ *
+ * A wrong link loses no money - the payment it absorbed is still counted once,
+ * and the one the entry was really for arrives later as new - but it pairs the
+ * wrong bank row with the envelope and note a person chose, and leaves the
+ * real one looking like a repeat of something already entered. Refusing is the
+ * way out of that before it is written.
+ *
+ * A refusal only applies while the row still matches what was refused. Between
+ * the preview a person saw and the commit, an earlier file in the same run can
+ * change what a row matches; a stale "not that one" must not add a row that now
+ * matches something else.
+ */
+export function decisionsFor(
+  preview: ImportPreview,
+  refusals: Refusal[],
+): Map<number, RowDecision> {
+  const decisions = new Map<number, RowDecision>();
+  for (const refusal of refusals) {
+    const row = preview.rows.find((candidate) => candidate.index === refusal.index);
+    if (row && MATCHED.has(row.verdict) && row.existingId === refusal.existingId) {
+      decisions.set(row.index, { action: 'add' });
+    }
+  }
+  return decisions;
+}
+
 export type CommitResult = {
   batchId: string;
   added: number;

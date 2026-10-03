@@ -13,6 +13,7 @@ import {
 import {
   balanceCheckpoints,
   commitImport,
+  decisionsFor,
   importHistory,
   previewImport,
   resolveAccount,
@@ -378,6 +379,129 @@ describe(
         'two entries answer for two rows; the third is new',
       );
       assert.equal(preview.rows[0]!.existingId, named, 'the same wording wins an equal date');
+    });
+
+    test('a wrong link costs no money; the payment it was meant for arrives as new', async () => {
+      // Why refusing a match is about which row is which, not about the total.
+      const { createManualTransaction } = await import('../transactions/manage.ts');
+      const entered = await createManualTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -5000,
+        payeeRaw: "Owner's draw",
+      });
+
+      // An unrelated payment of the same amount posts first and takes the entry.
+      const first = await previewImport(
+        db,
+        statementOf([
+          { fitId: 'OTHER', posted: '2026-09-11', amountCents: -5000, name: 'HARDWARE STORE' },
+        ]),
+        accountId,
+        { categorize: false },
+      );
+      assert.equal(first.rows[0]!.existingId, entered);
+      await commitImport(db, first, new Map());
+
+      // The payment the entry was for, days later, is not lost.
+      const later = await previewImport(
+        db,
+        statementOf([
+          { fitId: 'MINE', posted: '2026-09-13', amountCents: -5000, name: 'TFR-TO 004512' },
+        ]),
+        accountId,
+        { categorize: false },
+      );
+      assert.equal(later.rows[0]!.verdict, 'new');
+      await commitImport(db, later, new Map());
+
+      const balance = (await accountBalances(db)).find((row) => row.accountId === accountId);
+      assert.equal(balance?.balanceCents, -10000, 'both payments counted, once each');
+    });
+
+    test('a refused match is added as its own transaction', async () => {
+      const { createManualTransaction } = await import('../transactions/manage.ts');
+      const entered = await createManualTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -5000,
+        payeeRaw: "Owner's draw",
+      });
+      const preview = await previewImport(
+        db,
+        statementOf([
+          { fitId: 'OTHER', posted: '2026-09-11', amountCents: -5000, name: 'HARDWARE STORE' },
+        ]),
+        accountId,
+        { categorize: false },
+      );
+      assert.equal(preview.rows[0]!.verdict, 'entered_ahead');
+
+      const result = await commitImport(
+        db,
+        preview,
+        decisionsFor(preview, [{ index: 0, existingId: entered }]),
+      );
+      assert.equal(result.added, 1);
+      assert.equal(result.linked, 0);
+      assert.equal((await db.select().from(transactions)).length, 2);
+
+      // The entry was not claimed, so it is still waiting for its own row.
+      const mine = await previewImport(
+        db,
+        statementOf([
+          { fitId: 'MINE', posted: '2026-09-12', amountCents: -5000, name: 'TFR-TO 004512' },
+        ]),
+        accountId,
+        { categorize: false },
+      );
+      assert.equal(mine.rows[0]!.existingId, entered);
+      assert.ok((await checkInvariant(db)).ok);
+    });
+
+    test('a look-alike can be added anyway', async () => {
+      const existing = await recordTransaction(db, {
+        accountId,
+        date: '2025-09-03',
+        amountCents: -4520,
+        payeeRaw: 'SHELL #4471 CALGARY AB',
+        source: 'goodbudget',
+        status: 'confirmed',
+      });
+      const preview = await previewImport(db, bankStatement(), accountId, { categorize: false });
+      const flagged = preview.rows.find((row) => row.verdict === 'possible_duplicate')!;
+
+      const decisions = decisionsFor(preview, [{ index: flagged.index, existingId: existing }]);
+      assert.deepEqual(decisions.get(flagged.index), { action: 'add' });
+    });
+
+    test('a refusal only counts while the row still matches what was refused', async () => {
+      const { createManualTransaction } = await import('../transactions/manage.ts');
+      const entered = await createManualTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -5000,
+        payeeRaw: "Owner's draw",
+      });
+      const preview = await previewImport(
+        db,
+        statementOf([
+          { fitId: 'OTHER', posted: '2026-09-11', amountCents: -5000, name: 'HARDWARE STORE' },
+          { fitId: 'NEW', posted: '2026-09-11', amountCents: -1234, name: 'BAKERY' },
+        ]),
+        accountId,
+        { categorize: false },
+      );
+
+      // Stale: by commit time the row matched something else. Adding it on the
+      // strength of a refusal of a different pairing could record money twice.
+      const stale = decisionsFor(preview, [{ index: 0, existingId: crypto.randomUUID() }]);
+      assert.equal(stale.size, 0);
+
+      // A row that matched nothing has nothing to refuse, and a made-up index
+      // names no row: neither is a way to write something the preview did not.
+      assert.equal(decisionsFor(preview, [{ index: 1, existingId: entered }]).size, 0);
+      assert.equal(decisionsFor(preview, [{ index: 99, existingId: entered }]).size, 0);
     });
 
     test('the statement balance is checked against the result (FR-14)', async () => {
