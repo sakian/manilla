@@ -1923,7 +1923,14 @@ details[open] > summary > .group-summary::before {
 
 /* --- The move-money dialog ----------------------------------------------- */
 
-.fund-dialog {
+/*
+ * Wider than the other dialogs: a row is a name and four figures. Stated as
+ * `.picker.fund-dialog` because `.picker` sets every dialog to 520px further
+ * down this file, and at equal weight the later rule won - the 760px here never
+ * applied, names broke over two lines and the planned and balance columns ran
+ * into each other (#40).
+ */
+.picker.fund-dialog {
   width: min(760px, 100%);
 }
 
