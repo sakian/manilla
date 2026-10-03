@@ -640,9 +640,13 @@ input[type='file'] {
 .topbar-end {
   margin-left: auto;
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
+}
+
+.topbar-end .button-link {
+  padding: 4px 10px;
 }
 
 .panel-head {
