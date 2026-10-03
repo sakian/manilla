@@ -38,8 +38,12 @@ export function monthPace(today: string): number {
 }
 
 /**
- * The bar for one envelope, or null when there is nothing to draw: it had
- * nothing this month and spent nothing.
+ * The bar for one envelope, or null until there is something to draw: nothing
+ * spent this month, and not overspent.
+ *
+ * An empty bar used to be drawn for money held but not yet spent. Early in the
+ * month that was every bar, and an empty track with only the pace tick on it
+ * looks like a slider waiting to be dragged. Bars now appear as spending does.
  *
  * `spentCents` is the month's net spending as a positive number, as the budget
  * reports it; refunds beyond spending make it negative, which draws as nothing
@@ -53,10 +57,8 @@ export function envelopeProgress(
   const availableCents = spentCents + balanceCents;
   const overspent = balanceCents < 0;
 
-  if (availableCents <= 0) {
-    if (spentCents <= 0 && !overspent) return null;
-    return { share: 1, availableCents, overspent, ahead: false };
-  }
+  if (spentCents <= 0 && !overspent) return null;
+  if (availableCents <= 0) return { share: 1, availableCents, overspent, ahead: false };
 
   const share = Math.min(1, Math.max(0, spentCents / availableCents));
   return {
