@@ -79,7 +79,14 @@ export type RowVerdict =
    * rather than on the description, because the two banks never word it the
    * same way.
    */
-  | 'transfer_half';
+  | 'transfer_half'
+  /**
+   * A transaction typed in by hand before the bank had it (FR-2): a transfer
+   * that has not processed yet, or money moved to somewhere Manilla does not
+   * hold. Matched on amount and a near date, like a transfer half, because
+   * what a person types as the payee is never what the bank writes.
+   */
+  | 'entered_ahead';
 
 export type ImportRow = {
   index: number;
@@ -195,6 +202,16 @@ export async function previewImport(
   //    while its purchases kept theirs - and not the window either, which would
   //    take last week's identical charge for this one.
   const lookAlikes = new Map<string, { id: string; date: string; banked: boolean }[]>();
+  // Typed in by hand and not yet seen on a statement: the ones waiting for this
+  // file. Only `manual` rows, because a migrated history is just as unbanked
+  // but years of it would match every round amount within the window.
+  const enteredAhead: {
+    id: string;
+    date: string;
+    amountCents: number;
+    payeeKey: string;
+    payeeRaw: string;
+  }[] = [];
   if (incoming.length > 0) {
     const rows = await db
       .select({
@@ -202,6 +219,9 @@ export async function previewImport(
         date: transactions.date,
         amountCents: transactions.amountCents,
         payeeKey: transactions.payeeKey,
+        payeeRaw: transactions.payeeRaw,
+        source: transactions.source,
+        kind: transactions.kind,
         banked: sql<boolean>`exists (
           select 1 from ${transactionExternalIds} x
           where x.transaction_id = ${transactions.id} and x.kind = 'fitid'
@@ -216,10 +236,21 @@ export async function previewImport(
       const list = lookAlikes.get(key);
       if (list) list.push(candidate);
       else lookAlikes.set(key, [candidate]);
+
+      if (row.source === 'manual' && row.kind === 'spending' && !row.banked) {
+        enteredAhead.push({
+          id: row.id,
+          date: row.date,
+          amountCents: Number(row.amountCents),
+          payeeKey: row.payeeKey,
+          payeeRaw: row.payeeRaw,
+        });
+      }
     }
   }
   // Each existing row answers for one new row at most, so a file with four
-  // identical charges is matched against four, not one four times.
+  // identical charges is matched against four, not one four times. Shared with
+  // the entered-ahead match, which draws on the same rows.
   const claimedLookAlikes = new Set<string>();
 
   // Transfer halves in this account that have no bank id yet, so they are still
@@ -275,6 +306,34 @@ export async function previewImport(
         existingId: half.id,
         reason:
           `The other side of the transfer recorded as "${half.payeeRaw}" on ${half.date}. ` +
+          'Linking attaches this statement\'s id to it rather than recording the money twice.',
+      };
+    }
+
+    // Something typed in before the bank had it. Amount and a near date, as for
+    // a transfer half; the payee only breaks a tie, since "Owner's draw" and
+    // "TFR-TO 004512" are the same money.
+    const [ahead] = enteredAhead
+      .filter(
+        (candidate) =>
+          !claimedLookAlikes.has(candidate.id) &&
+          candidate.amountCents === transaction.amountCents &&
+          daysApart(candidate.date, transaction.posted) <= LOOKALIKE_WINDOW_DAYS,
+      )
+      .sort(
+        (left, right) =>
+          daysApart(left.date, transaction.posted) - daysApart(right.date, transaction.posted) ||
+          Number(right.payeeKey === payeeKey) - Number(left.payeeKey === payeeKey),
+      );
+    if (ahead) {
+      claimedLookAlikes.add(ahead.id);
+      return {
+        index,
+        transaction,
+        verdict: 'entered_ahead',
+        existingId: ahead.id,
+        reason:
+          `You entered this as "${ahead.payeeRaw}" on ${ahead.date}, before the bank had it. ` +
           'Linking attaches this statement\'s id to it rather than recording the money twice.',
       };
     }
@@ -383,6 +442,7 @@ export async function previewImport(
     duplicate: rows.filter((row) => row.verdict === 'duplicate').length,
     possible_duplicate: rows.filter((row) => row.verdict === 'possible_duplicate').length,
     transfer_half: rows.filter((row) => row.verdict === 'transfer_half').length,
+    entered_ahead: rows.filter((row) => row.verdict === 'entered_ahead').length,
   };
 
   let balanceCheck: BalanceCheck | undefined;
@@ -450,9 +510,10 @@ export async function commitImport(
 ): Promise<CommitResult> {
   const defaultFor = (row: ImportRow): RowDecision => {
     if (row.verdict === 'new') return { action: 'add' };
-    // A transfer half defaults to linking: the money is already recorded, and
-    // what this statement adds is the bank's id for it.
-    if (row.verdict === 'transfer_half' && row.existingId) {
+    // A transfer half, or something entered ahead, defaults to linking: the
+    // money is already recorded, and what this statement adds is the bank's id
+    // for it.
+    if ((row.verdict === 'transfer_half' || row.verdict === 'entered_ahead') && row.existingId) {
       return { action: 'link', transactionId: row.existingId };
     }
     return { action: 'skip' };

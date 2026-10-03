@@ -25,7 +25,8 @@ from transactions, allocations and transfers, and their totals are compared afte
 every write. A discrepancy is shown, not swallowed.
 
 **Import is preview-then-commit.** Duplicates are matched on the bank's own
-transaction ID, look-alikes are flagged rather than dropped, a stated closing
+transaction ID, look-alikes are flagged rather than dropped, something you typed
+in before the bank had it is linked rather than counted twice, a stated closing
 balance is checked against the result, and a whole import can be undone.
 
 **Categorization proposes; you confirm.** Rules fire first, then recency-weighted

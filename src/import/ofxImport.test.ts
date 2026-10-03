@@ -265,6 +265,121 @@ describe(
       assert.equal(again.counts.new, 0);
     });
 
+    /** A one-account statement holding just the rows given. */
+    const statementOf = (
+      rows: { fitId: string; posted: string; amountCents: number; name: string }[],
+    ): OfxStatement => ({
+      ...bankStatement(),
+      transactions: rows.map((row) => ({
+        ...row,
+        type: row.amountCents < 0 ? 'DEBIT' : 'CREDIT',
+        warnings: [],
+      })),
+    });
+
+    test('something entered ahead of the bank is linked, not recorded twice (FR-2)', async () => {
+      // Typed in the day the money moved, worded the person's way; the bank
+      // posts it two days later under its own description.
+      const { createManualTransaction } = await import('../transactions/manage.ts');
+      const entered = await createManualTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -300000,
+        payeeRaw: "Owner's draw",
+        lines: [{ envelopeId: env.groceriesId, amountCents: -300000 }],
+      });
+      const statement = statementOf([
+        { fitId: 'CHQ-9', posted: '2026-09-12', amountCents: -300000, name: 'TFR-TO 004512' },
+      ]);
+
+      const preview = await previewImport(db, statement, accountId, { categorize: false });
+      assert.equal(preview.rows[0]!.verdict, 'entered_ahead');
+      assert.equal(preview.rows[0]!.existingId, entered);
+      assert.match(preview.rows[0]!.reason, /Owner's draw/);
+      assert.equal(preview.counts.new, 0);
+
+      const result = await commitImport(db, preview, new Map());
+      assert.equal(result.linked, 1, 'linked by default, as a transfer half is');
+      assert.equal(result.added, 0);
+
+      const all = await db.select().from(transactions);
+      assert.equal(all.length, 1, 'the entry, and no second copy from the bank');
+      const lines = await db.select().from(txnLines);
+      assert.ok(
+        lines.some((line) => line.transactionId === entered && line.envelopeId === env.groceriesId),
+        'the envelope it was given is kept',
+      );
+      assert.ok((await checkInvariant(db)).ok);
+
+      // The bank's id is on it now, so the same file again is a plain duplicate.
+      const again = await previewImport(db, statement, accountId, { categorize: false });
+      assert.equal(again.rows[0]!.verdict, 'duplicate');
+    });
+
+    test('only hand entries wait for the bank, and only for a few days', async () => {
+      const { createManualTransaction } = await import('../transactions/manage.ts');
+      // Migrated history is unbanked too, but years of it would match any round
+      // amount; it is left to the payee-and-date look-alike check.
+      await recordTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -10000,
+        payeeRaw: 'Old app transfer',
+        source: 'goodbudget',
+        status: 'confirmed',
+      });
+      // Typed in, but far enough back to be a different payment.
+      await createManualTransaction(db, {
+        accountId,
+        date: '2026-08-28',
+        amountCents: -10000,
+        payeeRaw: 'Rent top-up',
+      });
+
+      const preview = await previewImport(
+        db,
+        statementOf([
+          { fitId: 'CHQ-1', posted: '2026-09-10', amountCents: -10000, name: 'TFR-TO 004512' },
+        ]),
+        accountId,
+        { categorize: false },
+      );
+      assert.equal(preview.rows[0]!.verdict, 'new');
+    });
+
+    test('an entry ahead is claimed once, and the payee breaks a tie', async () => {
+      const { createManualTransaction } = await import('../transactions/manage.ts');
+      await createManualTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -5000,
+        payeeRaw: 'Coffee beans',
+      });
+      const named = await createManualTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -5000,
+        payeeRaw: 'TFR-TO 004512',
+      });
+
+      const preview = await previewImport(
+        db,
+        statementOf([
+          { fitId: 'CHQ-1', posted: '2026-09-11', amountCents: -5000, name: 'TFR-TO 004512' },
+          { fitId: 'CHQ-2', posted: '2026-09-11', amountCents: -5000, name: 'TFR-TO 004512' },
+          { fitId: 'CHQ-3', posted: '2026-09-11', amountCents: -5000, name: 'TFR-TO 004512' },
+        ]),
+        accountId,
+        { categorize: false },
+      );
+      assert.deepEqual(
+        preview.rows.map((row) => row.verdict),
+        ['entered_ahead', 'entered_ahead', 'new'],
+        'two entries answer for two rows; the third is new',
+      );
+      assert.equal(preview.rows[0]!.existingId, named, 'the same wording wins an equal date');
+    });
+
     test('the statement balance is checked against the result (FR-14)', async () => {
       const preview = await previewImport(db, bankStatement(), accountId, { categorize: false });
       assert.ok(preview.balanceCheck, 'the file carries a ledger balance');
