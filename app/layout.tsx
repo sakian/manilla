@@ -65,11 +65,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   <Link href="/transactions">Transactions</Link>
                   <Link href="/reports">Reports</Link>
                 </nav>
+                {/* Two buttons that say what they do (#48). Settings used to be
+                    the user's own name, which nobody guessed was a link; who is
+                    signed in is said on the Settings screen instead. */}
                 <form action={signOutAction} className="topbar-end">
-                  <Link href="/settings" className="muted">
-                    {session.userName}
+                  <Link href="/settings" className="button-link">
+                    Settings
                   </Link>
-                  <button type="submit" className="link-button">
+                  <button type="submit" className="button-link">
                     Sign out
                   </button>
                 </form>
