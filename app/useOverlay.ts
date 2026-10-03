@@ -38,7 +38,16 @@ export type Overlay = {
   close: () => void;
 };
 
-export function useOverlay(name: string, extraNames: string[] = []): Overlay {
+/**
+ * `closeWith`, when given, replaces how the overlay shuts - Escape included -
+ * for one the router opened itself, by navigating, which only the router can
+ * close again (see NewTransaction).
+ */
+export function useOverlay(
+  name: string,
+  extraNames: string[] = [],
+  closeWith?: () => void,
+): Overlay {
   const params = useSearchParams();
   const pathname = usePathname();
   const value = params.get(name);
@@ -71,6 +80,10 @@ export function useOverlay(name: string, extraNames: string[] = []): Overlay {
   );
 
   const close = useCallback(() => {
+    if (closeWith) {
+      closeWith();
+      return;
+    }
     if (ours.current) {
       ours.current = false;
       window.history.back();
@@ -81,7 +94,7 @@ export function useOverlay(name: string, extraNames: string[] = []): Overlay {
     window.history.replaceState(null, '', urlWith(cleared));
     // A replace fires no popstate, so nothing else will notice; the router's
     // patched replaceState is what updates `useSearchParams` for us.
-  }, [extraNames, name, urlWith]);
+  }, [closeWith, extraNames, name, urlWith]);
 
   // Escape is what the other half of the world presses to mean back.
   useEffect(() => {

@@ -33,6 +33,7 @@ import { normalizePayee } from '../categorize/normalize.ts';
 import { LedgerError, recordAccountTransfer, recordTransaction } from '../ledger/ledger.ts';
 import { localToday } from '../budget/month.ts';
 import { formatMoney } from '../money.ts';
+import { NOTE_LIMIT } from './limits.ts';
 
 export class TransactionError extends Error {}
 
@@ -235,8 +236,7 @@ function cleanNote(note: string | null): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
-/** Room for a sentence or two, not a document. */
-export const NOTE_LIMIT = 500;
+export { NOTE_LIMIT } from './limits.ts';
 
 /**
  * Write or clear a transaction's note, touching nothing else.
