@@ -37,12 +37,16 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <div className="shell">
           <header className={`topbar${ledger ? ` ${toneOf(ledgers, ledger)}` : ''}`}>
             <h1 className="wordmark">
-              {/* Plain <img>: this is a fixed 26px mark from /public, so Next's
-                  image pipeline has nothing to optimise and a layout shift to
-                  avoid. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="" width={26} height={26} />
-              Manilla
+              {/* Home, as a wordmark is everywhere else (#46). Signed out, the
+                  proxy sends it on to the sign-in page, which is where it is. */}
+              <Link href="/">
+                {/* Plain <img>: this is a fixed 26px mark from /public, so Next's
+                    image pipeline has nothing to optimise and a layout shift to
+                    avoid. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.png" alt="" width={26} height={26} />
+                Manilla
+              </Link>
             </h1>
             {session && (
               <>

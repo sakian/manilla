@@ -1924,6 +1924,14 @@ details[open] > summary > .group-summary::before {
 
 /* A tile rather than a bare mark: half the logo is charcoal, which would vanish
    against the dark theme's background. */
+.wordmark a {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: inherit;
+  text-decoration: none;
+}
+
 .wordmark img {
   width: 26px;
   height: 26px;
