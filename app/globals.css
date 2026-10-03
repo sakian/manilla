@@ -2400,6 +2400,19 @@ details[open] > summary > .group-summary::before {
   overflow-wrap: anywhere;
 }
 
+/* An explanation opened in a dialog's head takes a line of its own under the
+   title. `.hint` is `display: contents`, so its body is a flex item of the head,
+   and it used to take the width beside the title instead - squeezing the title
+   to a letter or two a line on a phone (#52). */
+.picker-head {
+  flex-wrap: wrap;
+}
+
+.picker-head .hint-body {
+  flex: 1 0 100%;
+  margin-top: 0;
+}
+
 .picker-foot {
   padding: 9px 14px;
   border-top: 1px solid var(--border);
