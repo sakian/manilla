@@ -1,4 +1,4 @@
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
 import { attention } from '../../src/notices/notices.ts';
 import { requireUser } from '../auth.ts';
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function AccountsPage() {
   await requireUser();
-  const connection = db();
+  const connection = await ledgerDb();
 
   const [categories, report] = await Promise.all([
     listAccountCategories(connection, { includeArchived: true }),

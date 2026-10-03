@@ -1,4 +1,4 @@
-import { db } from '../../../db/client.ts';
+import { ledgerDb } from '../../ledger.ts';
 import { toCsv } from '../../../src/csv.ts';
 import { exportFilename } from '../../../src/export/export.ts';
 import {
@@ -39,7 +39,7 @@ export async function GET(request: Request): Promise<Response> {
   let name: string;
 
   if (report === 'trend') {
-    const trend = await monthlyTrend(db(), period);
+    const trend = await monthlyTrend(await ledgerDb(), period);
     csv = toCsv(
       trend.rows.map((row) => ({
         envelope: row.name,
@@ -52,7 +52,7 @@ export async function GET(request: Request): Promise<Response> {
     name = 'trend';
   } else if (report === 'transactions') {
     const envelopeId = url.searchParams.get('envelope');
-    const rows = await transactionsInPeriod(db(), period, {
+    const rows = await transactionsInPeriod(await ledgerDb(), period, {
       ...(envelopeId ? { envelopeId } : {}),
       limit: 100000,
     });
@@ -70,7 +70,7 @@ export async function GET(request: Request): Promise<Response> {
     );
     name = 'transactions';
   } else {
-    const spending = await spendingByEnvelope(db(), period);
+    const spending = await spendingByEnvelope(await ledgerDb(), period);
     csv = toCsv(
       spending.groups.flatMap((group) =>
         group.envelopes.map((envelope) => ({

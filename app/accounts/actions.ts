@@ -3,7 +3,7 @@
 /** Account management actions (FR-1). */
 
 import { revalidatePath } from 'next/cache';
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import {
   archiveAccount,
   createAccount,
@@ -45,7 +45,7 @@ export async function createAccountAction(input: {
     await requireUser();
     if (!isAccountKind(input.kind)) return { ok: false, error: `Not an account kind: ${input.kind}` };
 
-    await createAccount(db(), {
+    await createAccount(await ledgerDb(), {
       name: input.name,
       kind: input.kind as AccountKind,
       openingBalanceCents: centsFromInput(input.openingBalance),
@@ -70,7 +70,7 @@ export async function editAccountAction(
       return { ok: false, error: `Not an account kind: ${edit.kind}` };
     }
 
-    await editAccount(db(), accountId, {
+    await editAccount(await ledgerDb(), accountId, {
       ...(edit.name !== undefined ? { name: edit.name } : {}),
       ...(edit.kind !== undefined ? { kind: edit.kind as AccountKind } : {}),
       ...(edit.externalAccountId !== undefined
@@ -88,7 +88,7 @@ export async function editAccountAction(
 export async function archiveAccountAction(accountId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await archiveAccount(db(), accountId);
+    await archiveAccount(await ledgerDb(), accountId);
     refreshed();
     return { ok: true, message: 'Account archived.' };
   } catch (error) {
@@ -99,7 +99,7 @@ export async function archiveAccountAction(accountId: string): Promise<ActionRes
 export async function unarchiveAccountAction(accountId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await unarchiveAccount(db(), accountId);
+    await unarchiveAccount(await ledgerDb(), accountId);
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -114,7 +114,7 @@ export async function unarchiveAccountAction(accountId: string): Promise<ActionR
 export async function createAccountGroupAction(name: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await createAccountGroup(db(), name);
+    await createAccountGroup(await ledgerDb(), name);
     refreshed();
     return { ok: true, message: 'Category added.' };
   } catch (error) {
@@ -128,7 +128,7 @@ export async function renameAccountGroupAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await renameAccountGroup(db(), groupId, name);
+    await renameAccountGroup(await ledgerDb(), groupId, name);
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -139,7 +139,7 @@ export async function renameAccountGroupAction(
 export async function archiveAccountGroupAction(groupId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await archiveAccountGroup(db(), groupId);
+    await archiveAccountGroup(await ledgerDb(), groupId);
     refreshed();
     return {
       ok: true,
@@ -153,7 +153,7 @@ export async function archiveAccountGroupAction(groupId: string): Promise<Action
 export async function unarchiveAccountGroupAction(groupId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await unarchiveAccountGroup(db(), groupId);
+    await unarchiveAccountGroup(await ledgerDb(), groupId);
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -167,7 +167,7 @@ export async function nudgeAccountGroupAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await nudgeAccountGroup(db(), groupId, direction);
+    await nudgeAccountGroup(await ledgerDb(), groupId, direction);
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -182,7 +182,7 @@ export async function moveAccountToGroupAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await moveAccountToGroup(db(), accountId, groupId === '' ? null : groupId);
+    await moveAccountToGroup(await ledgerDb(), accountId, groupId === '' ? null : groupId);
     refreshed();
     return { ok: true };
   } catch (error) {

@@ -1,4 +1,4 @@
-import { db } from '../db/client.ts';
+import { ledgerDb } from './ledger.ts';
 import { budgetMonth, fundingFromBudget } from '../src/budget/budget.ts';
 import { addMonths, currentMonth, monthLabel, shortMonthLabel } from '../src/budget/month.ts';
 import { listEnvelopes } from '../src/envelopes/manage.ts';
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   await requireUser();
-  const connection = db();
+  const connection = await ledgerDb();
   const month = currentMonth();
 
   const [groups, budget, report] = await Promise.all([

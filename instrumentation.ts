@@ -19,13 +19,14 @@ export async function register(): Promise<void> {
 }
 
 /**
- * Bring the database up to schema (NF-12).
+ * Bring every ledger's database up to schema (NF-12, #23).
  *
  * The Dockerfile has always shipped the migrations and the drizzle runtime into
  * the image "so the container can bring the database up to date on start" -
  * which nothing then did. A first deploy would have come up against an empty
  * database and failed somewhere far from the cause, and every later migration
- * would have been a step someone had to remember.
+ * would have been a step someone had to remember. A ledger listed in
+ * MANILLA_LEDGERS that has no database yet gets one here.
  *
  * Only in production, and only with a database URL. In development migrations
  * are `npm run db:migrate`, run deliberately, because `next dev` restarts on
@@ -34,35 +35,20 @@ export async function register(): Promise<void> {
 async function migrateIfNeeded(production: boolean): Promise<void> {
   if (!production || !process.env.DATABASE_URL) return;
 
-  const { migrate } = await import('drizzle-orm/postgres-js/migrator');
-  const { createDb } = await import('./db/client.ts');
+  const { configuredLedgers } = await import('./src/ledgers/config.ts');
+  const { prepareLedgers } = await import('./src/ledgers/prepare.ts');
 
-  const db = createDb(process.env.DATABASE_URL);
   try {
-    await migrate(db, { migrationsFolder: './db/migrations' });
-    // A schema with no income pool is one every budget screen throws against
-    // (#21), and the seed that used to make it is a development script.
-    const { ensureIncomePool } = await import('./src/ledger/ledger.ts');
-    await ensureIncomePool(db);
-    console.log('[manilla] database is up to schema');
-
-    // The count behind "N rules Manilla could write" is stored, and a deploy
-    // can change the answer without any action to redo it - raising the
-    // threshold left a count of 24 pointing at a page with none. A wrong count
-    // is not worth refusing to start over.
-    try {
-      const { refreshRuleSuggestionCount } = await import('./src/rules/rules.ts');
-      await refreshRuleSuggestionCount(db);
-    } catch (error) {
-      console.warn('[manilla] could not recount rule suggestions:', error);
-    }
+    await prepareLedgers(process.env.DATABASE_URL, configuredLedgers(), (line) =>
+      console.log(`[manilla] ${line}`),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Serving against a schema we could not bring up to date is how a ledger
-    // ends up half-written, so this is fatal rather than a warning.
-    throw new Error(`Manilla refuses to start: migrations failed: ${message}`);
-  } finally {
-    await (db as unknown as { $client: { end: () => Promise<void> } }).$client.end();
+    // ends up half-written, so this is fatal rather than a warning. So is a
+    // MANILLA_LEDGERS that cannot be read: guessing which books someone meant
+    // is worse than not starting.
+    throw new Error(`Manilla refuses to start: ${message}`);
   }
 }
 

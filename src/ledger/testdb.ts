@@ -30,6 +30,9 @@ function urlFor(suite: string): string {
 
 const TEST_URL = BASE_URL;
 
+/** The test server's base URL, for a test that needs a database of its own making. */
+export const testServerUrl = BASE_URL;
+
 /** postgres.js keeps its socket open, so every throwaway connection must be closed. */
 async function withAdmin<T>(run: (admin: Database) => Promise<T>): Promise<T> {
   const admin = createDb(TEST_URL.replace(/\/[^/]+$/, '/postgres'));

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { db } from '../../../db/client.ts';
+import { ledgerDb } from '../../ledger.ts';
 import { budgetMonth } from '../../../src/budget/budget.ts';
 import { currentMonth, monthLabel } from '../../../src/budget/month.ts';
 import { envelopeHistory } from '../../../src/envelopes/manage.ts';
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function EnvelopePage(props: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await props.params;
-  const connection = db();
+  const connection = await ledgerDb();
   const month = currentMonth();
 
   const budget = await budgetMonth(connection, month);

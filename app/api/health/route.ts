@@ -12,17 +12,23 @@
  * in dollars taken off someone's ledger, is left to the screens that do ask for
  * one. The probe needs a yes or no; anything more is an unauthenticated endpoint
  * volunteering how much money is involved.
+ *
+ * With several ledgers it is still one yes or no - balanced only if every one
+ * is - and names none of them, for the same reason.
  */
 
-import { db } from '../../../db/client.ts';
+import { connectionFor } from '../../../db/client.ts';
+import { configuredLedgers } from '../../../src/ledgers/config.ts';
 import { checkInvariant } from '../../../src/ledger/ledger.ts';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const invariant = await checkInvariant(db());
-    return Response.json({ ok: true, ledgerBalanced: invariant.ok });
+    const checks = await Promise.all(
+      configuredLedgers().map((ledger) => checkInvariant(connectionFor(ledger.database))),
+    );
+    return Response.json({ ok: true, ledgerBalanced: checks.every((check) => check.ok) });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : 'unknown' },

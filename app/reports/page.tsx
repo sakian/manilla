@@ -1,4 +1,4 @@
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import { localToday } from '../../src/budget/month.ts';
 import {
   monthlyTrend,
@@ -34,7 +34,7 @@ export default async function ReportsPage(props: {
   const today = localToday();
   const period = readPeriod(params, today);
   const envelopeId = one(params.envelope);
-  const connection = db();
+  const connection = await ledgerDb();
 
   const [spending, trend, drilldown] = await Promise.all([
     spendingByEnvelope(connection, period),

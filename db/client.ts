@@ -11,10 +11,14 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema.ts';
+import { databaseOf, urlFor } from '../src/ledgers/config.ts';
 
 const DATE_OID = 1082;
 
-export function createConnection(url = process.env.DATABASE_URL) {
+export function createConnection(
+  url = process.env.DATABASE_URL,
+  options: { quiet?: boolean } = {},
+) {
   if (!url) {
     throw new Error(
       'DATABASE_URL is not set. Copy .env.example to .env, or run `docker compose up -d db`.',
@@ -31,19 +35,47 @@ export function createConnection(url = process.env.DATABASE_URL) {
         parse: (value: string) => value,
       },
     },
+    // Migrations re-run on every start, and each run has Postgres say that the
+    // schema it would create "already exists, skipping".
+    ...(options.quiet ? { onnotice: () => {} } : {}),
   });
 }
 
 export type Database = ReturnType<typeof createDb>;
 
-export function createDb(url?: string) {
-  return drizzle(createConnection(url), { schema });
+export function createDb(url?: string, options: { quiet?: boolean } = {}) {
+  return drizzle(createConnection(url, options), { schema });
 }
 
-let shared: Database | undefined;
+/** One pool per database for the life of the process. Tests make their own. */
+const pools = new Map<string, Database>();
 
-/** Process-wide connection for the running app. Tests make their own. */
-export function db(): Database {
-  shared ??= createDb();
-  return shared;
+/**
+ * The database in DATABASE_URL: sign-in lives here, and so does the first
+ * ledger. Only sign-in should reach for it by this name - money is read
+ * through the current ledger (`ledgerDb()` in app/ledger.ts), which is this
+ * same database only when that is the ledger being looked at.
+ */
+export function homeDb(): Database {
+  return connectionFor(databaseOf(requireUrl()));
+}
+
+/** A ledger's database by name, on the same server as DATABASE_URL. */
+export function connectionFor(database: string): Database {
+  let pool = pools.get(database);
+  if (!pool) {
+    pool = createDb(urlFor(requireUrl(), database));
+    pools.set(database, pool);
+  }
+  return pool;
+}
+
+function requireUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      'DATABASE_URL is not set. Copy .env.example to .env, or run `docker compose up -d db`.',
+    );
+  }
+  return url;
 }

@@ -14,7 +14,8 @@ import type {
 } from '@simplewebauthn/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { db } from '../../db/client.ts';
+import { homeDb } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import {
   beginRegistration,
   finishRegistration,
@@ -46,7 +47,7 @@ export async function beginAddDeviceAction(): Promise<
 > {
   try {
     const session = await requireUser();
-    const begun = await beginRegistration(db(), {
+    const begun = await beginRegistration(homeDb(), {
       userId: session.userId,
       userName: session.userName,
     });
@@ -63,7 +64,7 @@ export async function finishAddDeviceAction(input: {
 }): Promise<{ ok: true } | Failure> {
   try {
     const session = await requireUser();
-    await finishRegistration(db(), {
+    await finishRegistration(homeDb(), {
       challengeId: input.challengeId,
       response: input.response,
       userId: session.userId,
@@ -82,7 +83,7 @@ export async function renameDeviceAction(
 ): Promise<{ ok: true } | Failure> {
   try {
     const session = await requireUser();
-    await renameDevice(db(), session.userId, credentialId, label);
+    await renameDevice(homeDb(), session.userId, credentialId, label);
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {
@@ -95,7 +96,7 @@ export async function removeDeviceAction(
 ): Promise<{ ok: true } | Failure> {
   try {
     const session = await requireUser();
-    await removeDevice(db(), session.userId, credentialId);
+    await removeDevice(homeDb(), session.userId, credentialId);
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {
@@ -113,7 +114,7 @@ export async function updateRuleAction(
 ): Promise<{ ok: true } | Failure> {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     await updateRule(connection, ruleId, edit);
     await refreshRuleSuggestionCount(connection);
     revalidatePath('/settings');
@@ -129,7 +130,7 @@ export async function updateRuleAction(
 export async function undismissRuleAction(contains: string): Promise<{ ok: true } | Failure> {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     await undismissRuleSuggestion(connection, contains);
     await refreshRuleSuggestionCount(connection);
     revalidatePath('/settings');
@@ -143,7 +144,7 @@ export async function undismissRuleAction(contains: string): Promise<{ ok: true 
 export async function deleteRuleAction(ruleId: string): Promise<{ ok: true } | Failure> {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     await deleteRule(connection, ruleId);
     await refreshRuleSuggestionCount(connection);
     revalidatePath('/settings');
@@ -168,7 +169,7 @@ export async function eraseEverythingAction(
       return { ok: false, error: 'Not erased: the phrase did not match.' };
     }
 
-    const removed = await eraseAllData(db());
+    const removed = await eraseAllData(await ledgerDb());
     revalidatePath('/settings');
     revalidatePath('/');
     revalidatePath('/accounts');
@@ -185,7 +186,7 @@ export async function setAiSettingsAction(update: {
 }): Promise<{ ok: true } | Failure> {
   try {
     await requireUser();
-    await setAiSettings(db(), update);
+    await setAiSettings(await ledgerDb(), update);
     revalidatePath('/settings');
     revalidatePath('/import');
     return { ok: true };
@@ -197,7 +198,7 @@ export async function setAiSettingsAction(update: {
 export async function clearAiCacheAction(): Promise<{ ok: true; removed: number } | Failure> {
   try {
     await requireUser();
-    const removed = await clearAnswerCache(db());
+    const removed = await clearAnswerCache(await ledgerDb());
     revalidatePath('/settings');
     return { ok: true, removed };
   } catch (error) {
@@ -210,7 +211,7 @@ export async function regenerateRecoveryCodesAction(): Promise<
 > {
   try {
     const session = await requireUser();
-    const codes = await regenerateRecoveryCodes(db(), session.userId);
+    const codes = await regenerateRecoveryCodes(homeDb(), session.userId);
     revalidatePath('/settings');
     return { ok: true, codes };
   } catch (error) {
@@ -225,7 +226,7 @@ export async function regenerateRecoveryCodesAction(): Promise<
 export async function signOutEverywhereAction(): Promise<void> {
   const session = await currentSession();
   if (session) {
-    await destroyAllSessions(db(), session.userId);
+    await destroyAllSessions(homeDb(), session.userId);
     await endSession();
   }
   redirect('/login');
@@ -235,7 +236,7 @@ export async function signOutEverywhereAction(): Promise<void> {
 export async function acceptRuleAction(contains: string, envelopeId: string) {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     await createEnvelopeRule(connection, { contains, envelopeId });
     await refreshRuleSuggestionCount(connection);
     revalidatePath('/settings');
@@ -250,7 +251,7 @@ export async function acceptRuleAction(contains: string, envelopeId: string) {
 export async function dismissRuleAction(contains: string) {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     await dismissRuleSuggestion(connection, contains);
     await refreshRuleSuggestionCount(connection);
     revalidatePath('/settings');

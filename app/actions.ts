@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '../db/client.ts';
+import { ledgerDb } from './ledger.ts';
 import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
 import { pairTransferHalves, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
@@ -19,7 +19,7 @@ import { requireUser } from './auth.ts';
  */
 export async function saveReviewAction(decisions: ReviewDecision[]) {
   await requireUser();
-  const connection = db();
+  const connection = await ledgerDb();
   const result = await saveReview(connection, decisions);
   // Confirming rows is how a payee becomes worth a rule, so the count is stale
   // the moment this returns.
@@ -42,7 +42,7 @@ export async function markAsTransferAction(
 ) {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
 
     // Read the normalized payee before converting, since the rule matches on it.
     const detail = options.createRule ? await transactionDetail(connection, transactionId) : null;
@@ -86,7 +86,7 @@ export async function markAsTransferAction(
 export async function pairTransferAction(firstId: string, secondId: string) {
   try {
     await requireUser();
-    await pairTransferHalves(db(), firstId, secondId);
+    await pairTransferHalves(await ledgerDb(), firstId, secondId);
     revalidatePath('/review');
     revalidatePath('/transactions');
     revalidatePath('/');

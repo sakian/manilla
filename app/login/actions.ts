@@ -23,7 +23,7 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 import { redirect } from 'next/navigation';
-import { db } from '../../db/client.ts';
+import { homeDb } from '../../db/client.ts';
 import {
   beginAuthentication,
   beginRegistration,
@@ -46,12 +46,12 @@ export async function beginSetupAction(
   name: string,
 ): Promise<BeginResult<PublicKeyCredentialCreationOptionsJSON>> {
   try {
-    const state = await setupState(db());
+    const state = await setupState(homeDb());
     if (!state.needsSetup) {
       return { ok: false, error: 'This Manilla is already set up. Sign in with your passkey.' };
     }
 
-    const begun = await beginRegistration(db(), { userName: name });
+    const begun = await beginRegistration(homeDb(), { userName: name });
     return { ok: true, ...begun };
   } catch (error) {
     return failed(error);
@@ -66,12 +66,12 @@ export async function finishSetupAction(input: {
   name: string;
 }): Promise<SetupResult> {
   try {
-    const state = await setupState(db());
+    const state = await setupState(homeDb());
     if (!state.needsSetup) {
       return { ok: false, error: 'This Manilla is already set up. Sign in with your passkey.' };
     }
 
-    const { userId, recoveryCodes } = await finishRegistration(db(), {
+    const { userId, recoveryCodes } = await finishRegistration(homeDb(), {
       challengeId: input.challengeId,
       response: input.response,
       userName: input.name,
@@ -89,7 +89,7 @@ export async function beginSignInAction(): Promise<
   BeginResult<PublicKeyCredentialRequestOptionsJSON>
 > {
   try {
-    const begun = await beginAuthentication(db());
+    const begun = await beginAuthentication(homeDb());
     return { ok: true, ...begun };
   } catch (error) {
     return failed(error);
@@ -103,7 +103,7 @@ export async function finishSignInAction(input: {
   response: AuthenticationResponseJSON;
 }): Promise<SignInResult> {
   try {
-    const { userId } = await finishAuthentication(db(), {
+    const { userId } = await finishAuthentication(homeDb(), {
       challengeId: input.challengeId,
       response: input.response,
     });
@@ -120,7 +120,7 @@ export async function finishSignInAction(input: {
  */
 export async function recoveryCodeSignInAction(code: string): Promise<SignInResult> {
   try {
-    const userId = await redeemRecoveryCode(db(), code);
+    const userId = await redeemRecoveryCode(homeDb(), code);
     if (!userId) {
       return { ok: false, error: 'That recovery code is not one of yours, or has been used already.' };
     }

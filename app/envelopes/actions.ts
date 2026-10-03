@@ -6,7 +6,7 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import {
   archiveEnvelope,
   archiveGroup,
@@ -44,7 +44,7 @@ function refreshed(envelopeId?: string): void {
 export async function createGroupAction(name: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await createGroup(db(), name);
+    await createGroup(await ledgerDb(), name);
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -55,7 +55,7 @@ export async function createGroupAction(name: string): Promise<ActionResult> {
 export async function renameGroupAction(groupId: string, name: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await renameGroup(db(), groupId, name);
+    await renameGroup(await ledgerDb(), groupId, name);
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -66,7 +66,7 @@ export async function renameGroupAction(groupId: string, name: string): Promise<
 export async function archiveGroupAction(groupId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await archiveGroup(db(), groupId);
+    await archiveGroup(await ledgerDb(), groupId);
     refreshed();
     return { ok: true, message: 'Group archived.' };
   } catch (error) {
@@ -77,7 +77,7 @@ export async function archiveGroupAction(groupId: string): Promise<ActionResult>
 export async function unarchiveGroupAction(groupId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await unarchiveGroup(db(), groupId);
+    await unarchiveGroup(await ledgerDb(), groupId);
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -93,7 +93,7 @@ export async function createEnvelopeAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await createEnvelope(db(), { groupId, name });
+    await createEnvelope(await ledgerDb(), { groupId, name });
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -107,7 +107,7 @@ export async function editEnvelopeAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await editEnvelope(db(), envelopeId, edit);
+    await editEnvelope(await ledgerDb(), envelopeId, edit);
     refreshed(envelopeId);
     return { ok: true };
   } catch (error) {
@@ -125,7 +125,7 @@ export async function nudgeGroupAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await nudgeGroup(db(), groupId, direction);
+    await nudgeGroup(await ledgerDb(), groupId, direction);
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -140,7 +140,7 @@ export async function moveEnvelopeToGroupAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await editEnvelope(db(), envelopeId, { groupId });
+    await editEnvelope(await ledgerDb(), envelopeId, { groupId });
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -158,7 +158,7 @@ export async function archiveEnvelopeAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await archiveEnvelope(db(), envelopeId, moveBalanceTo ? { moveBalanceTo } : {});
+    await archiveEnvelope(await ledgerDb(), envelopeId, moveBalanceTo ? { moveBalanceTo } : {});
     refreshed(envelopeId);
     return { ok: true, message: 'Envelope archived.' };
   } catch (error) {
@@ -169,7 +169,7 @@ export async function archiveEnvelopeAction(
 export async function unarchiveEnvelopeAction(envelopeId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await unarchiveEnvelope(db(), envelopeId);
+    await unarchiveEnvelope(await ledgerDb(), envelopeId);
     refreshed(envelopeId);
     return { ok: true };
   } catch (error) {
@@ -190,7 +190,7 @@ export async function transferAction(input: {
   try {
     await requireUser();
     const amountCents = centsFromInput(input.amount);
-    await transferBetweenEnvelopes(db(), {
+    await transferBetweenEnvelopes(await ledgerDb(), {
       fromEnvelopeId: input.fromEnvelopeId,
       toEnvelopeId: input.toEnvelopeId,
       amountCents,
@@ -211,7 +211,7 @@ export async function coverPlanAction(
 ): Promise<{ ok: true; plan: CoverPlan } | { ok: false; error: string }> {
   try {
     await requireUser();
-    return { ok: true, plan: await coverPlan(db(), envelopeId) };
+    return { ok: true, plan: await coverPlan(await ledgerDb(), envelopeId) };
   } catch (error) {
     return failed(error);
   }
@@ -235,7 +235,7 @@ export async function coverAction(
       return { ok: false, error: 'Nothing to move: every amount was zero.' };
     }
 
-    const moved = await coverFrom(db(), envelopeId, lines);
+    const moved = await coverFrom(await ledgerDb(), envelopeId, lines);
     refreshed(envelopeId);
     return {
       ok: true,

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { db } from '../../db/client.ts';
+import { homeDb } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
 import {
@@ -25,7 +26,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   const session = await requireUser();
-  const connection = db();
+  const connection = await ledgerDb();
 
   const [
     devices,
@@ -41,8 +42,9 @@ export default async function SettingsPage() {
     quality,
     unknown,
   ] = await Promise.all([
-    listDevices(connection, session.userId),
-    countUnusedRecoveryCodes(connection, session.userId),
+    // Sign-in is the same whichever ledger is open.
+    listDevices(homeDb(), session.userId),
+    countUnusedRecoveryCodes(homeDb(), session.userId),
     listRules(connection),
     // Searched and counted together, so the notice that leads here always
     // agrees with what it finds.
