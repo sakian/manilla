@@ -1,4 +1,4 @@
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import { listAccounts } from '../../src/accounts/manage.ts';
 import { importHistory } from '../../src/import/ofxImport.ts';
 import { attention } from '../../src/notices/notices.ts';
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ImportPage() {
   await requireUser();
-  const connection = db();
+  const connection = await ledgerDb();
 
   const [accounts, history, report] = await Promise.all([
     listAccounts(connection),

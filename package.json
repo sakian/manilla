@@ -17,7 +17,7 @@
     "test": "node --env-file-if-exists=.env --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs migrate",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "ofx": "node spikes/parse-ofx.ts",
     "goodbudget": "node spikes/inspect-goodbudget.ts",

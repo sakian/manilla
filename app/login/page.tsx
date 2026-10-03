@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { db } from '../../db/client.ts';
+import { homeDb } from '../../db/client.ts';
 import { authConfig, isSecureOrigin } from '../../src/auth/config.ts';
 import { setupState } from '../../src/auth/passkeys.ts';
 import { currentSession } from '../auth.ts';
@@ -38,7 +38,7 @@ export default async function LoginPage(props: {
   const rerenderAfterAction = (await headers()).has('next-action');
   if (!rerenderAfterAction && (await currentSession())) redirect(safeNext(searchParams.next));
 
-  const state = await setupState(db());
+  const state = await setupState(homeDb());
 
   // A misconfigured relying party is the difference between "sign in" and "every
   // sign-in fails for no visible reason", so it is reported here rather than

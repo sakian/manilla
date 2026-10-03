@@ -9,7 +9,7 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import {
   fundEnvelopes,
   reverseAllocation,
@@ -38,7 +38,7 @@ export async function setPlannedAction(
   try {
     await requireUser();
     const cents = centsFromInput(amount);
-    await setPlanned(db(), envelopeId, cents, month ? { month: assertMonth(month) } : {});
+    await setPlanned(await ledgerDb(), envelopeId, cents, month ? { month: assertMonth(month) } : {});
     refreshed();
     return { ok: true };
   } catch (error) {
@@ -64,7 +64,7 @@ export async function fundEnvelopesAction(
       return { ok: false, error: 'Nothing to fund: every amount in the preview was zero.' };
     }
 
-    const result = await fundEnvelopes(db(), assertMonth(month), amounts);
+    const result = await fundEnvelopes(await ledgerDb(), assertMonth(month), amounts);
     refreshed();
 
     const total = (result.totalCents / 100).toFixed(2);
@@ -84,7 +84,7 @@ export async function fundEnvelopesAction(
 export async function reverseAllocationAction(moveId: string, month: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await reverseAllocation(db(), moveId);
+    await reverseAllocation(await ledgerDb(), moveId);
     refreshed();
     return { ok: true, message: 'Sent back to Available.' };
   } catch (error) {

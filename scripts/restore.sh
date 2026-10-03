@@ -11,6 +11,10 @@
 # Tuesday rather than discovered on the worst day of the year. A backup nobody
 # has restored is a hope, not a backup.
 #
+# Each ledger is backed up to files of its own, named for its database
+# (manilla_business-<stamp>.dump); with no file given this takes the newest of
+# the home ledger's. Restore another by naming its file, and --into its database.
+#
 # After restoring it runs the FR-37 check against the restored copy: envelope
 # balances against account balances. That is the difference between "the file
 # could be read" and "the books came back".

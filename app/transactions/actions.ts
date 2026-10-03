@@ -10,7 +10,7 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import {
   createManualTransaction,
   createTransfer,
@@ -65,7 +65,7 @@ export async function transactionDetailAction(transactionId: string): Promise<
 > {
   try {
     await requireUser();
-    const detail = await transactionDetail(db(), transactionId);
+    const detail = await transactionDetail(await ledgerDb(), transactionId);
     if (!detail) return { ok: false, error: 'That transaction is no longer there.' };
 
     return {
@@ -132,7 +132,7 @@ export async function createTransactionAction(
     await requireUser();
     const lines = linesFrom(fields);
 
-    await createManualTransaction(db(), {
+    await createManualTransaction(await ledgerDb(), {
       accountId: fields.accountId,
       date: fields.date,
       amountCents: signed(fields.amount, fields.direction),
@@ -162,7 +162,7 @@ export async function updateTransactionAction(
     await requireUser();
     const lines = linesFrom(fields);
 
-    await updateTransaction(db(), transactionId, {
+    await updateTransaction(await ledgerDb(), transactionId, {
       accountId: fields.accountId,
       date: fields.date,
       amountCents: signed(fields.amount, fields.direction),
@@ -190,7 +190,7 @@ export async function setTransactionNoteAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await setTransactionNote(db(), transactionId, note);
+    await setTransactionNote(await ledgerDb(), transactionId, note);
     revalidatePath('/transactions');
     return { ok: true, message: note.trim() ? 'Note saved.' : 'Note removed.' };
   } catch (error) {
@@ -201,7 +201,7 @@ export async function setTransactionNoteAction(
 export async function deleteTransactionAction(transactionId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    const result = await deleteTransaction(db(), transactionId);
+    const result = await deleteTransaction(await ledgerDb(), transactionId);
     refreshed();
 
     return {
@@ -231,7 +231,7 @@ export async function deleteTransactionAction(transactionId: string): Promise<Ac
 export async function sendBackToReviewAction(transactionId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    const result = await sendBackToReview(db(), transactionId);
+    const result = await sendBackToReview(await ledgerDb(), transactionId);
     refreshed();
 
     if (result.queued === 0) {
@@ -266,7 +266,7 @@ export type TransferFields = {
 export async function createTransferAction(fields: TransferFields): Promise<ActionResult> {
   try {
     await requireUser();
-    await createTransfer(db(), {
+    await createTransfer(await ledgerDb(), {
       fromAccountId: fields.fromAccountId,
       toAccountId: fields.toAccountId,
       amountCents: centsFromInput(fields.amount),
@@ -287,7 +287,7 @@ export async function updateTransferAction(
 ): Promise<ActionResult> {
   try {
     await requireUser();
-    await updateTransfer(db(), pairId, {
+    await updateTransfer(await ledgerDb(), pairId, {
       fromAccountId: fields.fromAccountId,
       toAccountId: fields.toAccountId,
       amountCents: centsFromInput(fields.amount),
@@ -305,7 +305,7 @@ export async function updateTransferAction(
 export async function deleteTransferAction(pairId: string): Promise<ActionResult> {
   try {
     await requireUser();
-    await deleteTransfer(db(), pairId);
+    await deleteTransfer(await ledgerDb(), pairId);
     refreshed();
     return { ok: true, message: 'Both halves of the transfer are gone.' };
   } catch (error) {

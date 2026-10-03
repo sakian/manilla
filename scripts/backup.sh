@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# A backup of the whole database, and of the node's identity (NF-7).
+# A backup of every ledger's database, and of the node's identity (NF-7).
 #
 #   bash scripts/backup.sh
 #
-# Writes a compressed pg_dump to $MANILLA_BACKUP_DIR (./backups by default),
-# verifies that the file it just wrote can actually be read back, and prunes
-# anything older than the retention count.
+# Writes a compressed pg_dump of each ledger to $MANILLA_BACKUP_DIR (./backups by
+# default), verifies that each file it just wrote can actually be read back, and
+# prunes anything older than the retention count, per ledger.
 #
 # It also copies .env and the Tailscale sidecar's state, both small and both
 # load-bearing:
@@ -42,49 +42,97 @@ DB_USER="${POSTGRES_USER:-manilla}"
 
 mkdir -p "$DIR"
 STAMP="$(date +%Y-%m-%d-%H%M%S)"
-FILE="$DIR/manilla-$STAMP.dump"
+
+# Every ledger is a database of its own (#23), so each gets its own dump:
+# <database>-<stamp>.dump. MANILLA_LEDGERS is read from the environment, or
+# from .env where the app reads it; without one there is a single ledger, and
+# its dump is named as it always was. A ledger left out of here would be one
+# that is never backed up, with nothing to say so - so this reads the same
+# setting the app does rather than a list of its own.
+LEDGER_SPEC="${MANILLA_LEDGERS-}"
+if [[ -z "$LEDGER_SPEC" && -f .env ]]; then
+  LEDGER_SPEC="$(sed -n 's/^MANILLA_LEDGERS=//p' .env | tail -n 1 | tr -d "\"'")"
+fi
+DATABASES=()
+if [[ -n "${LEDGER_SPEC//[[:space:],]/}" ]]; then
+  IFS=',' read -ra ENTRIES <<<"$LEDGER_SPEC"
+  for entry in "${ENTRIES[@]}"; do
+    database="${entry##*=}"
+    database="${database//[[:space:]]/}"
+    [[ -n "$database" ]] || continue
+    # The rule the app enforces (src/ledgers/config.ts), which also keeps one
+    # ledger's dumps from matching another's names.
+    if [[ ! "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
+      echo "backup: \"$database\" in MANILLA_LEDGERS is not a ledger database name" >&2
+      exit 1
+    fi
+    DATABASES+=("$database")
+  done
+else
+  DATABASES=("$DB_NAME")
+fi
 
 # Postgres runs in Compose here, so its own client tools are used rather than
 # asking the host to have a matching version installed - a dump written by an
 # older pg_dump than the server is a restore that fails when it is needed.
 if docker compose ps --status running --services 2>/dev/null | grep -qx "$CONTAINER"; then
-  docker compose exec -T "$CONTAINER" \
-    pg_dump --format=custom --compress=6 --username="$DB_USER" "$DB_NAME" > "$FILE"
+  dump() { docker compose exec -T "$CONTAINER" \
+    pg_dump --format=custom --compress=6 --username="$DB_USER" "$1" > "$2"; }
   VERIFY=(docker compose exec -T "$CONTAINER" pg_restore --list)
-  verify_input() { cat "$FILE"; }
 elif command -v pg_dump >/dev/null; then
   : "${DATABASE_URL:?Set DATABASE_URL, or start the database with docker compose up -d db}"
-  pg_dump --format=custom --compress=6 --file="$FILE" "$DATABASE_URL"
+  # The same server and credentials, another database; any ?options carry over.
+  URL_BASE="${DATABASE_URL%%\?*}"
+  URL_QUERY="${DATABASE_URL#"$URL_BASE"}"
+  dump() { pg_dump --format=custom --compress=6 --file="$2" "${URL_BASE%/*}/$1$URL_QUERY"; }
   VERIFY=(pg_restore --list)
-  verify_input() { cat "$FILE"; }
 else
   echo "backup: no running database container and no pg_dump on this machine" >&2
   exit 1
 fi
 
-if [[ ! -s "$FILE" ]]; then
-  echo "backup: $FILE is empty" >&2
-  rm -f "$FILE"
-  exit 1
-fi
+# One ledger. Every step is checked by hand: this runs as an `if` condition,
+# where bash ignores `set -e`.
+backup_ledger() {
+  local database="$1"
+  local file="$DIR/$database-$STAMP.dump"
 
-# Read the archive back. A truncated or half-written dump fails here.
-TABLES=$(verify_input | "${VERIFY[@]}" 2>/dev/null | grep -c 'TABLE DATA' || true)
-if [[ "${TABLES:-0}" -lt 1 ]]; then
-  echo "backup: $FILE could not be read back - refusing to keep it" >&2
-  rm -f "$FILE"
-  exit 1
-fi
+  if ! dump "$database" "$file"; then
+    echo "backup: pg_dump of $database failed" >&2
+    rm -f "$file"
+    return 1
+  fi
+  if [[ ! -s "$file" ]]; then
+    echo "backup: $file is empty" >&2
+    rm -f "$file"
+    return 1
+  fi
 
-SIZE=$(du -h "$FILE" | cut -f1)
-echo "backup: $FILE ($SIZE, $TABLES tables)"
+  # Read the archive back. A truncated or half-written dump fails here.
+  local tables
+  tables=$("${VERIFY[@]}" < "$file" 2>/dev/null | grep -c 'TABLE DATA' || true)
+  if [[ "${tables:-0}" -lt 1 ]]; then
+    echo "backup: $file could not be read back - refusing to keep it" >&2
+    rm -f "$file"
+    return 1
+  fi
+  echo "backup: $file ($(du -h "$file" | cut -f1), $tables tables)"
 
-# Prune, newest first, keeping $KEEP.
-mapfile -t OLD < <(ls -1t "$DIR"/manilla-*.dump 2>/dev/null | tail -n "+$((KEEP + 1))")
-for stale in "${OLD[@]:-}"; do
-  [[ -n "$stale" ]] || continue
-  rm -f "$stale"
-  echo "backup: pruned $(basename "$stale")"
+  # Prune this ledger's, newest first, keeping $KEEP. "$database-" cannot
+  # match another ledger's files: names have no hyphens of their own.
+  local stale
+  while IFS= read -r stale; do
+    [[ -n "$stale" ]] || continue
+    rm -f "$stale"
+    echo "backup: pruned $(basename "$stale")"
+  done < <(ls -1t "$DIR/$database"-*.dump 2>/dev/null | tail -n "+$((KEEP + 1))")
+}
+
+# A ledger that fails does not stop the others being backed up; the run still
+# fails at the end, loudly, so a scheduled backup that half-worked is noticed.
+FAILED=()
+for database in "${DATABASES[@]}"; do
+  backup_ledger "$database" || FAILED+=("$database")
 done
 
 # The node's identity, taken from inside the container so it does not matter
@@ -126,4 +174,12 @@ if [[ "${MANILLA_BACKUP_ENV:-1}" == "1" && -f .env ]]; then
   done
 fi
 
-echo "backup: $(ls -1 "$DIR"/manilla-*.dump 2>/dev/null | wc -l) kept, restore with scripts/restore.sh"
+for database in "${DATABASES[@]}"; do
+  echo "backup: $database: $(ls -1 "$DIR/$database"-*.dump 2>/dev/null | wc -l) kept"
+done
+echo "backup: restore one with scripts/restore.sh <file>"
+
+if [[ ${#FAILED[@]} -gt 0 ]]; then
+  echo "backup: FAILED for ${FAILED[*]} - the other ledgers were backed up" >&2
+  exit 1
+fi

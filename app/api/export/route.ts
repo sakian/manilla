@@ -1,4 +1,4 @@
-import { db } from '../../../db/client.ts';
+import { ledgerDb } from '../../ledger.ts';
 import {
   CSV_TABLES,
   exportCsv,
@@ -42,7 +42,7 @@ export async function GET(request: Request): Promise<Response> {
       });
     }
 
-    return new Response(await exportCsv(db(), table), {
+    return new Response(await exportCsv(await ledgerDb(), table), {
       headers: {
         'content-type': 'text/csv; charset=utf-8',
         'content-disposition': `attachment; filename="${exportFilename(table)}.csv"`,
@@ -51,7 +51,7 @@ export async function GET(request: Request): Promise<Response> {
     });
   }
 
-  const ledger = await exportLedger(db());
+  const ledger = await exportLedger(await ledgerDb());
   return new Response(JSON.stringify(ledger, null, 2), {
     headers: {
       'content-type': 'application/json; charset=utf-8',

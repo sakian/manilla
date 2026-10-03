@@ -1,4 +1,4 @@
-import { db } from '../../../db/client.ts';
+import { ledgerDb } from '../../ledger.ts';
 import { toCsv } from '../../../src/csv.ts';
 import { exportFilename } from '../../../src/export/export.ts';
 import { searchTransactions } from '../../../src/transactions/search.ts';
@@ -27,7 +27,7 @@ export async function GET(request: Request): Promise<Response> {
   const params = Object.fromEntries(new URL(request.url).searchParams.entries());
   const query = readQuery(params, { pageSize: EVERYTHING });
 
-  const found = await searchTransactions(db(), { ...query, limit: EVERYTHING, offset: 0 });
+  const found = await searchTransactions(await ledgerDb(), { ...query, limit: EVERYTHING, offset: 0 });
   const amount = (cents: number) => (cents / 100).toFixed(2);
 
   const csv = toCsv(

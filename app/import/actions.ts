@@ -15,7 +15,7 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import { parseOfx } from '../../src/ofx/parse.ts';
 import {
   commitImport,
@@ -101,7 +101,7 @@ export async function previewImportAction(
 ): Promise<PreviewResult> {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     const document = parseOfx(fileText);
     const statement = document.statements[0];
 
@@ -232,7 +232,7 @@ export async function commitImportAction(
 ): Promise<CommitResult> {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     const statement = parseOfx(fileText).statements[0];
     if (!statement) return { ok: false, error: 'No statement in that file.' };
 
@@ -260,7 +260,7 @@ export async function revertImportAction(
 ): Promise<{ ok: true; removed: number } | Failure> {
   try {
     await requireUser();
-    const removed = await revertImport(db(), batchId);
+    const removed = await revertImport(await ledgerDb(), batchId);
     refreshed();
     return { ok: true, removed };
   } catch (error) {

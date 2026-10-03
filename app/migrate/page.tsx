@@ -1,4 +1,4 @@
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import { listAccounts } from '../../src/accounts/manage.ts';
 import { envelopeBalances } from '../../src/ledger/ledger.ts';
 import { requireUser } from '../auth.ts';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function MigratePage() {
   await requireUser();
-  const connection = db();
+  const connection = await ledgerDb();
 
   const [envelopes, accounts] = await Promise.all([
     envelopeBalances(connection),

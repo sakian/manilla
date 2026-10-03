@@ -13,7 +13,8 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
+import type { Database } from '../../db/client.ts';
 import {
   applyReconciliation,
   commitMigration,
@@ -56,7 +57,7 @@ function refreshed(): void {
  * operation that fills the suggestion list and then said nothing about it until
  * the next review sitting happened to refresh the count.
  */
-async function countedAgain(connection: ReturnType<typeof db>): Promise<void> {
+async function countedAgain(connection: Database): Promise<void> {
   await refreshRuleSuggestionCount(connection);
   revalidatePath('/review');
   revalidatePath('/settings');
@@ -180,7 +181,7 @@ export async function commitMigrationAction(
 > {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     const { texts, names } = await readUpload(upload);
     const plan = planMigration(texts, { from: sourceFrom(from) });
     const result = await commitMigration(connection, plan, mapping, { filename: names.join(', ') });
@@ -205,7 +206,7 @@ export async function reconcileAction(
 > {
   try {
     await requireUser();
-    const report = await reconcile(db(), expected);
+    const report = await reconcile(await ledgerDb(), expected);
     return { ok: true, ...report };
   } catch (error) {
     return failed(error);
@@ -218,7 +219,7 @@ export async function applyReconciliationAction(
 ): Promise<{ ok: true; written: number } | Failure> {
   try {
     await requireUser();
-    const written = await applyReconciliation(db(), adjustments, {
+    const written = await applyReconciliation(await ledgerDb(), adjustments, {
       date: date ?? localToday(),
     });
     refreshed();
@@ -233,7 +234,7 @@ export async function revertMigrationAction(
 ): Promise<{ ok: true; removed: number } | Failure> {
   try {
     await requireUser();
-    const connection = db();
+    const connection = await ledgerDb();
     const removed = await revertMigration(connection, batchId);
     refreshed();
     // Taking the history back out removes the evidence too, so a suggestion the

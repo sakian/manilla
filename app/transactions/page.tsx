@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import { budgetMonth } from '../../src/budget/budget.ts';
 import { currentMonth } from '../../src/budget/month.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
@@ -45,7 +45,7 @@ export default async function TransactionsPage(props: {
   const params = await props.searchParams;
   const query = readQuery(params);
   const page = readPage(params);
-  const connection = db();
+  const connection = await ledgerDb();
 
   const [found, choices, envelopes, report, categories, budget] = await Promise.all([
     searchTransactions(connection, query),

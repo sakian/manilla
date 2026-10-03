@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { db } from '../../db/client.ts';
+import { ledgerDb } from '../ledger.ts';
 import { listAccounts } from '../../src/accounts/manage.ts';
 import {
   envelopeOptions,
@@ -22,7 +22,7 @@ export default async function ReviewPage(props: {
   const params = await props.searchParams;
   const asked = Array.isArray(params.batch) ? params.batch[0] : params.batch;
   const batch = asked && UUID.test(asked) ? asked : undefined;
-  const connection = db();
+  const connection = await ledgerDb();
 
   // `?batch=` is what an import lands on: the same screen, looking only at what
   // just arrived. Everything else waiting is one link away.
