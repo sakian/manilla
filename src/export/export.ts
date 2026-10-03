@@ -19,6 +19,7 @@ import {
   accountGroups,
   accounts,
   appSettings,
+  auditLog,
   budgetLines,
   envelopeGroups,
   envelopeMoves,
@@ -67,6 +68,8 @@ export type LedgerExport = {
   rules: Record<string, unknown>[];
   importBatches: Record<string, unknown>[];
   settings: Record<string, string>;
+  /** Every change and deletion of a money row, oldest first (NF-2). */
+  auditLog: Record<string, unknown>[];
 };
 
 /** Everything, with its structure: splits stay attached to their transaction. */
@@ -83,6 +86,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
     ruleRows,
     batchRows,
     settingRows,
+    auditRows,
   ] = await Promise.all([
     db.select().from(accounts).orderBy(asc(accounts.position), asc(accounts.name)),
     db.select().from(envelopeGroups).orderBy(asc(envelopeGroups.position)),
@@ -95,6 +99,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
     db.select().from(rules).orderBy(asc(rules.position)),
     db.select().from(importBatches).orderBy(asc(importBatches.createdAt)),
     db.select().from(appSettings),
+    db.select().from(auditLog).orderBy(asc(auditLog.id)),
   ]);
 
   const accountNames = new Map(accountRows.map((row) => [row.id, row.name]));
@@ -149,6 +154,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
       envelopeMoves: moveRows.length,
       budgetLines: budgetRows.length,
       rules: ruleRows.length,
+      auditEntries: auditRows.length,
     },
     accounts: accountRows,
     envelopeGroups: groupRows,
@@ -177,6 +183,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
     })),
     importBatches: batchRows,
     settings: Object.fromEntries(settingRows.map((row) => [row.key, row.value])),
+    auditLog: auditRows,
   };
 }
 
@@ -359,6 +366,9 @@ export async function eraseAllData(db: Database): Promise<Record<string, number>
     await tx
       .delete(appSettings)
       .where(notInArray(appSettings.key, [AI_ENABLED_KEY, AI_BUDGET_KEY, HOME_LEDGER_NAME_KEY]));
+    // Last, because every delete above was itself written into it (NF-2): an
+    // erase that left a row-by-row copy of what it erased would be no erase.
+    await tx.delete(auditLog);
     // The one envelope an empty ledger still needs: without it every budget
     // screen throws, which is not "starting again" (#21).
     await ensureIncomePool(tx);

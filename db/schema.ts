@@ -32,6 +32,7 @@ import {
   unique,
   primaryKey,
   check,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -579,6 +580,54 @@ export const rules = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Audit trail (NF-2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every change to a row that money is derived from, and every deletion of one.
+ *
+ * The invariant (FR-37) proves the two sides agree now; it cannot say whether
+ * they agreed yesterday, or which edit is responsible if they stop. This is
+ * what makes a discrepancy diagnosable rather than just visible (#8).
+ *
+ * Written by a trigger on `transactions`, `txn_lines` and `envelope_moves`
+ * (see the migration that creates `manilla_audit()`), not by the code that makes
+ * the change: the entry is in the same database transaction as the change, and
+ * a write path added next year, or a statement typed into psql, is recorded
+ * without anyone remembering to. Inserts are not recorded - the row itself says
+ * when it arrived - only what overwrote or removed one.
+ *
+ * Append-only, and deliberately without foreign keys: the rows it describes are
+ * often gone.
+ */
+export const auditLog = pgTable(
+  'audit_log',
+  {
+    /** An identity rather than a uuid, so entries order exactly as written. */
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    /** When the database transaction that made the change began. */
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    tableName: text('table_name').notNull(),
+    rowId: uuid('row_id').notNull(),
+    /**
+     * The transaction the row belongs to - itself, or a line's parent - so one
+     * transaction's history includes its envelope lines. Null for a move.
+     */
+    transactionId: uuid('transaction_id'),
+    action: text('action', { enum: ['update', 'delete'] }).notNull(),
+    /** An update's changed columns as they were; a deletion's whole row. */
+    before: jsonb('before').notNull(),
+    /** An update's changed columns as they became; null for a deletion. */
+    after: jsonb('after'),
+  },
+  (table) => [
+    index('audit_log_transaction_idx').on(table.transactionId),
+    index('audit_log_row_idx').on(table.rowId),
+    index('audit_log_at_idx').on(table.at),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Row types
 // ---------------------------------------------------------------------------
 
@@ -606,3 +655,4 @@ export type Rule = typeof rules.$inferSelect;
 export type Credential = typeof credentials.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type LedgerRow = typeof ledgers.$inferSelect;
+export type AuditEntry = typeof auditLog.$inferSelect;
