@@ -186,7 +186,8 @@ export async function setAiSettingsAction(update: {
 }): Promise<{ ok: true } | Failure> {
   try {
     await requireUser();
-    await setAiSettings(await ledgerDb(), update);
+    // The account's, not the ledger's: one budget covers every ledger (#23).
+    await setAiSettings(homeDb(), update);
     revalidatePath('/settings');
     revalidatePath('/import');
     return { ok: true };

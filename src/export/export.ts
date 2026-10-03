@@ -13,7 +13,7 @@
  * that gets emailed to yourself would undo the reason NF-3 exists.
  */
 
-import { asc } from 'drizzle-orm';
+import { asc, notInArray } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import {
   accountGroups,
@@ -31,6 +31,7 @@ import {
 } from '../../db/schema.ts';
 import { toCsv } from '../csv.ts';
 import { ensureIncomePool } from '../ledger/ledger.ts';
+import { AI_BUDGET_KEY, AI_ENABLED_KEY } from '../ai/ai.ts';
 
 export type ExportedTransaction = {
   id: string;
@@ -321,7 +322,8 @@ export async function exportCsv(db: Database, table: CsvTableName): Promise<stri
  *
  * `ai_calls` survives too, for a different reason: it is a record of money spent
  * with a third party, not a record of your money, and a spend log that can be
- * cleared by the thing doing the spending is not much of a log.
+ * cleared by the thing doing the spending is not much of a log. So do the AI
+ * switch and budget, which belong to the account and cover every ledger (#23).
  *
  * Every other table goes, and the list has to be kept in step with the schema -
  * `account_groups` was missed when it was added, which left a set of empty
@@ -350,7 +352,7 @@ export async function eraseAllData(db: Database): Promise<Record<string, number>
     await tx.delete(envelopeGroups);
     await tx.delete(accounts);
     await tx.delete(accountGroups);
-    await tx.delete(appSettings);
+    await tx.delete(appSettings).where(notInArray(appSettings.key, [AI_ENABLED_KEY, AI_BUDGET_KEY]));
     // The one envelope an empty ledger still needs: without it every budget
     // screen throws, which is not "starting again" (#21).
     await ensureIncomePool(tx);

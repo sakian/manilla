@@ -46,6 +46,15 @@ export type AiSettings = {
   monthlyCallBudget: number;
 };
 
+/*
+ * The switch, the budget and the log of calls against it belong to the
+ * account, not to a ledger (#23): there is one API key and one bill however
+ * many ledgers are kept, so a budget per ledger would let the total run to
+ * several times what was set. Callers pass the home database for these. The
+ * merchant cache stays with each ledger, because its answers name that
+ * ledger's envelopes.
+ */
+
 export async function aiSettings(db: Database): Promise<AiSettings> {
   const rows = await db.select().from(appSettings);
   const values = new Map(rows.map((row) => [row.key, row.value]));
@@ -109,11 +118,16 @@ export type AiUsageReport = {
   cachedMerchants: number;
 };
 
+/**
+ * This month's calls against the account's budget. `ledger` is where the
+ * merchant cache is counted; with one ledger it is the same database.
+ */
 export async function aiUsage(
-  db: Database,
+  account: Database,
   month: MonthKey = currentMonth(),
+  ledger: Database = account,
 ): Promise<AiUsageReport> {
-  const [totals] = await db
+  const [totals] = await account
     .select({
       calls: sql<string>`count(*) filter (where ${aiCalls.error} is null)`,
       failedCalls: sql<string>`count(*) filter (where ${aiCalls.error} is not null)`,
@@ -126,11 +140,11 @@ export async function aiUsage(
     .from(aiCalls)
     .where(eq(aiCalls.month, monthStart(month)));
 
-  const [cached] = await db
+  const [cached] = await ledger
     .select({ count: sql<string>`count(*)` })
     .from(aiSuggestionCache);
 
-  const settings = await aiSettings(db);
+  const settings = await aiSettings(account);
   const calls = Number(totals?.calls ?? 0);
 
   return {
