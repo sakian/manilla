@@ -38,14 +38,14 @@ all account balances.
 | FR-3 | A transaction stores date, amount, account, the raw bank description, a cleaned payee name, notes, status and envelope(s). | M | Built |
 | FR-4 | Split one transaction across several envelopes, with the split amounts required to sum to the total. | M | Built |
 | FR-5 | A transfer between two accounts is stored as a linked pair and never counted as spending or income. | M | Built |
-| FR-6 | Reconcile an account: mark transactions cleared and compare to a statement balance. | S | Not built ([#1](https://github.com/sakian/manilla/issues/1)) |
+| FR-6 | Reconcile an account: mark transactions cleared and compare to a statement balance. | S | Not planned. Each OFX import's stated balance is kept as a checkpoint (FR-14) and the home screen says when an account drifts from it, which covers what this was for ([#1](https://github.com/sakian/manilla/issues/1)). |
 
 ## File import
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
 | FR-7 | Import OFX and QFX files, mapping each file's account to a Manilla account (remembered for next time). | M | Built |
-| FR-8 | Import CSV with a column-mapping step, saved per account for reuse. | S | Not built ([#2](https://github.com/sakian/manilla/issues/2)) |
+| FR-8 | Import CSV with a column-mapping step, saved per account for reuse. | S | Not planned. Every account in use imports as OFX/QFX ([#2](https://github.com/sakian/manilla/issues/2)). |
 | FR-9 | Show a preview before committing: new rows, exact duplicates, and possible duplicates. | M | Built |
 | FR-10 | Deduplicate on the bank's transaction ID (OFX FITID) per account. For CSV, fall back to date + amount + description. Possible duplicates go to a review list and are never dropped silently. | M | Built |
 | FR-11 | Importing the same file twice, or two overlapping date ranges, must change nothing the second time. | M | Built |
@@ -76,7 +76,7 @@ The schema is shaped for this already: `bank_sync` is a transaction source and
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
 | FR-21 | Create, rename, reorder and archive envelopes, each belonging to one group. | M | Built. Envelopes are alphabetical within a group; the manual order is on groups, which are read as a shape rather than scanned. |
-| FR-22 | Groups are collapsible and show a rolled-up balance, budgeted amount and spent amount. | M | Partial. Groups collapse; the roll-up was removed from view mode as noise beside the per-envelope figures. ([#13](https://github.com/sakian/manilla/issues/13)) |
+| FR-22 | Groups are collapsible, and a group's rolled-up balance, budgeted amount and spent amount can be read. | M | Built. Groups collapse on the envelopes screen; the roll-up lives in Reports, per group. On the envelopes screen it competed with the cards under it, and on a phone was read as the first envelope's own figures ([#13](https://github.com/sakian/manilla/issues/13)). |
 | FR-23 | By default an envelope's balance carries over month to month. | M | Built |
 | FR-24 | An envelope may go negative. It is shown as overspent and listed on the dashboard. | M | Built |
 | FR-25 | Archiving an envelope with a non-zero balance requires moving that balance first. | M | Built |

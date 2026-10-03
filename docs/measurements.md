@@ -73,8 +73,9 @@ amount and recency together, and adding the model, measures 72.4%.
    transactions at merchants never seen before — not breaking the ambiguity ceiling.
 5. **Raising the ceiling needs new information, not better models.** The single
    highest-value addition would be importing Amazon order history, which alone
-   would address 1,064 transactions — 14% of all spending. That is what the
-   planned supplementary imports are for.
+   would address 1,064 transactions — 14% of all spending. Supplementary imports
+   were sketched for this and set aside: there is no clean, quick route to the
+   data ([#9](https://github.com/sakian/manilla/issues/9)).
 
 ### One measurement that went the other way
 
