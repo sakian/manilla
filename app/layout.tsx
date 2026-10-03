@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { currentSession } from './auth.ts';
 import { allLedgers, currentLedger } from './ledger.ts';
 import LedgerSwitch, { toneOf } from './LedgerSwitch.tsx';
 import { signOutAction } from './login/actions.ts';
+import { THEME_COOKIE, themeColorFor, themeFrom } from '../src/theme.ts';
 import './globals.css';
 
 export const metadata = {
@@ -11,17 +13,19 @@ export const metadata = {
   description: 'Envelope budgeting',
 };
 
+/** The theme this device chose in Settings, or "system" (#45). */
+async function chosenTheme() {
+  return themeFrom((await cookies()).get(THEME_COOKIE)?.value);
+}
+
 /**
  * The browser chrome matches the paper the app is printed on, in whichever
  * theme is showing. Without this, adding Manilla to a phone's home screen gives
  * it a white status bar above a dark page.
  */
-export const viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#fbfaf8' },
-    { media: '(prefers-color-scheme: dark)', color: '#16150f' },
-  ],
-};
+export async function generateViewport() {
+  return { themeColor: themeColorFor(await chosenTheme()) };
+}
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // The navigation is only useful once you are in, and the sign-in page has no
@@ -30,9 +34,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // Named on screen only when there is a choice to make.
   const ledgers = session ? await allLedgers() : [];
   const ledger = ledgers.length > 1 ? await currentLedger() : null;
+  const theme = await chosenTheme();
 
   return (
-    <html lang="en">
+    // Set on the server, so the first paint is already the chosen theme.
+    <html lang="en" data-theme={theme === 'system' ? undefined : theme}>
       <body>
         <div className="shell">
           <header className={`topbar${ledger ? ` ${toneOf(ledgers, ledger)}` : ''}`}>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { homeDb } from '../../db/client.ts';
 import { allLedgers, currentLedger, ledgerDb } from '../ledger.ts';
 import LedgersPanel from './LedgersPanel.tsx';
@@ -20,6 +21,8 @@ import { signOutEverywhereAction } from './actions.ts';
 import Devices from './Devices.tsx';
 import AiPanel from './AiPanel.tsx';
 import DataPanel from './DataPanel.tsx';
+import AppearancePanel from './AppearancePanel.tsx';
+import { THEME_COOKIE, themeFrom } from '../../src/theme.ts';
 import RuleSuggestions from './RuleSuggestions.tsx';
 import Rules from './Rules.tsx';
 import { displayDate, displayInstant } from '../../src/budget/month.ts';
@@ -63,6 +66,8 @@ export default async function SettingsPage() {
     accuracy(connection),
     unknownMerchantEstimate(connection),
   ]);
+
+  const theme = themeFrom((await cookies()).get(THEME_COOKIE)?.value);
 
   let boundTo: string | null = null;
   try {
@@ -140,6 +145,8 @@ export default async function SettingsPage() {
         envelopes={envelopeChoices.map(({ id, name, groupName }) => ({ id, name, groupName }))}
         accounts={accountChoices.map(({ id, name }) => ({ id, name }))}
       />
+
+      <AppearancePanel current={theme} />
 
       <Devices devices={devices} unusedRecoveryCodes={unusedRecoveryCodes} />
 
