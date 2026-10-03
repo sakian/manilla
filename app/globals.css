@@ -1612,8 +1612,24 @@ details[open] > summary > .group-summary::before {
 
 .envelope-figures .figure + .figure::before {
   content: '·';
-  margin: 0 6px 0 2px;
+  margin: 0 6px;
   color: var(--text-dim);
+}
+
+/*
+ * Editing puts a box among the figures, and a box with figures butted against
+ * both sides of it read as one run of text - "0.00AVG/MO", "-$45.20PLAN" (#50).
+ * Real gaps instead of dots, and a figure that does not fit wraps whole.
+ */
+.envelope-figures.editing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+}
+
+.envelope-figures.editing .figure + .figure::before {
+  content: none;
 }
 
 .budget-row.plan {
