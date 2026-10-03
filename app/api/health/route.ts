@@ -17,8 +17,9 @@
  * is - and names none of them, for the same reason.
  */
 
-import { connectionFor } from '../../../db/client.ts';
-import { configuredLedgers } from '../../../src/ledgers/config.ts';
+import { connectionFor, homeDb } from '../../../db/client.ts';
+import { databaseOf } from '../../../src/ledgers/config.ts';
+import { listLedgers } from '../../../src/ledgers/registry.ts';
 import { checkInvariant } from '../../../src/ledger/ledger.ts';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,9 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const checks = await Promise.all(
-      configuredLedgers().map((ledger) => checkInvariant(connectionFor(ledger.database))),
+      (await listLedgers(homeDb(), databaseOf(process.env.DATABASE_URL ?? ''))).map((ledger) =>
+        checkInvariant(connectionFor(ledger.database)),
+      ),
     );
     return Response.json({ ok: true, ledgerBalanced: checks.every((check) => check.ok) });
   } catch (error) {

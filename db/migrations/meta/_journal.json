@@ -64,6 +64,13 @@
       "when": 1790034159788,
       "tag": "0008_careless_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791042827930,
+      "tag": "0009_shocking_santa_claus",
+      "breakpoints": true
     }
   ]
 }

@@ -5,7 +5,7 @@ import { createDb, type Database } from '../../db/client.ts';
 import { envelopes } from '../../db/schema.ts';
 import { closeDb, databaseAvailable, testServerUrl } from '../ledger/testdb.ts';
 import { urlFor } from './config.ts';
-import { prepareLedger, prepareLedgers } from './prepare.ts';
+import { prepareLedger } from './prepare.ts';
 
 const available = await databaseAvailable();
 
@@ -14,7 +14,7 @@ const available = await databaseAvailable();
 const LEDGER = { key: 'manilla_test_new_ledger', name: 'Business', database: 'manilla_test_new_ledger' };
 
 describe(
-  'preparing ledgers',
+  'preparing a ledger',
   { skip: available ? false : 'No Postgres reachable; run `docker compose up -d db`' },
   () => {
     let admin: Database;
@@ -51,14 +51,6 @@ describe(
       await prepareLedger(testServerUrl, LEDGER, (line) => lines.push(line));
       assert.doesNotMatch(lines.join('\n'), /created/);
       assert.match(lines.join('\n'), /up to schema/);
-    });
-
-    test('a ledger that cannot be brought up says which one, and stops the rest', async () => {
-      const unreachable = urlFor(testServerUrl, 'postgres').replace(/:\d+\//, ':1/');
-      await assert.rejects(
-        prepareLedgers(unreachable, [LEDGER, { ...LEDGER, name: 'Second', database: 'x' }]),
-        /^Error: Business \(manilla_test_new_ledger\) could not be brought up/,
-      );
     });
   },
 );

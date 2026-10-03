@@ -1,12 +1,11 @@
+import Link from 'next/link';
 import { switchLedgerAction } from './actions.ts';
-import type { Ledger } from '../src/ledgers/config.ts';
+import { MAX_LEDGERS, type Ledger } from '../src/ledgers/config.ts';
 
-/** How many ledger colours there are; a fifth ledger reuses the first. */
-const TONES = 4;
-
-/** Each ledger's colour, by its place in MANILLA_LEDGERS. */
+/** Each ledger's colour, by its place in the list: one each, since there are four of both. */
 export function toneOf(ledgers: Ledger[], ledger: Ledger): string {
-  return `ledger-tone-${Math.max(0, ledgers.indexOf(ledger)) % TONES}`;
+  const index = Math.max(0, ledgers.findIndex((candidate) => candidate.key === ledger.key));
+  return `ledger-tone-${index % MAX_LEDGERS}`;
 }
 
 /**
@@ -42,6 +41,11 @@ export default function LedgerSwitch({ ledgers, current }: { ledgers: Ledger[]; 
             {ledger.name}
           </button>
         ))}
+        {ledgers.length < MAX_LEDGERS && (
+          <Link href="/settings#ledgers" className="ledger-menu-new">
+            New ledger…
+          </Link>
+        )}
       </form>
     </details>
   );

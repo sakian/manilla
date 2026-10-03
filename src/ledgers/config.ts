@@ -1,10 +1,10 @@
 /**
- * Which ledgers this Manilla keeps, and which one a request is looking at (#23).
+ * What a ledger is, and the rules for naming one (#23).
  *
  * A ledger is a whole Manilla's worth of money - accounts, envelopes, history -
- * in a Postgres database of its own on the same server. Two ledgers share
- * nothing but the sign-in: business and household books kept apart, with the
- * money that moves between them entered on each side by hand.
+ * in a Postgres database of its own on the same server. Ledgers share nothing
+ * but the sign-in: business and household books kept apart, with the money
+ * that moves between them entered on each side by hand.
  *
  * A database each, rather than a ledger column on every table, because then no
  * query can mix them: the invariant, the income pool, rules, suggestions and
@@ -12,9 +12,9 @@
  * told. A schema each was the other way to get that, and is ruled out by the
  * migrations, which name `"public"` throughout.
  *
- * Configured as `MANILLA_LEDGERS="Personal=manilla,Business=manilla_business"`:
- * a name to show, and the database it lives in. Unset, there is one ledger -
- * the database in DATABASE_URL - and nothing about the app changes.
+ * The home ledger is the database in DATABASE_URL, which also holds sign-in.
+ * The others are opened from Settings and listed in its `ledgers` table
+ * (registry.ts).
  */
 
 export class LedgerConfigError extends Error {}
@@ -28,12 +28,21 @@ export type Ledger = {
 };
 
 /**
- * Database names Manilla will create and connect to. Deliberately narrower than
- * what Postgres allows: the name ends up in a `create database` statement and a
- * backup's filename, and a hyphen would make `manilla-x-2026-10-03.dump`
- * ambiguous with the home ledger's `manilla-2026-10-03.dump`.
+ * The home ledger's name, as an app setting in the home database: kept with
+ * the account, so erasing the ledger's data keeps what it is called.
  */
-const DATABASE_NAME = /^[a-z][a-z0-9_]{0,62}$/;
+export const HOME_LEDGER_NAME_KEY = 'home_ledger_name';
+
+/** Four in all, the home one included - and four colours to tell them apart. */
+export const MAX_LEDGERS = 4;
+
+/**
+ * Database names Manilla will create. Deliberately narrower than what Postgres
+ * allows: the name ends up in a `create database` statement and a backup's
+ * filename, and a hyphen would make `manilla-x-2026-10-03.dump` ambiguous with
+ * the home ledger's `manilla-2026-10-03.dump`.
+ */
+export const DATABASE_NAME = /^[a-z][a-z0-9_]{0,62}$/;
 
 /** The database a Postgres URL points at. */
 export function databaseOf(url: string): string {
@@ -49,88 +58,51 @@ export function urlFor(homeUrl: string, database: string): string {
   return url.toString();
 }
 
-/**
- * Read `MANILLA_LEDGERS`, failing on anything ambiguous.
- *
- * The home database - the one in DATABASE_URL, which holds sign-in - must be
- * one of the ledgers. Leaving it out would not lose anything, but it would hide
- * every transaction recorded before the second ledger was added, and the first
- * person to notice would think them gone.
- */
-export function parseLedgers(spec: string | undefined, homeDatabase: string): Ledger[] {
-  const trimmed = spec?.trim() ?? '';
-  if (trimmed === '') {
-    return [{ key: homeDatabase, name: 'Manilla', database: homeDatabase }];
+/** A ledger's name as typed, trimmed, or a reason it will not do. */
+export function cleanLedgerName(name: string): string {
+  const trimmed = name.trim().replace(/\s+/g, ' ');
+  if (trimmed === '') throw new LedgerConfigError('A ledger needs a name.');
+  if (trimmed.length > 40) {
+    throw new LedgerConfigError('A ledger name can be up to 40 characters.');
   }
-
-  const ledgers: Ledger[] = [];
-  for (const part of trimmed.split(',')) {
-    const entry = part.trim();
-    if (entry === '') continue;
-
-    const equals = entry.lastIndexOf('=');
-    if (equals <= 0) {
-      throw new LedgerConfigError(
-        `MANILLA_LEDGERS entry "${entry}" should be Name=database, e.g. Business=manilla_business.`,
-      );
-    }
-    const name = entry.slice(0, equals).trim();
-    const database = entry.slice(equals + 1).trim();
-
-    if (name === '' || name.length > 40) {
-      throw new LedgerConfigError(`A ledger name must be 1 to 40 characters; got "${name}".`);
-    }
-    if (!DATABASE_NAME.test(database)) {
-      throw new LedgerConfigError(
-        `"${database}" cannot be a ledger's database: use lowercase letters, digits and _, ` +
-          'starting with a letter.',
-      );
-    }
-    if (ledgers.some((ledger) => ledger.database === database)) {
-      throw new LedgerConfigError(`Database "${database}" is listed twice in MANILLA_LEDGERS.`);
-    }
-    if (ledgers.some((ledger) => ledger.name.toLowerCase() === name.toLowerCase())) {
-      throw new LedgerConfigError(`Two ledgers are called "${name}"; they need telling apart.`);
-    }
-    ledgers.push({ key: database, name, database });
-  }
-
-  if (!ledgers.some((ledger) => ledger.database === homeDatabase)) {
-    throw new LedgerConfigError(
-      `MANILLA_LEDGERS must include ${homeDatabase}, the database in DATABASE_URL: it holds ` +
-        'sign-in, and everything recorded before a second ledger was added.',
-    );
-  }
-  return ledgers;
+  return trimmed;
 }
 
 /**
- * The ledger a request asked for, or the first one.
+ * The database a new ledger called `name` gets: `<home>_ledger_<name>`.
+ *
+ * The `_ledger_` keeps every one clear of the databases that are not ledgers
+ * but share the prefix - `manilla_restore_check`, which a restore overwrites by
+ * default, and the test suites' `manilla_test_*`. `taken` is every database
+ * already on the server, so an existing one, ledger or not, is never adopted:
+ * a clash gets a number instead.
+ */
+export function databaseNameFor(homeDatabase: string, name: string, taken: Set<string>): string {
+  const prefix = DATABASE_NAME.test(homeDatabase) ? homeDatabase : 'manilla';
+  const slug =
+    name
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'book';
+  // Room for a "_99" suffix inside Postgres's 63 characters.
+  const base = `${prefix}_ledger_${slug}`.slice(0, 60).replace(/_+$/, '');
+
+  if (!taken.has(base)) return base;
+  for (let n = 2; n < 100; n += 1) {
+    if (!taken.has(`${base}_${n}`)) return `${base}_${n}`;
+  }
+  throw new LedgerConfigError(`No free database name for "${name}".`);
+}
+
+/**
+ * The ledger a request asked for, or the home one.
  *
  * The cookie naming it is the browser's say, so it is only ever looked up in
- * the configured list, never used as a database name. One that names a ledger
- * since removed falls back rather than failing, since the person can do nothing
+ * the list, never used as a database name. One that names a ledger since
+ * removed falls back rather than failing, since the person can do nothing
  * about a cookie they cannot see.
  */
 export function chooseLedger(ledgers: Ledger[], requested: string | undefined): Ledger {
   return ledgers.find((ledger) => ledger.key === requested) ?? ledgers[0]!;
-}
-
-let configured: Ledger[] | undefined;
-
-/** The ledgers this process was started with, read once. */
-export function configuredLedgers(env: Record<string, string | undefined> = process.env): Ledger[] {
-  if (env !== process.env) return parseLedgers(env.MANILLA_LEDGERS, homeDatabaseOf(env));
-  configured ??= parseLedgers(env.MANILLA_LEDGERS, homeDatabaseOf(env));
-  return configured;
-}
-
-function homeDatabaseOf(env: Record<string, string | undefined>): string {
-  const url = env.DATABASE_URL;
-  if (!url) {
-    throw new LedgerConfigError(
-      'DATABASE_URL is not set. Copy .env.example to .env, or run `docker compose up -d db`.',
-    );
-  }
-  return databaseOf(url);
 }

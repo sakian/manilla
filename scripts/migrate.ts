@@ -3,15 +3,14 @@
  *
  * The same work the server does at boot in production (instrumentation.ts),
  * run by hand here because `next dev` restarts too often for a migration to
- * happen by accident. Creates the database of any ledger in MANILLA_LEDGERS
- * that does not have one yet.
+ * happen by accident: the home ledger first, then every ledger opened from
+ * Settings, which it lists.
  *
  * Generating a migration is still drizzle-kit (`npm run db:generate`); only
  * applying them moved here, since drizzle-kit knows one database.
  */
 
-import { configuredLedgers } from '../src/ledgers/config.ts';
-import { prepareLedgers } from '../src/ledgers/prepare.ts';
+import { prepareEveryLedger } from '../src/ledgers/registry.ts';
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -20,7 +19,7 @@ if (!url) {
 }
 
 try {
-  await prepareLedgers(url, configuredLedgers(), (line) => console.log(line));
+  await prepareEveryLedger(url, (line) => console.log(line));
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
