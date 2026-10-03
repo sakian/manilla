@@ -921,6 +921,77 @@ details[open] > summary > .group-summary::before {
   border-color: var(--negative);
 }
 
+/*
+ * The list beside the transactions of whatever was chosen in it (#35, see
+ * Split.tsx). Narrow-first: a phone has one column and no pane, and a row's link
+ * opens the transactions screen as a page. From 900px - the width Split.tsx also
+ * checks before opening the pane instead - the list takes 320-380px, which keeps
+ * a name and its balance together, and the transactions take the rest.
+ *
+ * The pane is sticky with its own scroll, so a long list of envelopes can be
+ * scrolled to the one wanted without the transactions scrolling away above it.
+ */
+.split-pane {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .split {
+    display: grid;
+    /* 380px where there is room; down to 320px nearer the breakpoint, where
+       a fixed 380px left the pane too narrow for its own search box. */
+    grid-template-columns: clamp(320px, 36%, 380px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* Sticky makes the pane a layer of its own, so its dialogs can rise no higher
+     than it does: above the list's raised buttons (z-index 1), or a Cover
+     button shows through a transaction's detail. */
+  .split-pane {
+    display: block;
+    position: sticky;
+    z-index: 2;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 14px 16px 4px;
+  }
+
+  /* The transactions screen's own panel, already inside the pane's border. */
+  .split-pane .panel {
+    border: none;
+    padding: 0;
+    background: none;
+  }
+
+  /* Room either side of a row, so its highlight is not flush with the text. */
+  .split .envelope-row {
+    margin-inline: -8px;
+    padding-inline: 8px;
+    border-radius: 6px;
+  }
+
+  /* The row the pane is showing. */
+  .split .envelope-row.selected {
+    background: var(--accent-soft);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .split .group-open.selected {
+    color: var(--text);
+    font-weight: 560;
+  }
+}
+
+.pane-loading {
+  margin: 0;
+  padding: 12px 0;
+}
+
 .new-account {
   border-top: 1px solid var(--border);
   padding-top: 14px;

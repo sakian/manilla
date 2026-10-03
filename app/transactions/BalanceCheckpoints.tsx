@@ -16,9 +16,12 @@ import { Money } from '../Money.tsx';
 export function BalanceCheckpoints({
   accountId,
   checkpoints,
+  path = '/transactions',
 }: {
   accountId: string;
   checkpoints: BalanceCheckpoint[];
+  /** The screen showing the list, so narrowing it stays on that screen. */
+  path?: string;
 }) {
   if (checkpoints.length === 0) {
     return (
@@ -83,7 +86,7 @@ export function BalanceCheckpoints({
               The gap moved by <Money cents={checkpoint.changeCents} plain /> since{' '}
               {displayDate(checkpoint.previousAsOf!)}.{' '}
               <Link
-                href={`/transactions?account=${accountId}&from=${addDays(
+                href={`${path}?account=${accountId}&from=${addDays(
                   checkpoint.previousAsOf!,
                   1,
                 )}&to=${checkpoint.asOf}&order=asc`}

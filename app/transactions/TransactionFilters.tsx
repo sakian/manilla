@@ -37,6 +37,7 @@ export default function TransactionFilters({
   pinnedAccountId,
   everyAccountValue,
   active,
+  keepScroll = false,
 }: {
   /** Where to navigate: the transactions page, or an account's own view. */
   path: string;
@@ -55,6 +56,8 @@ export default function TransactionFilters({
   everyAccountValue?: string;
   /** Whether anything is currently being filtered, so "Clear" can be hidden. */
   active: boolean;
+  /** In a pane beside the list it was opened from, which filtering should not scroll away. */
+  keepScroll?: boolean;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<FormValues>(values);
@@ -79,9 +82,9 @@ export default function TransactionFilters({
       // Applying is the end of choosing, so the panel folds away and leaves the
       // chips to say what was chosen.
       setOpen(false);
-      router.push(query ? `${path}?${query}` : path);
+      router.push(query ? `${path}?${query}` : path, { scroll: !keepScroll });
     },
-    [path, pinnedAccountId, router],
+    [keepScroll, path, pinnedAccountId, router],
   );
 
   const apply = (event: FormEvent) => {
@@ -164,7 +167,9 @@ export default function TransactionFilters({
       order: 'desc',
     };
     setForm(blank);
-    router.push(pinnedAccountId ? `${path}?account=${pinnedAccountId}` : path);
+    router.push(pinnedAccountId ? `${path}?account=${pinnedAccountId}` : path, {
+      scroll: !keepScroll,
+    });
   };
 
   // Grouped so a long envelope list is navigable; the pool sits with the rest

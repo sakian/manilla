@@ -23,7 +23,9 @@
  * A card is two lines: the name with its balance, then what it planned and spent.
  * The balance is what anyone opens this screen for, so it shares the line with
  * the name rather than sitting in a third column. Clicking anywhere on the card
- * opens the envelope.
+ * opens the envelope's transactions: on a phone as a page of their own, and on a
+ * wide screen in a pane beside the list, so the list you chose from stays in
+ * view (#35, see `Split`).
  *
  * Envelopes are alphabetical inside their group; groups keep a manual order.
  * There are dozens of envelopes and a handful of groups, so one is scanned and
@@ -46,6 +48,7 @@ import Link from 'next/link';
 import type { FundingPlan } from '../src/budget/budget.ts';
 import type { ManagedGroup } from '../src/envelopes/manage.ts';
 import { Hint } from './Hint.tsx';
+import { Split, usePaneLink } from './Split.tsx';
 import { useOverlay } from './useOverlay.ts';
 import { Money, Spend } from './Money.tsx';
 import { inputFromCents } from './amount.ts';
@@ -93,6 +96,7 @@ export default function HomeScreen({
   month,
   funding,
   notices,
+  pane,
 }: {
   groups: ManagedGroup[];
   figures: MonthFigures;
@@ -103,6 +107,8 @@ export default function HomeScreen({
   funding: FundingPlan;
   /** The notices list, rendered on the server and slotted in under the heading. */
   notices?: ReactNode;
+  /** The transactions beside the list on a wide screen, rendered on the server (#35). */
+  pane?: ReactNode;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -119,6 +125,10 @@ export default function HomeScreen({
   const openEnvelopeId = searchParams.get('envelope');
   const [newEnvelope, setNewEnvelope] = useState<Record<string, string>>({});
   const [newGroup, setNewGroup] = useState('');
+  const openInPane = usePaneLink('/');
+  /** What the pane is showing, so its row can say so. */
+  const shownEnvelopes = searchParams.getAll('env');
+  const shownGroups = searchParams.getAll('envgroup');
 
   const run = useCallback(
     (work: () => Promise<Result>) => {
@@ -275,6 +285,9 @@ export default function HomeScreen({
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
 
+      {/* Editing gets the whole width: renaming, planning and regrouping need
+          the room, and nobody edits envelopes while reading transactions. */}
+      <Split pane={editing ? undefined : pane}>
       {live.map((group, groupIndex) => {
         const envelopes = group.envelopes.filter((envelope) => envelope.archivedAt === null);
         /**
@@ -296,9 +309,14 @@ export default function HomeScreen({
                 {/* The heading is a way in too: a whole group's spending is a
                     question people ask more often than one envelope's. */}
                 <Link
-                  className="group-open"
+                  className={`group-open${
+                    shownGroups.length === 1 && shownGroups[0] === group.id ? ' selected' : ''
+                  }`}
                   href={`/transactions?envgroup=${group.id}`}
-                  onClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openInPane(event);
+                  }}
                 >
                   transactions
                 </Link>
@@ -344,7 +362,11 @@ export default function HomeScreen({
               return (
                 <div
                   key={envelope.id}
-                  className={`envelope-row${editing ? ' editing' : ''}`}
+                  className={`envelope-row${editing ? ' editing' : ''}${
+                    !editing && shownEnvelopes.length === 1 && shownEnvelopes[0] === envelope.id
+                      ? ' selected'
+                      : ''
+                  }`}
                 >
                   <span className="envelope-name">
                     {/* The whole card opens the envelope, done with a real link
@@ -356,6 +378,7 @@ export default function HomeScreen({
                     <Link
                       href={`/transactions?env=${envelope.id}`}
                       className="envelope-open"
+                      onClick={openInPane}
                     >
                       {envelope.name}
                     </Link>
@@ -555,6 +578,7 @@ export default function HomeScreen({
           ))}
         </details>
       )}
+      </Split>
 
       {overlay.value === 'fund' && (
         <FundEnvelopes

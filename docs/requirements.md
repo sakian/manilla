@@ -149,7 +149,7 @@ flowchart LR
 | VW-2 | Pace marker on each bar showing how far through the month you are. | S | Not built ([#3](https://github.com/sakian/manilla/issues/3)) |
 | VW-3 | Dashboard callouts: overspent envelopes, unallocated income, transactions awaiting review, and the FR-37 balance check. | M | Built, as one ranked list shown on every main screen. |
 | VW-4 | Envelope view: envelopes in groups with balance, budgeted and spent. Opening one shows its transactions, transfers, allocations and a balance-over-time chart. | M | Partial. Everything but the chart. ([#4](https://github.com/sakian/manilla/issues/4)) |
-| VW-5 | Account view: accounts with balances, and each account's transactions filterable by status, date, payee and envelope. | M | Built, unified. One `/transactions` screen behind every filter. |
+| VW-5 | Account view: accounts with balances, and each account's transactions filterable by status, date, payee and envelope. | M | Built, unified. One `/transactions` screen behind every filter. On a wide screen it also sits beside the envelope and account lists, showing whichever row was chosen ([#35](https://github.com/sakian/manilla/issues/35)). |
 | VW-6 | Global transaction search and filter (text, amount range, date range, envelope, status). | M | Built |
 
 ## Reports

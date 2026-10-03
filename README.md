@@ -47,7 +47,8 @@ actually received.
 **Everything is one screen where it can be.** Envelopes and the dashboard are one
 list. Accounts are the same screen for the other half of the ledger. Every
 transaction list is `/transactions` with a filter, and pressing an envelope, a
-group, an account or a category lands there with that filter applied. What needs
+group, an account or a category shows it with that filter applied: on a phone as
+its own page, and on a wider screen beside the list you pressed it in. What needs
 attention is one ranked list shown on every main screen — and nothing at all when
 there is nothing to say.
 
