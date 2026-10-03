@@ -25,8 +25,11 @@
  * into Savings is one decision, and it belongs in one sitting rather than split
  * across two screens with the books half-changed in between.
  *
- * **Every envelope is listed, planned or not.** A plan is what funding proposes,
- * not what it permits. Rows left alone write nothing.
+ * **Every envelope is listed, planned or not, and every row starts at zero.**
+ * A plan is what funding can propose, not what it permits, and not something to
+ * undo before typing the one figure you came to change. "Fill from plan" puts
+ * each planned amount in when the plan is what you want. Rows left alone write
+ * nothing.
  *
  * Applying with Available overdrawn is allowed - FR-24 lets a balance go
  * negative, and refusing would strand someone who knows income arrives tomorrow.
@@ -71,13 +74,36 @@ export default function FundEnvelopes({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  /** Every row starts on "add", holding its planned monthly amount. */
+  /**
+   * Every row starts on "add", and empty. Empty rather than a typed 0.00: a row
+   * switched to "set" would read a 0 as "empty this envelope", and a blank is
+   * already "leave it alone" in both modes (see `moveFor`).
+   */
   const [modes, setModes] = useState<Record<string, Mode>>({});
-  const [amounts, setAmounts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      funding.lines.map((line) => [line.envelopeId, inputFromCents(line.proposedCents)]),
-    ),
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
+
+  const planned = useMemo(
+    () => funding.lines.filter((line) => line.proposedCents !== 0),
+    [funding.lines],
   );
+  const plannedTotal = planned.reduce((sum, line) => sum + line.proposedCents, 0);
+
+  /**
+   * Each planned envelope gets its plan, as an amount to add. Envelopes with no
+   * plan keep whatever was typed for them - the button is about the plan, and
+   * there is nothing in it to say about those.
+   */
+  const fillFromPlan = useCallback(() => {
+    setAmounts((current) => ({
+      ...current,
+      ...Object.fromEntries(planned.map((line) => [line.envelopeId, inputFromCents(line.proposedCents)])),
+    }));
+    setModes((current) => {
+      const next = { ...current };
+      for (const line of planned) delete next[line.envelopeId];
+      return next;
+    });
+  }, [planned]);
 
   const modeOf = useCallback((envelopeId: string) => modes[envelopeId] ?? 'add', [modes]);
 
@@ -160,9 +186,9 @@ export default function FundEnvelopes({
           <strong>Fund envelopes · {label}</strong>
           <Hint label="How funding works">
             Money out of Available and into the envelopes. Every figure here is worked out in your
-            browser — nothing moves until you press Apply. Each row starts at its planned monthly
-            amount, and at nothing when it has no plan; what the envelope has already had this month
-            sits beside it, so funding twice is visible before you do it. Choose <em>add</em> to put
+            browser — nothing moves until you press Apply. Every row starts at nothing; <em>Fill from
+            plan</em> puts each envelope&rsquo;s planned monthly amount in, and the plan sits beside
+            each row either way. Choose <em>add</em> to put
             an amount in, or <em>set to</em> to name the balance you want and let Manilla work out
             the difference. Either can be negative, which takes money back out and returns it to
             Available.
@@ -184,6 +210,17 @@ export default function FundEnvelopes({
               {formatMoney(availableAfter)}
             </span>
           </span>
+          {planned.length > 0 && (
+            <button
+              type="button"
+              className="fund-fill"
+              onClick={fillFromPlan}
+              disabled={pending}
+              title={`Put each planned amount in: ${formatMoney(plannedTotal)} across ${planned.length} envelope${planned.length === 1 ? '' : 's'}`}
+            >
+              Fill from plan
+            </button>
+          )}
         </div>
 
         <div className="dialog-body">
@@ -261,6 +298,9 @@ export default function FundEnvelopes({
                           : `Balance to set ${line.name} to`
                       }
                       value={amounts[line.envelopeId] ?? ''}
+                      // What a blank box means: nothing added, or the balance
+                      // left as it is.
+                      placeholder={inputFromCents(mode === 'add' ? 0 : line.balanceCents)}
                       disabled={pending}
                       onChange={(event) =>
                         setAmounts((current) => ({

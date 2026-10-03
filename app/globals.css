@@ -2101,6 +2101,14 @@ details[open] > summary > .group-summary::before {
   font-weight: 620;
 }
 
+/* At the far end of the figures it changes, and still in view while scrolling. */
+.fund-summary .fund-fill {
+  margin-left: auto;
+  align-self: center;
+  font-size: 13px;
+  padding: 6px 11px;
+}
+
 /*
  * Written narrow-first, and widened by a min-width query rather than narrowed by
  * a max-width one. The five-column version used to be the base rule and sat

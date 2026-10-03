@@ -492,7 +492,7 @@ export type FundingLine = {
   plannedCents: number;
   /** Net allocated into it already this month, shown so double-funding is visible. */
   alreadyAllocatedCents: number;
-  /** What the row starts at: this envelope's planned monthly amount. */
+  /** What "Fill from plan" puts in the row: this envelope's planned monthly amount. */
   proposedCents: number;
   /**
    * What the envelope holds now, carry-over included. Needed because the funding
