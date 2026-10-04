@@ -12,8 +12,10 @@
 #
 # The app shares the sidecar's network namespace (`network_mode`), which means it
 # has no address of its own: not on the LAN, not on the host, not on 127.0.0.1.
-# The only way to it is through its Tailscale node, and the only people on that
-# are the ones you have added to your tailnet.
+# The only way to it is through its Tailscale node, and by default the only
+# people on that are the ones you have added to your tailnet. Set
+# MANILLA_SERVE_CONFIG=tailscale-serve-funnel.json to open it to the internet
+# as well, through Tailscale Funnel (see the README before you do).
 #
 #   docker compose up -d
 #
@@ -59,7 +61,10 @@ services:
       TS_USERSPACE: 'false'
     volumes:
       - manilla-tailscale:/var/lib/tailscale
-      - ./deploy/tailscale-serve.json:/config/serve.json:ro
+      # tailscale-serve.json for the tailnet only, or tailscale-serve-funnel.json
+      # to add Funnel. The sidecar reads it at start: `docker compose up -d`
+      # after changing it.
+      - ./deploy/${MANILLA_SERVE_CONFIG:-tailscale-serve.json}:/config/serve.json:ro
       - /dev/net/tun:/dev/net/tun
     cap_add:
       - NET_ADMIN
@@ -114,6 +119,10 @@ services:
       # for the wrong origin is worse than no session at all.
       MANILLA_RP_ID: ${MANILLA_RP_ID:-localhost}
       MANILLA_ORIGIN: ${MANILLA_ORIGIN:-http://localhost:3000}
+      # Unset is right for a tailnet user's first visit; see .env.example.
+      MANILLA_ALLOW_SETUP: ${MANILLA_ALLOW_SETUP:-}
+      # Where sign-in activity is posted as it happens, e.g. an ntfy topic.
+      MANILLA_ALERT_URL: ${MANILLA_ALERT_URL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Bank feeds (FR-15 to FR-20). Empty means off: the Bank feeds panel says
       # which are missing and nothing is fetched. PLAID_ENV defaults to the

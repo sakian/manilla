@@ -12,6 +12,7 @@ import { revalidatePath } from 'next/cache';
 import { connectionFor, homeDb } from '../../db/client.ts';
 import { allLedgers, currentLedger, ledgerDb } from '../ledger.ts';
 import { requireUser } from '../auth.ts';
+import { actAs } from '../../src/audit/actor.ts';
 import type { Failure } from '../login/actions.ts';
 import { createLinkToken, linkConnection, liveConnectionIds, resolveHeld } from '../../src/sync/connections.ts';
 import { plaidCall, plaidConfigFromEnv } from '../../src/sync/plaidClient.ts';
@@ -49,7 +50,7 @@ export async function createLinkTokenAction(
   connectionId?: string,
 ): Promise<{ ok: true; linkToken: string } | Failure> {
   try {
-    const session = await requireUser();
+    const session = actAs(await requireUser());
     const { call, decrypt } = plaid();
     const linkToken = await createLinkToken(await ledgerDb(), call, {
       userId: session.userId,
@@ -64,7 +65,7 @@ export async function createLinkTokenAction(
 /** What Plaid's window handed back after a new login. */
 export async function linkBankAction(publicToken: string): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const { call, key } = plaid();
     await linkConnection(await ledgerDb(), call, publicToken, key);
     revalidatePath('/settings');
@@ -83,7 +84,7 @@ export async function setFeedAccountAction(
   choice: string,
 ): Promise<{ ok: true; startDate: string | null } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const { all, current } = await ledgers();
     const split = choice.indexOf(':');
     const target = choice ? { ledgerKey: choice.slice(0, split), accountId: choice.slice(split + 1) } : null;
@@ -111,7 +112,7 @@ export type SyncNowResult =
 
 export async function syncNowAction(connectionId: string): Promise<SyncNowResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const { call, key } = plaid();
     const { all, current } = await ledgers();
     // Every ledger this login feeds, so one press brings them all up to date.
@@ -147,7 +148,7 @@ export async function syncAllAction(): Promise<
   | Failure
 > {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const { call, key } = plaid();
     const { all, current } = await ledgers();
     let added = 0;
@@ -173,7 +174,7 @@ export async function syncAllAction(): Promise<
 
 export async function revokeBankAction(connectionId: string): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const { call, decrypt } = plaid();
     const { all, current } = await ledgers();
     await revokeEverywhere(all, current, connectionId, call, decrypt);
@@ -189,7 +190,7 @@ export async function resolveHeldAction(
   action: 'add' | 'link' | 'dismiss',
 ): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     await resolveHeld(await ledgerDb(), heldId, action);
     revalidatePath('/', 'layout');
     return { ok: true };

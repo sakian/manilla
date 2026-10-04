@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import type { NextConfig } from 'next';
+import { securityHeaders } from './src/security-headers.ts';
 
 /** One git answer, or null where there is no git or no repository to ask. */
 function git(...args: string[]): string | null {
@@ -18,10 +19,16 @@ const committed = commit ? git('log', '-1', '--format=%cs') : null;
 const modified = commit ? Boolean(git('status', '--porcelain', '--untracked-files=no')) : false;
 
 const config: NextConfig = {
-  // The app runs behind Nginx on a private Tailscale network, and is packaged
+  // The app runs behind its Tailscale node (docker-compose.yml), and is packaged
   // as a self-contained server bundle for the Docker image.
   output: 'standalone',
   poweredByHeader: false,
+
+  async headers() {
+    return [
+      { source: '/:path*', headers: securityHeaders(process.env.NODE_ENV === 'production') },
+    ];
+  },
 
   env: {
     MANILLA_COMMIT: commit ?? '',

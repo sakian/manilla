@@ -8,8 +8,8 @@ import type { MetadataRoute } from 'next';
  * browser chrome, which on a small screen is two rows of pixels back and one
  * less thing between you and the envelopes.
  *
- * Nothing here is public. The app only resolves on the tailnet, so this is
- * metadata for the one household that can reach it.
+ * Nothing here is private: it is served without a session (proxy.ts), and with
+ * Funnel on, to anyone. It names the app and nothing else.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {

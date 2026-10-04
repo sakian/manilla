@@ -119,6 +119,8 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Up to when this person has looked at sign-in activity (src/auth/activity.ts). */
+  securitySeenAt: timestamp('security_seen_at', { withTimezone: true }),
 });
 
 /** WebAuthn passkeys (NF-3). A user may register several devices. */
@@ -165,6 +167,65 @@ export const sessions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('sessions_user_idx').on(table.userId)],
+);
+
+/**
+ * An invitation for another member of the household (NF-3).
+ *
+ * The link carries a random token and only its hash is kept, so the table cannot
+ * be read back into a working link. It is spent by the passkey it registers, and
+ * kept afterwards to say who brought whom in.
+ */
+export const invites = pgTable('invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tokenHash: text('token_hash').notNull().unique(),
+  /** Who it is for: offered as their name, which they can change. */
+  name: text('name').notNull(),
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  usedBy: uuid('used_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+/**
+ * Things that change who can get in, and failed attempts to (NF-3).
+ *
+ * Names are copied in rather than only referenced, because the most important
+ * entries outlive the person they are about: "removed Sam" has to still say Sam.
+ */
+export const securityEvents = pgTable(
+  'security_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    kind: text('kind', {
+      enum: [
+        'passkey_added',
+        'passkey_removed',
+        'recovery_code_used',
+        'recovery_code_failed',
+        'recovery_codes_replaced',
+        'invite_created',
+        'invite_withdrawn',
+        'member_joined',
+        'member_removed',
+      ],
+    }).notNull(),
+    /** Whose way in it concerns. */
+    subjectId: uuid('subject_id').references(() => users.id, { onDelete: 'set null' }),
+    subjectName: text('subject_name'),
+    /** Who did it; null when nobody signed in did (a failed recovery code). */
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    actorName: text('actor_name'),
+    /** A device's label, or who an invitation is for. */
+    detail: text('detail'),
+    /** Where it came from, as the sign-in log describes it. */
+    source: text('source'),
+  },
+  (table) => [index('security_events_at_idx').on(table.at)],
 );
 
 // ---------------------------------------------------------------------------
@@ -422,6 +483,15 @@ export const transactions = pgTable(
     importBatchId: uuid('import_batch_id').references(() => importBatches.id),
     /** Links the two halves of an account transfer (FR-5). */
     transferPairId: uuid('transfer_pair_id'),
+    /**
+     * Who entered, imported or synced it. The audit trigger records changes,
+     * not arrivals, so this is the only place that says. Filled by the
+     * database from the transaction's `manilla.actor` (src/audit/actor.ts), so
+     * no write path has to remember it; null for rows from before it was kept.
+     * No foreign key, for the reason `audit_log.actor_id` has none.
+     */
+    createdById: uuid('created_by_id').default(sql`manilla_actor_id()`),
+    createdByName: text('created_by_name').default(sql`manilla_actor_name()`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -541,6 +611,13 @@ export const envelopeMoves = pgTable(
      * are never replayed from anywhere.
      */
     externalId: text('external_id'),
+    /**
+     * Who moved the money. Moves are only ever added - undo is another move -
+     * so the audit trail, which records changes, never sees one being made.
+     * Filled by the database, as on `transactions`.
+     */
+    createdById: uuid('created_by_id').default(sql`manilla_actor_id()`),
+    createdByName: text('created_by_name').default(sql`manilla_actor_name()`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -737,6 +814,14 @@ export const auditLog = pgTable(
     before: jsonb('before').notNull(),
     /** An update's changed columns as they became; null for a deletion. */
     after: jsonb('after'),
+    /**
+     * Who made the change (src/audit/actor.ts). No foreign key: people live in
+     * the home database and a ledger may be another, and the name is copied so
+     * the entry still says who after they have left. Both null for changes
+     * made before this was recorded, or by something that did not say.
+     */
+    actorId: uuid('actor_id'),
+    actorName: text('actor_name'),
   },
   (table) => [
     index('audit_log_transaction_idx').on(table.transactionId),

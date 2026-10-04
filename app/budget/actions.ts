@@ -17,6 +17,7 @@ import {
 } from '../../src/budget/budget.ts';
 import { assertMonth } from '../../src/budget/month.ts';
 import { requireUser } from '../auth.ts';
+import { actAs } from '../../src/audit/actor.ts';
 import { centsFromInput } from '../../src/amount.ts';
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -36,7 +37,7 @@ export async function setPlannedAction(
   month?: string,
 ): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const cents = centsFromInput(amount);
     await setPlanned(await ledgerDb(), envelopeId, cents, month ? { month: assertMonth(month) } : {});
     refreshed();
@@ -55,7 +56,7 @@ export async function fundEnvelopesAction(
   lines: { envelopeId: string; amount: string }[],
 ): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const amounts = lines
       .map((line) => ({ envelopeId: line.envelopeId, amountCents: centsFromInput(line.amount) }))
       .filter((line) => line.amountCents > 0);
@@ -83,7 +84,7 @@ export async function fundEnvelopesAction(
 
 export async function reverseAllocationAction(moveId: string, month: string): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     await reverseAllocation(await ledgerDb(), moveId);
     refreshed();
     return { ok: true, message: 'Sent back to Available.' };

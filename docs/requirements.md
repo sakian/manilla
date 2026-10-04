@@ -135,7 +135,7 @@ flowchart LR
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
 | RQ-1 | A review queue lists every pending-review transaction with the suggested envelope visible and changeable in one tap or keystroke. | M | Built |
-| RQ-2 | Confirm one, several, or many at once. | M | Built, differently. The queue stages decisions and saves in one go; bulk "confirm all high-confidence" was dropped, because [measurements.md](measurements.md) puts safe auto-confirmation at 16% of transactions. |
+| RQ-2 | Confirm one, several, or many at once. | M | Built, differently. The queue stages decisions and saves in one go; bulk "confirm all high-confidence" was dropped, because [measurements.md](measurements.md) puts safe auto-confirmation at 16% of transactions. A row someone else reviewed after the queue was opened is refused rather than saved over, and the refusal names who reviewed it ([#18](https://github.com/sakian/manilla/issues/18)). |
 | RQ-3 | Fast recategorization: envelope picker, keyboard shortcuts, and mobile-friendly tap targets. | M | Built. The picker lists every envelope under its category, with a row of categories to jump to and a box that narrows by envelope or category name; arrow keys and Enter choose. The box takes focus only where there is a keyboard. Type-ahead was dropped once in favour of the organised list alone, and came back with [#32](https://github.com/sakian/manilla/issues/32): scanning was slow for an envelope whose name you already know. |
 | RQ-4 | Pending transactions already affect the envelope balance (marked as unconfirmed), so the dashboard is accurate mid-month before review is done. | M | Built, narrowed. Only suggestions in the medium band and above are applied; below that the money stays unassigned rather than a guess moving a balance. Each envelope card shows its unreviewed share. |
 | RQ-5 | Confirmed transactions can still be edited later. A change updates rules and history. | M | Built |
@@ -228,9 +228,9 @@ model rank above features.
 | ID | Area | Requirement | Status |
 | --- | --- | --- | --- |
 | NF-1 | Money accuracy | Store amounts as integers in the currency's smallest unit, never floating point. Balances must always be reproducible from the transaction, allocation and transfer records. | Built |
-| NF-2 | Integrity | Imports and migrations are atomic: they fully apply or not at all. Edits and deletions keep an audit trail. | Built. Every writer runs in one database transaction. Updates to and deletions of transactions, envelope lines and envelope moves are recorded in `audit_log` by a trigger, in the same transaction as the change; it is in the JSON export, and there is no screen for it yet. |
-| NF-3 | Authentication | Strong sign-in: passkeys, with session timeouts. | Built. Passkeys plus single-use recovery codes; sessions lapse after 12 idle hours and end after 30 days. After five wrong recovery codes each try waits longer, up to 15 minutes, and each is logged. |
-| NF-4 | Data protection | Encrypt in transit and at rest. No bank credentials are ever stored. | Partial. TLS via the Tailscale node, and no credentials exist to store; at-rest encryption is the host's disk, not the app's. |
+| NF-2 | Integrity | Imports and migrations are atomic: they fully apply or not at all. Edits and deletions keep an audit trail. | Built. Every writer runs in one database transaction. Updates to and deletions of transactions, envelope lines and envelope moves are recorded in `audit_log` by a trigger, in the same transaction as the change; each entry names the person who made the change, carried from the signed-in session to the trigger as a transaction-local setting (or the daily bank sync, for its own changes). Transactions and envelope moves also keep who created them, filled by the database from the same setting: the trigger records changes, not arrivals, and a move is never changed, so this is what says who moved money. It is in the JSON export; a transaction's dialog shows its history, starting with who added it, and an envelope's history says who made each move. |
+| NF-3 | Authentication | Strong sign-in: passkeys, with session timeouts. | Built. Passkeys plus single-use recovery codes; sessions lapse after 12 idle hours and end after 30 days. After five wrong recovery codes each try waits longer, up to 15 minutes, and each is logged. More people join by a single-use invitation link that lapses after three days, each with their own passkeys and codes. Recovery codes are refused over Funnel. Changes to who can sign in, and recovery codes used or tried, are kept, shown as a notice to the members who did not make them, and optionally posted to a webhook. |
+| NF-4 | Data protection | Encrypt in transit and at rest. No bank credentials are ever stored. | Partial. TLS via the Tailscale node (with HSTS once it can be public through Funnel), and no credentials exist to store; at-rest encryption is the host's disk, not the app's. |
 | NF-5 | AI data minimization | Send the model only what the task needs. Settings show exactly what is sent, with an off switch. | Built. Payee text, amount, date, memo and envelope names — see the note in the README about what a bank writes into a memo. |
 | NF-6 | Data ownership | Full export of all data as CSV and JSON at any time, and a delete-everything option. | Built |
 | NF-7 | Backup and recovery | Automated daily backups with a tested restore procedure. | Built |
@@ -283,12 +283,13 @@ The schema is `db/schema.ts`, and it is the authority; this table is the summary
 
 ## Scope
 
-Version 1 is a single-household tool for one primary user.
+Version 1 is a single-household tool.
 
-**Assumptions.** One primary user — a second login is a later phase. One or more
-independent ledgers behind that sign-in (business and household books, say),
-each a separate database that shares nothing with the others; money moving
-between them is entered on both sides ([#23](https://github.com/sakian/manilla/issues/23)).
+**Assumptions.** One household, whose members each sign in as themselves and
+share everything: there are no roles. One or more independent ledgers behind
+that sign-in (business and household books, say), each a separate database that
+shares nothing with the others; money moving between them is entered on both
+sides ([#23](https://github.com/sakian/manilla/issues/23)).
 One currency. A responsive web app, usable on phone and desktop. Bank data enters
 by file import. AI features call a hosted model, so a cost and privacy control is
 required.

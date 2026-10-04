@@ -25,6 +25,9 @@ import {
   renameDevice,
 } from '../../src/auth/passkeys.ts';
 import { destroyAllSessions } from '../../src/auth/session.ts';
+import { authConfig } from '../../src/auth/config.ts';
+import { createInvite, removeMember, withdrawInvite } from '../../src/auth/invites.ts';
+import { markActivitySeen, recordActivity } from '../../src/auth/activity.ts';
 import {
   createEnvelopeRule,
   deleteRule,
@@ -37,17 +40,23 @@ import {
 import { eraseAllData } from '../../src/export/export.ts';
 import { clearAnswerCache, setAiSettings } from '../../src/ai/ai.ts';
 import { endSession, requireUser } from '../auth.ts';
+import { actAs } from '../../src/audit/actor.ts';
 import type { BeginResult, Failure } from '../login/actions.ts';
 
 function failed(error: unknown): Failure {
   return { ok: false, error: error instanceof Error ? error.message : String(error) };
 }
 
+/** The signed-in member, as the activity log names them. */
+function me(session: { userId: string; userName: string }) {
+  return { id: session.userId, name: session.userName };
+}
+
 export async function beginAddDeviceAction(): Promise<
   BeginResult<PublicKeyCredentialCreationOptionsJSON>
 > {
   try {
-    const session = await requireUser();
+    const session = actAs(await requireUser());
     const begun = await beginRegistration(homeDb(), {
       userId: session.userId,
       userName: session.userName,
@@ -64,12 +73,18 @@ export async function finishAddDeviceAction(input: {
   label: string;
 }): Promise<{ ok: true } | Failure> {
   try {
-    const session = await requireUser();
+    const session = actAs(await requireUser());
     await finishRegistration(homeDb(), {
       challengeId: input.challengeId,
       response: input.response,
       userId: session.userId,
       label: input.label,
+    });
+    await recordActivity(homeDb(), {
+      kind: 'passkey_added',
+      subject: me(session),
+      actor: me(session),
+      detail: input.label.trim() || null,
     });
     revalidatePath('/settings');
     return { ok: true };
@@ -83,7 +98,7 @@ export async function renameDeviceAction(
   label: string,
 ): Promise<{ ok: true } | Failure> {
   try {
-    const session = await requireUser();
+    const session = actAs(await requireUser());
     await renameDevice(homeDb(), session.userId, credentialId, label);
     revalidatePath('/settings');
     return { ok: true };
@@ -96,13 +111,70 @@ export async function removeDeviceAction(
   credentialId: string,
 ): Promise<{ ok: true } | Failure> {
   try {
-    const session = await requireUser();
-    await removeDevice(homeDb(), session.userId, credentialId);
+    const session = actAs(await requireUser());
+    const label = await removeDevice(homeDb(), session.userId, credentialId);
+    await recordActivity(homeDb(), {
+      kind: 'passkey_removed',
+      subject: me(session),
+      actor: me(session),
+      detail: label,
+    });
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {
     return failed(error);
   }
+}
+
+/**
+ * A link for someone joining the household. Returned once, because only its
+ * hash is kept: closing the panel without copying it means making another.
+ */
+export async function createInviteAction(
+  name: string,
+): Promise<{ ok: true; link: string; expiresAt: Date } | Failure> {
+  try {
+    const session = actAs(await requireUser());
+    const { token, expiresAt } = await createInvite(homeDb(), { createdBy: session.userId, name });
+    await recordActivity(homeDb(), { kind: 'invite_created', actor: me(session), detail: name.trim() });
+    revalidatePath('/settings');
+    return { ok: true, link: `${authConfig().origin}/login/join#${token}`, expiresAt };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function withdrawInviteAction(inviteId: string): Promise<{ ok: true } | Failure> {
+  try {
+    const session = actAs(await requireUser());
+    const forName = await withdrawInvite(homeDb(), inviteId);
+    if (forName) {
+      await recordActivity(homeDb(), { kind: 'invite_withdrawn', actor: me(session), detail: forName });
+    }
+    revalidatePath('/settings');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function removeMemberAction(userId: string): Promise<{ ok: true } | Failure> {
+  try {
+    const session = actAs(await requireUser());
+    const removed = await removeMember(homeDb(), { actingUserId: session.userId, userId });
+    await recordActivity(homeDb(), { kind: 'member_removed', subject: removed, actor: me(session) });
+    revalidatePath('/settings');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** Plain form action: the notice's "Seen" button works before any script has loaded. */
+export async function markActivitySeenAction(): Promise<void> {
+  const session = actAs(await requireUser());
+  await markActivitySeen(homeDb(), session.userId);
+  revalidatePath('/', 'layout');
 }
 
 /**
@@ -114,7 +186,7 @@ export async function updateRuleAction(
   edit: RuleEdit,
 ): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     await updateRule(connection, ruleId, edit);
     await refreshRuleSuggestionCount(connection);
@@ -130,7 +202,7 @@ export async function updateRuleAction(
 /** Take back a "no", so the payee can be suggested again. */
 export async function undismissRuleAction(contains: string): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     await undismissRuleSuggestion(connection, contains);
     await refreshRuleSuggestionCount(connection);
@@ -144,7 +216,7 @@ export async function undismissRuleAction(contains: string): Promise<{ ok: true 
 
 export async function deleteRuleAction(ruleId: string): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     await deleteRule(connection, ruleId);
     await refreshRuleSuggestionCount(connection);
@@ -165,7 +237,7 @@ export async function eraseEverythingAction(
   phrase: string,
 ): Promise<{ ok: true; removed: Record<string, number> } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     if (phrase.trim().toLowerCase() !== 'erase everything') {
       return { ok: false, error: 'Not erased: the phrase did not match.' };
     }
@@ -186,7 +258,7 @@ export async function setAiSettingsAction(update: {
   monthlyCallBudget?: number;
 }): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     // The account's, not the ledger's: one budget covers every ledger (LG-5).
     await setAiSettings(homeDb(), update);
     revalidatePath('/settings');
@@ -199,7 +271,7 @@ export async function setAiSettingsAction(update: {
 
 export async function clearAiCacheAction(): Promise<{ ok: true; removed: number } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const removed = await clearAnswerCache(await ledgerDb());
     revalidatePath('/settings');
     return { ok: true, removed };
@@ -212,8 +284,13 @@ export async function regenerateRecoveryCodesAction(): Promise<
   { ok: true; codes: string[] } | Failure
 > {
   try {
-    const session = await requireUser();
+    const session = actAs(await requireUser());
     const codes = await regenerateRecoveryCodes(homeDb(), session.userId);
+    await recordActivity(homeDb(), {
+      kind: 'recovery_codes_replaced',
+      subject: me(session),
+      actor: me(session),
+    });
     revalidatePath('/settings');
     return { ok: true, codes };
   } catch (error) {
@@ -226,7 +303,7 @@ export async function regenerateRecoveryCodesAction(): Promise<
  * them, which is why it ends at the sign-in page.
  */
 export async function signOutEverywhereAction(): Promise<void> {
-  const session = await requireUser();
+  const session = actAs(await requireUser());
   await destroyAllSessions(homeDb(), session.userId);
   await endSession();
   redirect('/login');
@@ -235,7 +312,7 @@ export async function signOutEverywhereAction(): Promise<void> {
 /** CA-2: accept one suggestion, which is the only way an envelope rule is written. */
 export async function acceptRuleAction(contains: string, envelopeId: string) {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     await createEnvelopeRule(connection, { contains, envelopeId });
     await refreshRuleSuggestionCount(connection);
@@ -250,7 +327,7 @@ export async function acceptRuleAction(contains: string, envelopeId: string) {
 /** Say no, and stop being asked about that payee. */
 export async function dismissRuleAction(contains: string) {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     await dismissRuleSuggestion(connection, contains);
     await refreshRuleSuggestionCount(connection);
@@ -271,7 +348,7 @@ export async function openLedgerAction(
   name: string,
 ): Promise<{ ok: true; name: string } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const ledger = await openLedger(homeDb(), process.env.DATABASE_URL ?? '', homeDatabase(), name);
     // The person who just opened it is about to set it up.
     await rememberLedger(ledger.key);
@@ -285,7 +362,7 @@ export async function openLedgerAction(
 /** Rename a ledger, the home one included. Its database keeps its name. */
 export async function renameLedgerAction(key: string, name: string): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     await renameLedger(homeDb(), homeDatabase(), key, name);
     revalidatePath('/', 'layout');
     return { ok: true };

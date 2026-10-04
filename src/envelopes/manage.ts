@@ -139,6 +139,8 @@ export type EnvelopeEvent =
       description: string;
       amountCents: number;
       pending: false;
+      /** Who moved it; null for moves from before that was kept. */
+      by: string | null;
     };
 
 /**
@@ -185,6 +187,7 @@ export async function envelopeHistory(
       fromEnvelopeId: envelopeMoves.fromEnvelopeId,
       fromName: source.name,
       toName: destination.name,
+      by: envelopeMoves.createdByName,
     })
     .from(envelopeMoves)
     .innerJoin(source, eq(source.id, envelopeMoves.fromEnvelopeId))
@@ -222,6 +225,7 @@ export async function envelopeHistory(
         description: row.note ?? (incoming ? `Moved in from ${other}` : `Moved out to ${other}`),
         amountCents: incoming ? Number(row.amountCents) : -Number(row.amountCents),
         pending: false,
+        by: row.by,
       };
     }),
   ];

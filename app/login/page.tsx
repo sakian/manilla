@@ -3,6 +3,12 @@ import { redirect } from 'next/navigation';
 import { homeDb } from '../../db/client.ts';
 import { authConfig, isSecureOrigin } from '../../src/auth/config.ts';
 import { setupState } from '../../src/auth/passkeys.ts';
+import {
+  RECOVERY_NEEDS_TAILNET,
+  firstSetupGate,
+  recoveryAllowed,
+  requestReach,
+} from '../../src/auth/reach.ts';
 import { currentSession } from '../auth.ts';
 import SignIn from './SignIn.tsx';
 
@@ -35,10 +41,13 @@ export default async function LoginPage(props: {
   // never again - and sent a recovery-code sign-in to `next` rather than to
   // Settings to replace the code it spent. Each of those actions navigates on the
   // client when it is ready, so the page just stays put.
-  const rerenderAfterAction = (await headers()).has('next-action');
+  const request = await headers();
+  const rerenderAfterAction = request.has('next-action');
   if (!rerenderAfterAction && (await currentSession())) redirect(safeNext(searchParams.next));
 
   const state = await setupState(homeDb());
+  // The actions refuse on their own; this only saves showing a form that cannot work.
+  const gate = state.needsSetup ? firstSetupGate(requestReach(request)) : { allowed: true as const };
 
   // A misconfigured relying party is the difference between "sign in" and "every
   // sign-in fails for no visible reason", so it is reported here rather than
@@ -61,6 +70,8 @@ export default async function LoginPage(props: {
       ) : (
         <SignIn
           needsSetup={state.needsSetup}
+          setupBlocked={gate.allowed ? null : gate.reason}
+          recoveryBlocked={recoveryAllowed(requestReach(request)) ? null : RECOVERY_NEEDS_TAILNET}
           secureOrigin={isSecureOrigin(origin)}
           origin={origin}
           next={safeNext(searchParams.next)}

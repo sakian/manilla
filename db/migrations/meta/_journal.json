@@ -106,6 +106,34 @@
       "when": 1791135778015,
       "tag": "0014_abnormal_guardsmen",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791142327085,
+      "tag": "0015_wild_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791142639124,
+      "tag": "0016_elite_kid_colt",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791142639997,
+      "tag": "0017_audit_actor",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791143889089,
+      "tag": "0018_created_by",
+      "breakpoints": true
     }
   ]
 }

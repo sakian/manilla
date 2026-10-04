@@ -15,6 +15,7 @@ import { listLedgers } from '../ledgers/registry.ts';
 import { plaidCall, plaidConfigFromEnv, type PlaidCall } from './plaidClient.ts';
 import { syncConnection, type SyncReport } from './run.ts';
 import { secretKeyFromEnv } from './secret.ts';
+import { runAs } from '../audit/actor.ts';
 
 /** Under a day, so a sync that ran at 6:05 is due again by 6:00 tomorrow. */
 const DUE_AFTER_MS = 20 * 60 * 60 * 1000;
@@ -74,7 +75,9 @@ export function startDailySync(log: (line: string) => void): void {
   }
   holder[STARTED] = true;
 
-  const check = async () => {
+  // Nobody is signed in at 3am; the audit trail says what did it instead.
+  const check = () => runAs({ id: null, name: 'Daily bank sync' }, checkAll);
+  const checkAll = async () => {
     try {
       const home = homeDb();
       for (const ledger of await listLedgers(home, databaseOf(process.env.DATABASE_URL ?? ''))) {

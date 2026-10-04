@@ -79,7 +79,9 @@ export default function History({
             <span className="muted txn-meta">
               <span className="txn-date">{displayDate(event.date)}</span>
               <span className="txn-env">
-                {event.kind === 'transaction' ? event.accountName : ''}
+                {event.kind === 'transaction'
+                  ? event.accountName
+                  : event.by && `by ${event.by}`}
                 {event.pending && ' · pending review'}
               </span>
             </span>

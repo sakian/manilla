@@ -31,6 +31,18 @@ import { localToday } from '../budget/month.ts';
 
 export class LedgerError extends Error {}
 
+/**
+ * The row was reviewed by someone else between showing it and saving it. Its
+ * own class so the review queue can say who, rather than a bare refusal.
+ */
+export class AlreadyReviewedError extends LedgerError {
+  readonly transactionId: string;
+  constructor(transactionId: string) {
+    super('This was already reviewed');
+    this.transactionId = transactionId;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
@@ -402,17 +414,21 @@ export async function moveBetweenEnvelopes(
     throw new LedgerError('Cannot move money from an envelope to itself');
   }
 
-  const [row] = await db
-    .insert(envelopeMoves)
-    .values({
-      fromEnvelopeId: input.fromEnvelopeId,
-      toEnvelopeId: input.toEnvelopeId,
-      amountCents: input.amountCents,
-      date: input.date,
-      kind: input.kind,
-      note: input.note ?? null,
-    })
-    .returning({ id: envelopeMoves.id });
+  // A transaction for one insert, because that is what tells the database who
+  // is moving the money (db/client.ts); a caller's own becomes a savepoint.
+  const [row] = await db.transaction((tx) =>
+    tx
+      .insert(envelopeMoves)
+      .values({
+        fromEnvelopeId: input.fromEnvelopeId,
+        toEnvelopeId: input.toEnvelopeId,
+        amountCents: input.amountCents,
+        date: input.date,
+        kind: input.kind,
+        note: input.note ?? null,
+      })
+      .returning({ id: envelopeMoves.id }),
+  );
 
   return row!.id;
 }
@@ -501,7 +517,15 @@ export async function setTransactionEnvelopes(
   db: Database,
   transactionId: string,
   lines: NewTransactionLine[],
-  options: { confirm?: boolean } = {},
+  options: {
+    confirm?: boolean;
+    /**
+     * Refuse unless the row is still waiting for review: the queue's answer to
+     * two people saving the same row, where the second would otherwise replace
+     * the first's decision without either of them knowing (#18).
+     */
+    onlyIfPending?: boolean;
+  } = {},
 ): Promise<void> {
   const [transaction] = await db
     .select({ amountCents: transactions.amountCents, kind: transactions.kind })
@@ -541,6 +565,16 @@ export async function setTransactionEnvelopes(
   }
 
   await db.transaction(async (tx) => {
+    if (options.onlyIfPending) {
+      // Locked, so two saves of the same row run one after the other and the
+      // second sees the first's answer rather than a status read before it.
+      const [current] = await tx
+        .select({ status: transactions.status })
+        .from(transactions)
+        .where(eq(transactions.id, transactionId))
+        .for('update');
+      if (current?.status !== 'pending_review') throw new AlreadyReviewedError(transactionId);
+    }
     await tx.delete(txnLines).where(eq(txnLines.transactionId, transactionId));
     if (lines.length > 0) {
       await tx.insert(txnLines).values(

@@ -45,9 +45,8 @@ server {
     # explicit so a large multi-year import does not fail with a confusing 413.
     client_max_body_size 25M;
 
-    # The app sets its own security headers; these cover what a proxy should own.
-    add_header X-Content-Type-Options nosniff always;
-    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    # The app sets its own security headers (src/security-headers.ts); adding
+    # them here as well would send each one twice.
 
     location / {
         # Must match the host side of the app's port mapping in docker-compose.yml
@@ -60,6 +59,11 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host  $host;
+
+        # The app reads these as facts from `tailscale serve` (src/auth/reach.ts).
+        # Here nothing vouches for them, so a client must not get to send them.
+        proxy_set_header Tailscale-User-Login     "";
+        proxy_set_header Tailscale-Funnel-Request "";
 
         # Next.js streams server-rendered responses; buffering delays them.
         proxy_buffering off;

@@ -18,6 +18,7 @@ import { Money } from './Money.tsx';
 import { DismissInsight } from './DismissInsight.tsx';
 import { displayDate } from '../src/budget/month.ts';
 import { jumpShare } from '../src/insights/insights.ts';
+import { SignInActivityNotice } from './SignInActivityNotice.tsx';
 
 const RANK = { bad: 0, warn: 1, info: 2 } as const;
 
@@ -129,8 +130,11 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
   }
 }
 
-export function Notices({ report }: { report: AttentionReport }) {
-  if (report.notices.length === 0) return null;
+export async function Notices({ report }: { report: AttentionReport }) {
+  // First, and outside the ranking: someone else's way in changing outranks
+  // anything about money.
+  const signIn = await SignInActivityNotice();
+  if (report.notices.length === 0 && !signIn) return null;
 
   const ordered = [...report.notices].sort(
     (left, right) => RANK[left.severity] - RANK[right.severity],
@@ -138,6 +142,7 @@ export function Notices({ report }: { report: AttentionReport }) {
 
   return (
     <ul className="notices">
+      {signIn}
       {ordered.map((notice) => {
         const { text, href } = describe(notice);
         const insight = notice.insight;

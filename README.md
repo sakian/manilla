@@ -13,7 +13,7 @@ by hand.
 | --- | --- |
 | Stack | TypeScript, Next.js 16, Postgres, Docker |
 | Sign-in | Passkeys (WebAuthn) with single-use recovery codes |
-| Access | Its own node on your tailnet — no port open to anything |
+| Access | Its own node on your tailnet — no port open to anything; optionally public through Tailscale Funnel |
 | Classifier | Your rules → payee history → optionally the Claude API, with an off switch |
 | Banking | File import, or a daily feed through Plaid. Canada |
 | Users | One |
@@ -66,9 +66,10 @@ credentials, not records of your money.
 
 ## Honest limitations
 
-- **One user.** The schema is keyed by row so a second login is additive, but
-  nothing is built. The first visitor to a fresh install claims it by registering a
-  passkey, so do that before it is reachable by anyone else.
+- **One household, no permissions.** Several people can sign in, each with their
+  own passkeys and recovery codes, but everyone sees and changes the same books and
+  anyone can invite or remove anyone else. The first visitor to a fresh install
+  claims it by registering a passkey, so do that before anyone else can reach it.
 - **One currency, and it is dollars.** The symbol is one constant
   (`src/money.ts`); thousands separators follow the server's locale. Nobody has
   tried it anywhere else.
@@ -83,9 +84,15 @@ credentials, not records of your money.
   each try waits longer, doubling to 15 minutes, and every wrong one is logged.
   It counts per install, not per person, so someone hammering it delays your own
   recovery too — a passkey still works.
-- **The audit trail has no screen yet** (NF-2). Every edit and deletion of a
-  transaction, envelope line or envelope move is recorded, but it is read from the
-  JSON export or the `audit_log` table, not from the app.
+- **The audit trail is shown per transaction** (NF-2). Every edit and deletion
+  of a transaction, envelope line or envelope move is recorded with who made it,
+  and each transaction and envelope move also keeps who created it - a move is
+  never edited, so that is the only record of who moved the money. A
+  transaction's history is under *History* in its dialog, ending with who added
+  it; an envelope's history says who made each fill and transfer. There is no
+  screen for every change at once - read that from the JSON export or the
+  `audit_log` table. Anything from before who was recorded says "not recorded
+  who", or nothing at all on a move.
 
 ## Documentation
 
@@ -155,14 +162,15 @@ src/
   transactions/urlQuery.ts the filters as they live in the URL, so a search is a link
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
-  auth/                 passkeys, sessions, recovery codes, RP configuration
+  auth/                 passkeys, sessions, recovery codes, invitations, who may set up
+  security-headers.ts   what the browser is told about framing, HTTPS and referrers
   categorize/
     normalize.ts        payee normalization (CA-1)
     history.ts          recency-weighted history matching (CA-3, CA-4)
     ai.ts               Claude layer for unknown merchants (CA-5, CA-8)
     pipeline.ts         rules -> history -> AI, with confidence bands (CA-7)
 spikes/                 runnable investigations; see docs/measurements.md
-deploy/                 the Tailscale serve config, and an Nginx example as a fallback
+deploy/                 Tailscale serve configs (tailnet; tailnet plus Funnel), an Nginx fallback
 docs/                   requirements, design decisions, measurements
 data/samples/           synthetic fixtures, safe to commit
 data/private/           your real exports - gitignored
@@ -185,7 +193,8 @@ fails with nothing useful on screen.
 
 The first visit asks you to create a passkey, and shows ten recovery codes once.
 Save them: they are stored hashed, and they are the only way in if the device
-holding your passkey is lost. More devices can be added from Settings.
+holding your passkey is lost. More devices can be added from Settings, and more
+people from **Settings → People**.
 
 ```bash
 npm test                         # no network, no spend
@@ -262,7 +271,11 @@ Then open `https://manilla.your-tailnet.ts.net` from any device on the tailnet,
 **and register your passkey straight away.** Until the first passkey exists, the
 install belongs to whoever registers one, and anyone on your tailnet can reach it.
 Bring it up when nobody else could beat you to it, or with the node shared with
-nobody yet.
+nobody yet. In production only a signed-in tailnet user can register that first
+passkey — never a visitor over Funnel, and never a tagged device — so an empty
+database is not up for grabs from the internet. Behind Nginx there is no tailnet
+identity to check: set `MANILLA_ALLOW_SETUP=1` until the passkey exists, then
+remove it.
 
 **Your existing passkey will not work there.** A passkey is bound to an exact
 host, so moving off `manilla.lan` invalidates it — which is the intended
@@ -295,6 +308,58 @@ screen and the nightly backup log does too.
 for the whole machine, a reverse proxy in front of several services, and a
 systemd timer to re-run `tailscale cert` every 90 days. The sidecar exists so none
 of that is needed for this one service.
+
+### Reaching it without Tailscale
+
+Tailscale Funnel puts the same node on the public internet, at the same
+`manilla.<your-tailnet>.ts.net` address, so someone in the household can use
+Manilla from a phone browser without installing anything. Because the hostname
+does not change, every registered passkey keeps working. TLS still ends on your
+node; Tailscale's relay carries traffic it cannot read.
+
+```bash
+# 1. In the tailnet policy (admin console, Access controls), allow Funnel for
+#    this node - by its tag, or by your user if it is not tagged:
+#      "nodeAttrs": [{ "target": ["tag:manilla"], "attr": ["funnel"] }]
+
+# 2. In .env:
+#    MANILLA_SERVE_CONFIG=tailscale-serve-funnel.json
+
+# 3. Restart the sidecar with the new serve config.
+docker compose up -d
+```
+
+Turning it off again is removing that line and running `docker compose up -d`.
+
+What changes once it is public:
+
+- **Anyone can load the sign-in page**, and the name is in public certificate
+  logs already. Everything past it needs a session, and passkeys cannot be
+  guessed.
+- **Recovery codes only work from the tailnet.** Over Funnel the sign-in page
+  says so and the action refuses, so the internet has nothing to guess at;
+  someone who has lost their device recovers from home or over Tailscale.
+- **The first passkey cannot be registered over Funnel**, so an install with an
+  empty database is not claimable from outside.
+- **Sign-in logs name a Funnel visitor by address**, marked "over Funnel", where
+  a tailnet user is named by their login.
+- **The health check is not there.** `/api/health` answers Docker and the
+  tailnet; over Funnel it is a 404, so whether the books balance is nobody
+  else's business.
+
+Everything that changes who can sign in — a passkey added or removed, a recovery
+code used or tried, someone invited, joining or removed — is listed under
+**Settings → Sign-in activity**, and shown as a notice to every member who did not
+do it until they press *Seen*. Set `MANILLA_ALERT_URL` (see `.env.example`) to
+have each one sent to your phone through ntfy as it happens.
+
+To bring someone else in, open **Settings → People**, type their name and send
+them the link it makes. It works once, for three days, and can be withdrawn; on
+their phone it asks for a passkey, gives them recovery codes of their own, and
+signs them in. Then the browser's *Add to Home screen* makes it open like an app.
+The token is in the link's `#` part, which a browser never sends, so it does not
+end up in a request log. Anyone holding the link can join, so send it somewhere
+private.
 
 ### Where your own configuration lives
 

@@ -40,7 +40,7 @@ type Mode = 'passkey' | 'recovery';
  *  - "not a registrable domain suffix" means the hostname itself cannot be a
  *    passkey domain, which is a different fix: a different hostname.
  */
-function readableError(error: unknown): string {
+export function readableError(error: unknown): string {
   const name = error instanceof Error ? error.name : '';
   const message = error instanceof Error ? error.message : String(error);
 
@@ -74,18 +74,24 @@ function readableError(error: unknown): string {
  * This is the one screen reached without a session, so it is also the only place
  * the logo has to be served to a stranger - see the public files in proxy.ts.
  */
-function SignInMark() {
+export function SignInMark() {
   // eslint-disable-next-line @next/next/no-img-element
   return <img className="signin-mark" src="/logo.png" alt="" width={44} height={44} />;
 }
 
 export default function SignIn({
   needsSetup,
+  setupBlocked,
+  recoveryBlocked,
   secureOrigin,
   origin,
   next,
 }: {
   needsSetup: boolean;
+  /** Why this request may not register the first passkey, or null if it may. */
+  setupBlocked: string | null;
+  /** Why a recovery code cannot be used from here, or null if it can. */
+  recoveryBlocked: string | null;
   secureOrigin: boolean;
   origin: string;
   next: string;
@@ -277,6 +283,18 @@ export default function SignIn({
     );
   }
 
+  // Said before any form is drawn: a name box that could only ever fail would
+  // invite someone to keep trying.
+  if (needsSetup && setupBlocked) {
+    return (
+      <div className="signin">
+        <SignInMark />
+        <h2>Not set up yet</h2>
+        <p className="muted">{setupBlocked}</p>
+      </div>
+    );
+  }
+
   if (needsSetup) {
     return (
       <div className="signin">
@@ -306,14 +324,28 @@ export default function SignIn({
     );
   }
 
+  // The action refuses on its own; this says so before a code is typed.
+  if (mode === 'recovery' && recoveryBlocked) {
+    return (
+      <div className="signin">
+        <SignInMark />
+        <h2>Use a recovery code</h2>
+        <p className="muted">{recoveryBlocked}</p>
+        <div className="signin-actions">
+          <button onClick={() => setMode('passkey')}>Back</button>
+        </div>
+      </div>
+    );
+  }
+
   if (mode === 'recovery') {
     return (
       <div className="signin">
         <SignInMark />
         <h2>Use a recovery code</h2>
         <p className="muted">
-          One of the codes from setup. Each works once, and signing in this way takes you straight to
-          Settings so you can register a new passkey.
+          One of the codes you saved when you set up or joined. Each works once, and signing in this
+          way takes you straight to Settings so you can register a new passkey.
         </p>
         <label className="field">
           <span>Recovery code</span>
