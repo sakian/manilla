@@ -80,6 +80,11 @@ the audit trail can say who made the change (`src/audit/actor.ts`;
 request, like the daily bank sync, runs inside `runAs(...)` instead. The only
 exceptions are in `app/login/actions.ts`, and each says why it is safe to be public.
 
+The name reaches the audit trigger only through `db.transaction(...)`, which sets
+it for that transaction (`db/client.ts`). An update or delete on `transactions`,
+`txn_lines` or `envelope_moves` made outside one is still logged, but with nobody's
+name on it — so those writes go through `tx`, even when there is only one.
+
 **Never commit real financial data.** `data/private/`, `.env`, `certs/` and
 `backups/` are gitignored and stay that way. Fixtures in `data/samples/` are
 synthetic. Account numbers, balances and anybody's name do not belong in a commit,
