@@ -17,7 +17,8 @@ import { syncConnection, type SyncReport } from './run.ts';
 import { secretKeyFromEnv } from './secret.ts';
 import { runAs } from '../audit/actor.ts';
 import { pendingCount } from '../queue/queue.ts';
-import { sendSyncNotice, syncNotice, type SyncOutcome } from './notice.ts';
+import { newlyOverdrawn, sendSyncNotice, syncNotice, type LedgerAfterSync, type SyncOutcome } from './notice.ts';
+import { listEnvelopes } from '../envelopes/manage.ts';
 
 /** Under a day, so a sync that ran at 6:05 is due again by 6:00 tomorrow. */
 const DUE_AFTER_MS = 20 * 60 * 60 * 1000;
@@ -82,7 +83,7 @@ export function startDailySync(log: (line: string) => void): void {
   const checkAll = async () => {
     const notifyUrl = process.env.MANILLA_SYNC_NOTIFY_URL;
     const outcomes: SyncOutcome[] = [];
-    const waiting = new Map<string, number>();
+    const after = new Map<string, LedgerAfterSync>();
     let ledgerCount = 0;
     try {
       const home = homeDb();
@@ -90,6 +91,9 @@ export function startDailySync(log: (line: string) => void): void {
       ledgerCount = ledgers.length;
       for (const ledger of ledgers) {
         const db = connectionFor(ledger.database);
+        // A look before the sync, so afterwards it can say which envelopes the
+        // sync itself took below zero rather than every one that is.
+        const before = notifyUrl ? await listEnvelopes(db) : [];
         const reports = await syncDue(db, { ...deps, account: home });
         for (const report of reports) {
           const added = report.accounts.reduce((sum, account) => sum + account.added, 0);
@@ -111,7 +115,12 @@ export function startDailySync(log: (line: string) => void): void {
                   (notReady > 0 ? `, ${notReady} accounts not ready at Plaid yet` : ''),
           );
         }
-        if (notifyUrl && reports.length > 0) waiting.set(ledger.name, await pendingCount(db));
+        if (notifyUrl && reports.length > 0) {
+          after.set(ledger.name, {
+            waiting: await pendingCount(db),
+            overdrawn: newlyOverdrawn(before, await listEnvelopes(db)),
+          });
+        }
       }
     } catch (error) {
       // One bad hour is logged and the next one tries again; it must not take
@@ -119,7 +128,7 @@ export function startDailySync(log: (line: string) => void): void {
       log(`bank sync failed: ${error instanceof Error ? error.message : String(error)}`);
     }
     // Whatever was synced before a failure is still worth saying.
-    const notice = notifyUrl ? syncNotice(outcomes, waiting, { manyLedgers: ledgerCount > 1 }) : null;
+    const notice = notifyUrl ? syncNotice(outcomes, after, { manyLedgers: ledgerCount > 1 }) : null;
     if (notice) await sendSyncNotice(notifyUrl!, notice, process.env.MANILLA_ORIGIN);
   };
 
