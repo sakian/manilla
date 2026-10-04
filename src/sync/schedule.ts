@@ -7,7 +7,7 @@
  * down is tried again tomorrow, not every hour.
  */
 
-import { and, isNotNull, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, ne, or } from 'drizzle-orm';
 import { connectionFor, homeDb, type Database } from '../../db/client.ts';
 import { bankConnections } from '../../db/schema.ts';
 import { databaseOf } from '../ledgers/config.ts';
@@ -16,6 +16,8 @@ import { plaidCall, plaidConfigFromEnv, type PlaidCall } from './plaidClient.ts'
 import { syncConnection, type SyncReport } from './run.ts';
 import { secretKeyFromEnv } from './secret.ts';
 import { runAs } from '../audit/actor.ts';
+import { pendingCount } from '../queue/queue.ts';
+import { sendSyncNotice, syncNotice, type SyncOutcome } from './notice.ts';
 
 /** Under a day, so a sync that ran at 6:05 is due again by 6:00 tomorrow. */
 const DUE_AFTER_MS = 20 * 60 * 60 * 1000;
@@ -78,30 +80,59 @@ export function startDailySync(log: (line: string) => void): void {
   // Nobody is signed in at 3am; the audit trail says what did it instead.
   const check = () => runAs({ id: null, name: 'Daily bank sync' }, checkAll);
   const checkAll = async () => {
+    const notifyUrl = process.env.MANILLA_SYNC_NOTIFY_URL;
+    const outcomes: SyncOutcome[] = [];
+    const waiting = new Map<string, number>();
+    let ledgerCount = 0;
     try {
       const home = homeDb();
-      for (const ledger of await listLedgers(home, databaseOf(process.env.DATABASE_URL ?? ''))) {
+      const ledgers = await listLedgers(home, databaseOf(process.env.DATABASE_URL ?? ''));
+      ledgerCount = ledgers.length;
+      for (const ledger of ledgers) {
         const db = connectionFor(ledger.database);
-        for (const report of await syncDue(db, { ...deps, account: home })) {
+        const reports = await syncDue(db, { ...deps, account: home });
+        for (const report of reports) {
           const added = report.accounts.reduce((sum, account) => sum + account.added, 0);
           const held = report.accounts.reduce((sum, account) => sum + account.held, 0);
-          const waiting = report.accounts.filter((account) => account.notReady).length;
+          if (notifyUrl) {
+            outcomes.push({
+              ledger: ledger.name,
+              bank: await bankName(db, report.connectionId),
+              added,
+              held,
+              ...(report.error ? { error: report.error.code } : {}),
+            });
+          }
+          const notReady = report.accounts.filter((account) => account.notReady).length;
           log(
             report.error
               ? `bank sync in ${ledger.name} stopped: ${report.error.code}`
               : `bank sync in ${ledger.name}: ${added} added, ${held} held for you` +
-                  (waiting > 0 ? `, ${waiting} accounts not ready at Plaid yet` : ''),
+                  (notReady > 0 ? `, ${notReady} accounts not ready at Plaid yet` : ''),
           );
         }
+        if (notifyUrl && reports.length > 0) waiting.set(ledger.name, await pendingCount(db));
       }
     } catch (error) {
       // One bad hour is logged and the next one tries again; it must not take
       // the server down with it.
       log(`bank sync failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+    // Whatever was synced before a failure is still worth saying.
+    const notice = notifyUrl ? syncNotice(outcomes, waiting, { manyLedgers: ledgerCount > 1 }) : null;
+    if (notice) await sendSyncNotice(notifyUrl!, notice, process.env.MANILLA_ORIGIN);
   };
 
   setTimeout(check, 60_000).unref();
   setInterval(check, CHECK_EVERY_MS).unref();
   log('bank feeds sync daily');
+}
+
+/** What a person calls the bank: Plaid's institution name, when it gave one. */
+async function bankName(db: Database, connectionId: string): Promise<string> {
+  const [row] = await db
+    .select({ name: bankConnections.institutionName })
+    .from(bankConnections)
+    .where(eq(bankConnections.id, connectionId));
+  return row?.name ?? 'Your bank';
 }

@@ -35,7 +35,9 @@ a transaction a file already brought in is linked rather than doubled, and anyth
 a person would have had to decide is held for one rather than guessed. You sign in
 to your bank in Plaid's window; Manilla keeps only an encrypted token that
 Disconnect revokes. Each install brings its own Plaid keys, and Plaid's free plan
-covers a household.
+covers a household. Set `MANILLA_SYNC_NOTIFY_URL` to an ntfy topic and the nightly
+sync says so on your phone when something came in, or when a bank wants you to
+sign in again — bank names and counts only, and nothing on a quiet night.
 
 **Categorization proposes; you confirm.** Rules fire first, then recency-weighted
 payee history, then — if you leave it on — a model, only for what the free layers

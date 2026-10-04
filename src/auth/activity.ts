@@ -15,6 +15,7 @@
 import { and, desc, eq, gt, inArray, ne, or, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import { securityEvents, users } from '../../db/schema.ts';
+import { push } from '../notify.ts';
 
 export type ActivityKind = NonNullable<(typeof securityEvents.$inferInsert)['kind']>;
 
@@ -70,24 +71,9 @@ export async function recordActivity(
     .returning();
 
   const url = options.alertUrl ?? process.env.MANILLA_ALERT_URL;
-  if (url && options.alert !== false) void sendAlert(url, `Manilla: ${describeActivity(row!)}`);
-}
-
-/**
- * POST the line as plain text, which is what ntfy takes as a notification
- * body. Names and nothing else: no amounts, no addresses.
- */
-async function sendAlert(url: string, text: string): Promise<void> {
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      body: text,
-      headers: { 'content-type': 'text/plain; charset=utf-8', title: 'Manilla sign-in' },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!response.ok) console.warn(`[manilla] the alert webhook answered ${response.status}`);
-  } catch (error) {
-    console.warn(`[manilla] the alert webhook could not be reached: ${String(error)}`);
+  // Names and nothing else: no amounts, no addresses.
+  if (url && options.alert !== false) {
+    void push(url, `Manilla: ${describeActivity(row!)}`, { title: 'Manilla sign-in' });
   }
 }
 

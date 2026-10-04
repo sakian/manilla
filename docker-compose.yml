@@ -123,6 +123,8 @@ services:
       MANILLA_ALLOW_SETUP: ${MANILLA_ALLOW_SETUP:-}
       # Where sign-in activity is posted as it happens, e.g. an ntfy topic.
       MANILLA_ALERT_URL: ${MANILLA_ALERT_URL:-}
+      # The nightly bank sync's news, on a topic of its own.
+      MANILLA_SYNC_NOTIFY_URL: ${MANILLA_SYNC_NOTIFY_URL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Bank feeds (FR-15 to FR-20). Empty means off: the Bank feeds panel says
       # which are missing and nothing is fetched. PLAID_ENV defaults to the
