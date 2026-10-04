@@ -90,7 +90,8 @@ const PAGINATION_RESTARTS = 3;
 
 /**
  * Every change since `cursor`, all pages of it. Without a cursor, the whole
- * history Plaid holds.
+ * history Plaid holds. With `accountId`, that account's alone, under a cursor
+ * of its own.
  *
  * If Plaid's data changes between pages it refuses the next one, and the whole
  * update has to be fetched again from the first page's cursor - keeping the
@@ -100,10 +101,11 @@ export async function syncTransactions(
   call: PlaidCall,
   accessToken: string,
   cursor?: string,
+  options: { accountId?: string } = {},
 ): Promise<SyncResult> {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await syncPages(call, accessToken, cursor);
+      return await syncPages(call, accessToken, cursor, options.accountId);
     } catch (error) {
       const changedUnderneath =
         error instanceof PlaidApiError && error.code === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION';
@@ -112,7 +114,12 @@ export async function syncTransactions(
   }
 }
 
-async function syncPages(call: PlaidCall, accessToken: string, start?: string): Promise<SyncResult> {
+async function syncPages(
+  call: PlaidCall,
+  accessToken: string,
+  start: string | undefined,
+  accountId: string | undefined,
+): Promise<SyncResult> {
   const result: SyncResult = { added: [], modified: [], removed: [], accounts: [], cursor: start ?? '' };
   let cursor = start;
   for (;;) {
@@ -121,7 +128,7 @@ async function syncPages(call: PlaidCall, accessToken: string, start?: string): 
         access_token: accessToken,
         ...(cursor ? { cursor } : {}),
         count: 500,
-        options: { include_original_description: true },
+        options: { include_original_description: true, ...(accountId ? { account_id: accountId } : {}) },
       }),
     );
     result.added.push(...page.added);
