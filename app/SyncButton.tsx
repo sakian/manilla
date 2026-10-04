@@ -57,7 +57,7 @@ export function SyncButton() {
 
   if (result?.settings) {
     return (
-      <Link href="/settings#bank-feeds" className="button-link sync-button" title={result.detail} role="status">
+      <Link href="/settings/ledgers#bank-feeds" className="button-link sync-button" title={result.detail} role="status">
         {result.label}
       </Link>
     );

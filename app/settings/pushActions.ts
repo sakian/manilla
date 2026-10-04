@@ -41,7 +41,7 @@ export async function turnOnNotificationsAction(subscription: unknown): Promise<
     // not the token itself, which is as good as the subscription.
     const url = new URL(checked.endpoint);
     console.log(`[manilla] notifications on for ${label}, through ${url.host}${url.pathname.replace(/[^/]+$/, '…')}`);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -53,7 +53,7 @@ export async function removeNotificationDeviceAction(id: string): Promise<Result
   try {
     const session = actAs(await requireUser());
     await removeDevice(homeDb(), session.userId, id);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -64,7 +64,7 @@ export async function setNotificationKindsAction(id: string, kinds: Partial<Push
   try {
     const session = actAs(await requireUser());
     await setDeviceKinds(homeDb(), session.userId, id, kinds);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -80,7 +80,7 @@ export async function sendTestNotificationAction(endpoint: string): Promise<Resu
   try {
     const session = actAs(await requireUser());
     const result = await testDevice(homeDb(), session.userId, endpoint);
-    if (!result.ok) revalidatePath('/settings');
+    if (!result.ok) revalidatePath('/settings', 'layout');
     return result;
   } catch (error) {
     return failed(error);

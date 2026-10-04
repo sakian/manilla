@@ -79,7 +79,7 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
     case 'rules_to_suggest':
       return {
         text: `${count} rule${count === 1 ? '' : 's'} Manilla could write for you`,
-        href: '/settings#rules',
+        href: '/settings/sorting#rules',
       };
     case 'bank_login_needed':
       return {
@@ -87,7 +87,7 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
           count > 1
             ? `${count} banks want you to sign in again`
             : `${notice.institution ?? 'Your bank'} wants you to sign in again`,
-        href: '/settings#bank-feeds',
+        href: '/settings/ledgers#bank-feeds',
       };
     case 'sync_held':
       return {

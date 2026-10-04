@@ -218,7 +218,7 @@ export default function SignIn({
         setError(finished.error);
         return;
       }
-      router.replace('/settings');
+      router.replace('/settings/you');
       router.refresh();
     });
   }, [code, router]);

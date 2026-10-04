@@ -68,7 +68,7 @@ export async function markAsTransferAction(
 
     revalidatePath('/review');
     revalidatePath('/accounts');
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     revalidatePath('/');
     return { ok: true as const, ruleMade };
   } catch (error) {

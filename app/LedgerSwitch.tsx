@@ -42,7 +42,7 @@ export default function LedgerSwitch({ ledgers, current }: { ledgers: Ledger[]; 
           </button>
         ))}
         {ledgers.length < MAX_LEDGERS && (
-          <Link href="/settings#ledgers" className="ledger-menu-new">
+          <Link href="/settings/ledgers#ledgers" className="ledger-menu-new">
             New ledger…
           </Link>
         )}

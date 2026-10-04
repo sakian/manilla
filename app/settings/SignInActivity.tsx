@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { describeActivity, type Activity } from '../../src/auth/activity.ts';
 import { displayInstant } from '../../src/budget/month.ts';
 
@@ -27,7 +28,8 @@ export default function SignInActivity({ events }: { events: Activity[] }) {
       <p className="muted footnote">
         Passkeys added and removed, recovery codes used or tried, and people invited, joining or
         removed. Signing in with a passkey is not listed: that is what is supposed to happen.
-        {' '}Turn on Notifications, above, to have each sent to your phone as it happens.
+        {' '}Turn on Sign-in activity in your <Link href="/settings/you">notifications</Link> to have each
+        sent to your phone as it happens.
         {process.env.MANILLA_ALERT_URL && ' Each is also sent to the alert webhook.'}
       </p>
     </section>

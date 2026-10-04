@@ -86,7 +86,7 @@ export async function recordActivity(
     {
       title: 'Manilla sign-in',
       body: describeActivity(row!),
-      path: '/settings',
+      path: '/settings/household',
       urgent: ALWAYS_SHOWN.includes(row!.kind),
     },
   );

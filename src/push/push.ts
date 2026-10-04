@@ -334,7 +334,7 @@ export async function testDevice(
   if (!row) {
     return { ok: false, forgotten: true, error: 'Manilla no longer has this device on its list. Turn notifications on again.' };
   }
-  const { payload, subject } = prepare('test', { title: 'Manilla', body: 'Notifications are working on this device.', path: '/settings' }, options);
+  const { payload, subject } = prepare('test', { title: 'Manilla', body: 'Notifications are working on this device.', path: '/settings/you' }, options);
   const result = await deliver(
     { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
     payload,
