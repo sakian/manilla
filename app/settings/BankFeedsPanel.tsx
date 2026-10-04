@@ -59,7 +59,10 @@ export type BankConnectionView = {
     id: string;
     name: string;
     mask: string | null;
-    accountId: string | null;
+    /** What the picker shows: `ledger:account`, or empty when it is not brought in. */
+    choice: string;
+    /** The other ledger it feeds, when it is not the open one. */
+    elsewhere: string | null;
     startDate: string | null;
     /** Holdings, not transactions: Plaid's sync does not cover them. */
     investment: boolean;
@@ -78,11 +81,16 @@ function ago(iso: string | null): string {
 
 export default function BankFeedsPanel({
   connections,
-  accounts,
+  ledgers,
   missing,
 }: {
   connections: BankConnectionView[];
-  accounts: { id: string; name: string }[];
+  /**
+   * Every ledger's accounts, the open one first. One bank login can hold
+   * accounts that belong in different ledgers - personal and business - so
+   * any of them can be chosen.
+   */
+  ledgers: { key: string; name: string; accounts: { id: string; name: string }[] }[];
   /** Settings that have to be in .env before a bank can be connected. */
   missing: string[];
 }) {
@@ -145,11 +153,11 @@ export default function BankFeedsPanel({
   );
 
   const setAccount = useCallback(
-    (feedId: string, accountId: string) => {
+    (feedId: string, choice: string) => {
       setError(null);
       setNote(null);
       startTransition(async () => {
-        const result = await setFeedAccountAction(feedId, accountId || null);
+        const result = await setFeedAccountAction(feedId, choice);
         if (!result.ok) setError(result.error);
         router.refresh();
       });
@@ -189,8 +197,8 @@ export default function BankFeedsPanel({
       const name = connection.institutionName ?? 'this bank';
       if (
         !window.confirm(
-          `Disconnect ${name}? Plaid forgets the login and nothing more comes in from it. ` +
-            'What it already brought in stays.',
+          `Disconnect ${name}? Plaid forgets the login and nothing more comes in from it, ` +
+            'in any ledger. What it already brought in stays.',
         )
       ) {
         return;
@@ -273,10 +281,11 @@ export default function BankFeedsPanel({
                 <span>
                   {feed.name}
                   {feed.mask && <span className="muted"> ··{feed.mask}</span>}
-                  {feed.accountId && (
+                  {feed.choice && (
                     <span className="muted">
                       {' '}
                       · {feed.startDate ? `from ${displayDate(feed.startDate)}` : 'its whole history'}
+                      {feed.elsewhere && `, in ${feed.elsewhere}`}
                     </span>
                   )}
                 </span>
@@ -284,16 +293,26 @@ export default function BankFeedsPanel({
                   <span className="muted">investments come later</span>
                 ) : (
                   <select
-                    value={feed.accountId ?? ''}
+                    value={feed.choice}
                     onChange={(event) => setAccount(feed.id, event.target.value)}
                     disabled={pending}
                   >
                     <option value="">Not brought in</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
+                    {ledgers.length === 1
+                      ? ledgers[0]!.accounts.map((account) => (
+                          <option key={account.id} value={`${ledgers[0]!.key}:${account.id}`}>
+                            {account.name}
+                          </option>
+                        ))
+                      : ledgers.map((ledger) => (
+                          <optgroup key={ledger.key} label={ledger.name}>
+                            {ledger.accounts.map((account) => (
+                              <option key={account.id} value={`${ledger.key}:${account.id}`}>
+                                {account.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
                   </select>
                 )}
               </label>
