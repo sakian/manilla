@@ -798,6 +798,14 @@ export const auditLog = pgTable(
     before: jsonb('before').notNull(),
     /** An update's changed columns as they became; null for a deletion. */
     after: jsonb('after'),
+    /**
+     * Who made the change (src/audit/actor.ts). No foreign key: people live in
+     * the home database and a ledger may be another, and the name is copied so
+     * the entry still says who after they have left. Both null for changes
+     * made before this was recorded, or by something that did not say.
+     */
+    actorId: uuid('actor_id'),
+    actorName: text('actor_name'),
   },
   (table) => [
     index('audit_log_transaction_idx').on(table.transactionId),

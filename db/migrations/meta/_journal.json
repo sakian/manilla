@@ -113,6 +113,20 @@
       "when": 1791142327085,
       "tag": "0015_wild_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791142639124,
+      "tag": "0016_elite_kid_colt",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791142639997,
+      "tag": "0017_audit_actor",
+      "breakpoints": true
     }
   ]
 }
