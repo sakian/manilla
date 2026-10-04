@@ -856,24 +856,47 @@ input[type='file'] {
   flex: 1 1 220px;
 }
 
-/* What each device hears about, beside it; wraps under its name on a phone. */
+/* A device's name and button, then what it hears about, one switch to a line
+   with what each one covers under its name. */
+.notify-device + .notify-device {
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+
+/* Name and date on the left, the button kept to the right even on a phone. */
+.notify-head {
+  align-items: center;
+}
+
+.notify-added {
+  display: block;
+  font-size: 13px;
+}
+
 .notify-kinds {
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  display: grid;
+  gap: 10px;
+  padding: 4px 0 10px 12px;
 }
 
 .notify-kinds label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
   cursor: pointer;
 }
 
 .notify-kinds input {
   width: 18px;
   height: 18px;
-  margin: 0;
+  margin: 1px 0 0;
+  flex: none;
+}
+
+.notify-kinds .muted {
+  display: block;
+  font-size: 13px;
 }
 
 /* While a sync or a sign-in is under way: said beside the bank it is for,

@@ -23,12 +23,12 @@ import type { PushDevice, PushKind, PushKinds } from '../../src/push/push.ts';
 type Device = PushDevice;
 
 /** In the order a person meets them: the sync, what it found, then what is wrong. */
-const SWITCHES: [PushKind, string][] = [
-  ['sync', 'Bank sync'],
-  ['overspent', 'Overspent envelopes'],
-  ['unusual', 'Unusual charges'],
-  ['problems', 'Problems'],
-  ['signin', 'Sign-in activity'],
+const SWITCHES: [PushKind, string, string][] = [
+  ['sync', 'Bank sync', 'What came in each night, income to give to envelopes, and a bank that wants you to sign in again'],
+  ['overspent', 'Overspent envelopes', 'Envelopes the sync took below zero'],
+  ['unusual', 'Unusual charges', 'A regular charge well above its usual, or a large first charge from a new payee'],
+  ['problems', 'Problems', 'A ledger that no longer adds up, or the server’s disk filling'],
+  ['signin', 'Sign-in activity', 'Someone adding a passkey, using a recovery code, or joining'],
 ];
 
 /** What this browser can do, once it has been asked. */
@@ -194,16 +194,8 @@ export default function NotificationsPanel({
       {note && <p className="queue-note">{note}</p>}
 
       <p className="muted">
-        {here
-          ? 'On for this device. '
-          : support === 'ready'
-            ? 'Off for this device. '
-            : ''}
-        <strong>Bank sync</strong> is what came in each night, income to give to envelopes, and a bank
-        that wants you to sign in again. <strong>Overspent envelopes</strong> and{' '}
-        <strong>unusual charges</strong> are what the sync caused. <strong>Problems</strong> are a
-        ledger that no longer adds up, or the server&rsquo;s disk filling.
-        {manyLedgers && ' These cover every ledger, whichever one is open, and say which each is about.'}{' '}
+        {here ? 'On for this device. ' : support === 'ready' ? 'Off for this device. ' : ''}
+        {manyLedgers && 'These cover every ledger, whichever one is open. '}
         Names and counts, never amounts or payees.
       </p>
 
@@ -221,15 +213,29 @@ export default function NotificationsPanel({
         </p>
       )}
 
-      {devices.map((device) => (
-        <div key={device.id} className="row device-row notify-row">
-          <span>
-            {device.label}
-            {device.id === here?.id && <span className="tag">this device</span>}
-            <span className="muted"> · added {displayInstant(device.createdAt)}</span>
-          </span>
-          <span className="device-actions notify-kinds">
-            {SWITCHES.map(([kind, label]) => (
+      {/* The one in your hand first: it is the one you came here about. */}
+      {[...devices].sort((left, right) => Number(right.id === here?.id) - Number(left.id === here?.id)).map((device) => (
+        <div key={device.id} className="notify-device">
+          <div className="row notify-head">
+            <span>
+              {device.label}
+              {device.id === here?.id && <span className="tag">this device</span>}
+              <span className="muted notify-added">added {displayInstant(device.createdAt)}</span>
+            </span>
+            <span className="device-actions">
+              {device.id === here?.id ? (
+                <button onClick={test} disabled={pending}>
+                  Send a test
+                </button>
+              ) : (
+                <button onClick={() => remove(device)} disabled={pending}>
+                  Remove
+                </button>
+              )}
+            </span>
+          </div>
+          <div className="notify-kinds">
+            {SWITCHES.map(([kind, label, hint]) => (
               <label key={kind}>
                 <input
                   type="checkbox"
@@ -237,19 +243,13 @@ export default function NotificationsPanel({
                   disabled={pending}
                   onChange={(event) => choose(device, { [kind]: event.target.checked })}
                 />
-                {label}
+                <span>
+                  {label}
+                  <span className="muted">{hint}</span>
+                </span>
               </label>
             ))}
-            {device.id === here?.id ? (
-              <button onClick={test} disabled={pending}>
-                Send a test
-              </button>
-            ) : (
-              <button onClick={() => remove(device)} disabled={pending}>
-                Remove
-              </button>
-            )}
-          </span>
+          </div>
         </div>
       ))}
     </section>
