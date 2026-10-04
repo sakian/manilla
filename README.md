@@ -15,7 +15,7 @@ by hand.
 | Sign-in | Passkeys (WebAuthn) with single-use recovery codes |
 | Access | Its own node on your tailnet — no port open to anything |
 | Classifier | Your rules → payee history → optionally the Claude API, with an off switch |
-| Banking | File import. Canada; an aggregator feed planned, not built |
+| Banking | File import, or a daily feed through Plaid. Canada |
 | Users | One |
 
 ## What it does
@@ -28,6 +28,14 @@ every write. A discrepancy is shown, not swallowed.
 transaction ID, look-alikes are flagged rather than dropped, something you typed
 in before the bank had it is linked rather than counted twice, a stated closing
 balance is checked against the result, and a whole import can be undone.
+
+**A bank feed is an import nobody watches.** Through Plaid, once a day: posted
+transactions take the same path as a statement's rows and wait in the same queue,
+a transaction a file already brought in is linked rather than doubled, and anything
+a person would have had to decide is held for one rather than guessed. You sign in
+to your bank in Plaid's window; Manilla keeps only an encrypted token that
+Disconnect revokes. Each install brings its own Plaid keys, and Plaid's free plan
+covers a household.
 
 **Categorization proposes; you confirm.** Rules fire first, then recency-weighted
 payee history, then — if you leave it on — a model, only for what the free layers
@@ -64,9 +72,9 @@ credentials, not records of your money.
 - **One currency, and it is dollars.** The symbol is one constant
   (`src/money.ts`); thousands separators follow the server's locale. Nobody has
   tried it anywhere else.
-- **Canada-shaped.** OFX/QFX only for now, and the case for an interim
-  aggregator, and for which one, is specifically about Canadian banking. See
-  [docs/measurements.md](docs/measurements.md).
+- **Canada-shaped.** OFX/QFX files, or Plaid, and the case for using an
+  aggregator before open banking arrives, and for which one, is specifically about
+  Canadian banking. See [docs/measurements.md](docs/measurements.md).
 - **Automatic categorization tops out around 72%** of transactions accepted
   unchanged, because 68% of transactions happen at merchants used for more than one
   envelope. This was measured, not guessed, and it is why the review queue matters

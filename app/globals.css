@@ -794,6 +794,51 @@ input[type='file'] {
   flex: 1 1 220px;
 }
 
+/* One bank login, then the accounts it can see. */
+.bank-connection {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+/* The name takes what is left and wraps; the choice keeps its column, so a
+   long account name does not push its picker onto a line of its own. */
+.row.bank-account {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.bank-account > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.bank-account select {
+  font-size: 13px;
+  padding: 3px 6px;
+}
+
+.bank-account > .muted:last-child {
+  font-size: 13px;
+  text-align: right;
+}
+
+/* On a phone the note would take the name's room; let it wrap instead. */
+@media (max-width: 720px) {
+  .bank-account > .muted:last-child {
+    max-width: 8em;
+  }
+}
+
+.bank-login {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 8px 12px;
+}
+
 /* --- Budget -------------------------------------------------------------- */
 
 .month-head {
@@ -1363,6 +1408,34 @@ details[open] > summary > .group-summary::before {
 .import-match-choice input {
   width: 18px;
   height: 18px;
+}
+
+/* The same grid, but a row of buttons rather than one big label. */
+.held-row {
+  cursor: default;
+}
+
+.held-row .device-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.held-row .button-link {
+  font-size: 13px;
+  padding: 3px 8px;
+}
+
+/* On a phone two buttons beside the text leave it a column a few words wide,
+   so they go underneath. */
+@media (max-width: 720px) {
+  .held-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .held-row .device-actions {
+    justify-content: flex-start;
+  }
 }
 
 .budget-warning.ok {

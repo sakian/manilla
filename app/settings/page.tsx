@@ -22,6 +22,8 @@ import Devices from './Devices.tsx';
 import AiPanel from './AiPanel.tsx';
 import DataPanel from './DataPanel.tsx';
 import AppearancePanel from './AppearancePanel.tsx';
+import BankFeedsPanel from './BankFeedsPanel.tsx';
+import { listConnections } from '../../src/sync/connections.ts';
 import { THEME_COOKIE, themeFrom } from '../../src/theme.ts';
 import RuleSuggestions from './RuleSuggestions.tsx';
 import Rules from './Rules.tsx';
@@ -48,6 +50,7 @@ export default async function SettingsPage() {
     usage,
     quality,
     unknown,
+    bankConnections,
   ] = await Promise.all([
     // Sign-in is the same whichever ledger is open.
     listDevices(homeDb(), session.userId),
@@ -65,6 +68,7 @@ export default async function SettingsPage() {
     aiUsage(homeDb(), undefined, connection),
     accuracy(connection),
     unknownMerchantEstimate(connection),
+    listConnections(connection),
   ]);
 
   const theme = themeFrom((await cookies()).get(THEME_COOKIE)?.value);
@@ -122,6 +126,26 @@ export default async function SettingsPage() {
           against what your old app showed.
         </p>
       </section>
+
+      <BankFeedsPanel
+        connections={bankConnections.map((bank) => ({
+          id: bank.id,
+          institutionName: bank.institutionName,
+          errorCode: bank.errorCode,
+          errorMessage: bank.errorMessage,
+          lastSyncedAt: bank.lastSyncedAt?.toISOString() ?? null,
+          accounts: bank.accounts.map(({ id, name, mask, type, accountId, startDate }) => ({
+            id,
+            name,
+            mask,
+            accountId,
+            startDate,
+            investment: type === 'investment',
+          })),
+        }))}
+        accounts={accountChoices.map(({ id, name }) => ({ id, name }))}
+        missing={['PLAID_CLIENT_ID', 'PLAID_SECRET', 'MANILLA_SECRET_KEY'].filter((name) => !process.env[name])}
+      />
 
       <DataPanel
         counts={{

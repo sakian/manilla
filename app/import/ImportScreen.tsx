@@ -109,11 +109,14 @@ export default function ImportScreen({
   accounts,
   history,
   notices,
+  held,
 }: {
   accounts: { id: string; name: string; externalAccountId: string | null }[];
   history: ImportRecord[];
   /** What needs attention, so what an import just created is reachable from here. */
   notices?: ReactNode;
+  /** What the bank feed held back for a decision. */
+  held?: ReactNode;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -340,6 +343,8 @@ export default function ImportScreen({
 
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
+
+      {held}
 
       {statements.length === 0 && (
         <section className="panel">

@@ -27,6 +27,9 @@ export async function register(): Promise<void> {
  * Sync now button.
  */
 async function startBankSync(production: boolean): Promise<void> {
+  // A timer and node:crypto, so Node's runtime only; checked this way so the
+  // Edge build drops the import rather than warning about it.
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
   if (!production || !process.env.DATABASE_URL) return;
   const { startDailySync } = await import('./src/sync/schedule.ts');
   startDailySync((line) => console.log(`[manilla] ${line}`));

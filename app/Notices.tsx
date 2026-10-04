@@ -81,6 +81,19 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
         text: `${count} rule${count === 1 ? '' : 's'} Manilla could write for you`,
         href: '/settings#rules',
       };
+    case 'bank_login_needed':
+      return {
+        text:
+          count > 1
+            ? `${count} banks want you to sign in again`
+            : `${notice.institution ?? 'Your bank'} wants you to sign in again`,
+        href: '/settings#bank-feeds',
+      };
+    case 'sync_held':
+      return {
+        text: `${count} from your bank feed need${count === 1 ? 's' : ''} a decision`,
+        href: '/import#held',
+      };
     case 'nothing_recorded':
       return { text: 'Nothing recorded yet — bring your history in', href: '/migrate' };
     case 'unusual_charge': {
