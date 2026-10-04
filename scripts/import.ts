@@ -45,6 +45,7 @@ for (const statement of doc.statements) {
 
   console.log(`  new:                ${preview.counts.new}`);
   console.log(`  already imported:   ${preview.counts.duplicate}`);
+  console.log(`  from the bank feed: ${preview.counts.same_entry}`);
   console.log(`  possible duplicate: ${preview.counts.possible_duplicate}`);
 
   if (preview.balanceCheck) {

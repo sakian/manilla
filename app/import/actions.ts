@@ -53,7 +53,7 @@ export type PreviewRow = {
   payee: string;
   amountCents: number;
   memo: string | null;
-  verdict: 'new' | 'duplicate' | 'possible_duplicate' | 'transfer_half' | 'entered_ahead';
+  verdict: 'new' | 'same_entry' | 'duplicate' | 'possible_duplicate' | 'transfer_half' | 'entered_ahead';
   reason: string;
   /** The transaction it matched, when it matched one. */
   existingId?: string;
@@ -77,6 +77,7 @@ export type PreviewResult =
       rows: PreviewRow[];
       counts: {
         new: number;
+        same_entry: number;
         duplicate: number;
         possible_duplicate: number;
         transfer_half: number;

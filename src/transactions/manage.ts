@@ -702,11 +702,11 @@ export async function unmatchedTransferHalves(
       and(
         eq(transactions.accountId, accountId),
         eq(transactions.kind, 'account_transfer'),
-        // A half that already carries a bank id came from its own statement, so
-        // it is not waiting for anything.
+        // A half that already carries a bank id came from its own statement or
+        // the bank feed, so it is not waiting for anything.
         sql`not exists (
           select 1 from transaction_external_ids e
-          where e.transaction_id = ${transactions.id} and e.kind = 'fitid'
+          where e.transaction_id = ${transactions.id} and e.kind in ('fitid', 'aggregator')
         )`,
       ),
     );
