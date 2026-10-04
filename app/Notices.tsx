@@ -19,8 +19,7 @@ import { DismissInsight } from './DismissInsight.tsx';
 import { displayDate } from '../src/budget/month.ts';
 import { jumpShare } from '../src/insights/insights.ts';
 import { SignInActivityNotice } from './SignInActivityNotice.tsx';
-
-const RANK = { bad: 0, warn: 1, info: 2 } as const;
+import { foldNotices } from '../src/notices/fold.ts';
 
 function describe(notice: Attention): { text: ReactNode; href?: string } {
   const count = notice.count ?? 0;
@@ -130,32 +129,50 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
   }
 }
 
+function NoticeLine({ notice }: { notice: Attention }) {
+  const { text, href } = describe(notice);
+  const insight = notice.insight;
+  return (
+    <li className={`notice ${notice.severity}${insight ? ' with-action' : ''}`}>
+      {href ? <Link href={href}>{text}</Link> : text}
+      {insight && <DismissInsight transactionId={insight.transactionId} payee={insight.payee} />}
+    </li>
+  );
+}
+
+const keyOf = (notice: Attention) =>
+  notice.insight ? `${notice.kind}-${notice.insight.transactionId}` : notice.kind;
+
 export async function Notices({ report }: { report: AttentionReport }) {
   // First, and outside the ranking: someone else's way in changing outranks
   // anything about money.
   const signIn = await SignInActivityNotice();
   if (report.notices.length === 0 && !signIn) return null;
 
-  const ordered = [...report.notices].sort(
-    (left, right) => RANK[left.severity] - RANK[right.severity],
-  );
+  const { shown, folded } = foldNotices(report.notices);
+  // Ranked, so the first folded is the most serious, and its colour is the line's.
+  const worst = folded[0];
 
   return (
     <ul className="notices">
       {signIn}
-      {ordered.map((notice) => {
-        const { text, href } = describe(notice);
-        const insight = notice.insight;
-        return (
-          <li
-            key={insight ? `${notice.kind}-${insight.transactionId}` : notice.kind}
-            className={`notice ${notice.severity}${insight ? ' with-action' : ''}`}
-          >
-            {href ? <Link href={href}>{text}</Link> : text}
-            {insight && <DismissInsight transactionId={insight.transactionId} payee={insight.payee} />}
-          </li>
-        );
-      })}
+      {shown.map((notice) => (
+        <NoticeLine key={keyOf(notice)} notice={notice} />
+      ))}
+      {/* A <details>, so it opens before any script has loaded. Closed again on
+          the next visit: what is folded is what can wait. */}
+      {worst && (
+        <li className="notices-more">
+          <details>
+            <summary className={`notice ${worst.severity}`}>{folded.length} alerts</summary>
+            <ul className="notices">
+              {folded.map((notice) => (
+                <NoticeLine key={keyOf(notice)} notice={notice} />
+              ))}
+            </ul>
+          </details>
+        </li>
+      )}
     </ul>
   );
 }
