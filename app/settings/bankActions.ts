@@ -13,7 +13,7 @@ import { connectionFor, homeDb } from '../../db/client.ts';
 import { allLedgers, currentLedger, ledgerDb } from '../ledger.ts';
 import { requireUser } from '../auth.ts';
 import type { Failure } from '../login/actions.ts';
-import { createLinkToken, linkConnection, resolveHeld } from '../../src/sync/connections.ts';
+import { createLinkToken, linkConnection, liveConnectionIds, resolveHeld } from '../../src/sync/connections.ts';
 import { plaidCall, plaidConfigFromEnv } from '../../src/sync/plaidClient.ts';
 import {
   chooseFeedAccount,
@@ -132,6 +132,40 @@ export async function syncNowAction(connectionId: string): Promise<SyncNowResult
       ),
       ...(error ? { error } : {}),
     };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/**
+ * The header's Sync button: every bank connected to the open ledger, and with
+ * each, whatever other ledgers it feeds. Totals only - the button has a word
+ * or two of room - and the screens refresh with the rest.
+ */
+export async function syncAllAction(): Promise<
+  | { ok: true; added: number; held: number; notReady: number; loginNeeded: boolean; stopped: boolean }
+  | Failure
+> {
+  try {
+    await requireUser();
+    const { call, key } = plaid();
+    const { all, current } = await ledgers();
+    let added = 0;
+    let held = 0;
+    let notReady = 0;
+    let loginNeeded = false;
+    let stopped = false;
+    for (const connectionId of await liveConnectionIds(current.db)) {
+      for (const { report } of await syncEverywhere(all, current, connectionId, { call, key, account: homeDb() })) {
+        added += report.accounts.reduce((sum, account) => sum + account.added, 0);
+        held += report.accounts.reduce((sum, account) => sum + account.held, 0);
+        notReady += report.accounts.filter((account) => account.notReady).length;
+        if (report.error?.code === 'ITEM_LOGIN_REQUIRED') loginNeeded = true;
+        else if (report.error) stopped = true;
+      }
+    }
+    revalidatePath('/', 'layout');
+    return { ok: true, added, held, notReady, loginNeeded, stopped };
   } catch (error) {
     return failed(error);
   }

@@ -7,7 +7,7 @@
  * exchanged here for the access token a sync uses, which is stored encrypted.
  */
 
-import { and, desc, eq, inArray, isNull, max, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, max, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import {
   accounts,
@@ -323,6 +323,15 @@ export async function bankAttention(
     db.select({ count: sql<number>`count(*)::int` }).from(syncHeldRows).where(isNull(syncHeldRows.resolvedAt)),
   ]);
   return { loginNeeded: waiting.map((row) => row.institutionName), held: Number(held?.count ?? 0) };
+}
+
+/** Connections in this ledger that can still sync: what the header's Sync button runs. */
+export async function liveConnectionIds(db: Database): Promise<string[]> {
+  const rows = await db
+    .select({ id: bankConnections.id })
+    .from(bankConnections)
+    .where(and(isNull(bankConnections.revokedAt), isNotNull(bankConnections.accessToken)));
+  return rows.map((row) => row.id);
 }
 
 export type HeldRow = typeof syncHeldRows.$inferSelect & {
