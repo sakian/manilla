@@ -15,7 +15,7 @@ by hand.
 | Sign-in | Passkeys (WebAuthn) with single-use recovery codes |
 | Access | Its own node on your tailnet — no port open to anything |
 | Classifier | Your rules → payee history → optionally the Claude API, with an off switch |
-| Banking | File import. Canada; automatic feeds deliberately deferred |
+| Banking | File import. Canada; an aggregator feed planned, not built |
 | Users | One |
 
 ## What it does
@@ -64,8 +64,9 @@ credentials, not records of your money.
 - **One currency, and it is dollars.** The symbol is one constant
   (`src/money.ts`); thousands separators follow the server's locale. Nobody has
   tried it anywhere else.
-- **Canada-shaped.** OFX/QFX only, and the argument for deferring automatic feeds
-  is specifically about Canadian banking. See [docs/measurements.md](docs/measurements.md).
+- **Canada-shaped.** OFX/QFX only for now, and the case for an interim
+  aggregator, and for which one, is specifically about Canadian banking. See
+  [docs/measurements.md](docs/measurements.md).
 - **Automatic categorization tops out around 72%** of transactions accepted
   unchanged, because 68% of transactions happen at merchants used for more than one
   envelope. This was measured, not guessed, and it is why the review queue matters
@@ -85,8 +86,8 @@ credentials, not records of your money.
 - [docs/design-decisions.md](docs/design-decisions.md) — the choices that would be
   expensive to reverse, and why.
 - [docs/measurements.md](docs/measurements.md) — what was measured against real
-  data: the accuracy ceiling, the four silent-corruption defects, and the case for
-  waiting on open banking.
+  data: the accuracy ceiling, the four silent-corruption defects, and why bank
+  feeds go through an aggregator until open banking arrives.
 
 ## Getting set up
 
