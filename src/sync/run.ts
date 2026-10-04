@@ -42,6 +42,8 @@ export type AccountSyncReport = {
   added: number;
   linked: number;
   held: number;
+  /** Dated before the feed's start, so already here or before the account began. */
+  earlier: number;
   batchId?: string;
 };
 
@@ -140,7 +142,8 @@ async function syncFeed(
     accountId: feed.providerAccountId,
   });
 
-  const added = result.added.filter((t) => !t.pending);
+  const posted = result.added.filter((t) => !t.pending);
+  const added = posted.filter((t) => !feed.startDate || t.date >= feed.startDate);
   const modified = result.modified.filter((t) => !t.pending);
 
   // Which of the changed and removed ids are transactions already here. A
@@ -264,6 +267,7 @@ async function syncFeed(
       added: committed?.added ?? 0,
       linked: committed?.linked ?? 0,
       held: fresh.length,
+      earlier: posted.length - added.length,
       ...(committed ? { batchId: committed.batchId } : {}),
     };
   });
