@@ -32,6 +32,7 @@ import type { OfxTransaction } from '../ofx/parse.ts';
 import { PlaidDataError, type PlaidTransaction } from './plaid.ts';
 import { PlaidApiError, syncTransactions, type PlaidCall } from './plaidClient.ts';
 import { decryptSecret } from './secret.ts';
+import { unsyncable } from './connections.ts';
 
 export type HeldReason = 'possible_duplicate' | 'rounded' | 'changed' | 'withdrawn';
 
@@ -111,7 +112,9 @@ export async function syncConnection(
     .where(and(eq(bankFeedAccounts.connectionId, connectionId), isNotNull(bankFeedAccounts.accountId)));
 
   const report: SyncReport = { connectionId, accounts: [] };
-  for (const feed of feeds) {
+  // One linked before Plaid's limits were known would only ever say "not
+  // ready"; asking for it is asking for nothing.
+  for (const feed of feeds.filter((candidate) => !unsyncable(candidate.type, candidate.subtype))) {
     try {
       report.accounts.push(await syncFeed(db, feed as typeof feed & { accountId: string }, token, deps));
     } catch (error) {

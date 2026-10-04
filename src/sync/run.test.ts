@@ -335,6 +335,18 @@ describe(
       assert.match(connection!.errorMessage!, /has_more|not a list/);
     });
 
+    test('an account linked though Plaid cannot sync it is not asked for', async () => {
+      await db
+        .update(bankFeedAccounts)
+        .set({ type: 'loan', subtype: 'line of credit' })
+        .where(eq(bankFeedAccounts.providerAccountId, 'plaid-chq'));
+      const plaid = fakePlaid({});
+      const report = await sync(plaid.call);
+      assert.deepEqual(plaid.requests, []);
+      assert.deepEqual(report.accounts, []);
+      assert.ok((await db.select().from(bankConnections))[0]!.lastSyncedAt);
+    });
+
     test('a revoked connection fetches nothing', async () => {
       await db.update(bankConnections).set({ accessToken: null, revokedAt: new Date() });
       const plaid = fakePlaid({});

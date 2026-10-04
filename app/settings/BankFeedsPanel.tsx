@@ -65,8 +65,12 @@ export type BankConnectionView = {
     /** The other ledger it feeds, when it is not the open one. */
     elsewhere: string | null;
     startDate: string | null;
-    /** Holdings, not transactions: Plaid's sync does not cover them. */
-    investment: boolean;
+    /**
+     * Why it is not offered: an investment account's holdings are not
+     * transactions, and Plaid's sync does not cover some loans at all - a
+     * line of credit among them.
+     */
+    unsyncable: 'investment' | 'unsupported' | null;
   }[];
 };
 
@@ -344,8 +348,10 @@ export default function BankFeedsPanel({
                     </span>
                   )}
                 </span>
-                {feed.investment ? (
-                  <span className="muted">investments come later</span>
+                {feed.unsyncable ? (
+                  <span className="muted">
+                    {feed.unsyncable === 'investment' ? 'investments come later' : 'Plaid does not sync these'}
+                  </span>
                 ) : (
                   <select
                     value={feed.choice}

@@ -23,7 +23,7 @@ import AiPanel from './AiPanel.tsx';
 import DataPanel from './DataPanel.tsx';
 import AppearancePanel from './AppearancePanel.tsx';
 import BankFeedsPanel from './BankFeedsPanel.tsx';
-import { listConnections } from '../../src/sync/connections.ts';
+import { listConnections, unsyncable } from '../../src/sync/connections.ts';
 import { fedElsewhere, feedKey } from '../../src/sync/shared.ts';
 import { THEME_COOKIE, themeFrom } from '../../src/theme.ts';
 import RuleSuggestions from './RuleSuggestions.tsx';
@@ -163,7 +163,7 @@ export default async function SettingsPage() {
           errorCode: bank.errorCode,
           errorMessage: bank.errorMessage,
           lastSyncedAt: bank.lastSyncedAt?.toISOString() ?? null,
-          accounts: bank.accounts.map(({ id, providerAccountId, name, mask, type, accountId, startDate }) => {
+          accounts: bank.accounts.map(({ id, providerAccountId, name, mask, type, subtype, accountId, startDate }) => {
             const other = elsewhere.get(feedKey(bank.itemId, providerAccountId));
             return {
               id,
@@ -176,7 +176,7 @@ export default async function SettingsPage() {
                   : '',
               elsewhere: !accountId && other ? other.ledgerName : null,
               startDate: accountId ? startDate : (other?.startDate ?? null),
-              investment: type === 'investment',
+              unsyncable: unsyncable(type, subtype),
             };
           }),
         }))}
