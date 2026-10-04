@@ -50,7 +50,9 @@ export type AttentionKind =
   /** A bank feed stopped because the bank wants its login again (FR-16). */
   | 'bank_login_needed'
   /** A sync held back transactions that need a person's decision. */
-  | 'sync_held';
+  | 'sync_held'
+  /** The server's disk is nearly full, which would stop every write. */
+  | 'disk_nearly_full';
 
 export type Attention = {
   kind: AttentionKind;
@@ -123,9 +125,21 @@ async function balancesForNotices(db: Database, month: MonthKey) {
   };
 }
 
+/** Past this share in use, the disk is worth a notice; past the second, it is a fault. */
+const DISK_WARN = 0.9;
+const DISK_BAD = 0.97;
+
 export async function attention(
   db: Database,
   month: MonthKey = currentMonth(),
+  options: {
+    /**
+     * How full the server's disk is (src/system/disk.ts). Passed in by the
+     * screens rather than read here, so a test's notices do not depend on the
+     * machine running it.
+     */
+    diskUsage?: () => Promise<number | null>;
+  } = {},
 ): Promise<AttentionReport> {
   const [balances, invariant, waiting, received, expected, average, suggestions, mismatched, unusual, bank] =
     await Promise.all([
@@ -140,6 +154,7 @@ export async function attention(
       unusualCharges(db),
       bankAttention(db),
     ]);
+  const disk = options.diskUsage ? await options.diskUsage() : null;
 
   const notices: Attention[] = [];
   const overspent = balances.overspent;
@@ -150,6 +165,12 @@ export async function attention(
   // invariant counts it, which is why it can be unassigned and still agree.
   if (!invariant.ok) {
     notices.push({ kind: 'ledger_mismatch', severity: 'bad', cents: invariant.unexplainedCents });
+  }
+
+  // Nothing about money, and above everything that is: a full disk stops
+  // every write, the nightly backup included.
+  if (disk !== null && disk >= DISK_WARN) {
+    notices.push({ kind: 'disk_nearly_full', severity: disk >= DISK_BAD ? 'bad' : 'warn', count: Math.round(disk * 100) });
   }
 
   if (pool < 0) {

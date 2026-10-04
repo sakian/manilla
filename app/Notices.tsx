@@ -94,6 +94,8 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
         text: `${count} from your bank feed need${count === 1 ? 's' : ''} a decision`,
         href: '/import#held',
       };
+    case 'disk_nearly_full':
+      return { text: `The server's disk is ${count}% full; Docker's build cache is the usual cause` };
     case 'nothing_recorded':
       return { text: 'Nothing recorded yet — bring your history in', href: '/migrate' };
     case 'unusual_charge': {

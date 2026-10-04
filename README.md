@@ -253,6 +253,7 @@ cp .env.example .env            # then fill in TS_AUTHKEY, POSTGRES_PASSWORD, MA
 # 3. Up it goes. The app migrates the database itself on start.
 docker compose up -d --build
 docker compose logs -f app      # "database is up to schema", then the origin
+docker image prune -f && docker builder prune -f --filter until=168h   # see below
 
 # 4. Clear TS_AUTHKEY from .env - the node keeps its identity in a volume.
 ```
@@ -273,6 +274,22 @@ In production the boot check refuses to start on a localhost relying-party ID or
 a schema it could not bring up to date, with the reason in
 `docker compose logs app`. Serving against a half-migrated schema is how a ledger
 ends up half-written, so both are fatal rather than warnings.
+
+**Every rebuild leaves the last one behind.** `--build` keeps the previous image
+and the build cache, and Docker never clears either: on this project's own
+server that reached 64 GB and filled the disk, which stops Postgres writing.
+So an update is the same three steps every time:
+
+```bash
+git pull
+docker compose up -d --build
+docker image prune -f && docker builder prune -f --filter until=168h
+```
+
+The prune removes untagged images no container uses, and build cache older
+than a week - nothing running, and never a volume. Both are machine-wide, so
+another project's leftovers go too. Past 90% full, the app says so on every
+screen and the nightly backup log does too.
 
 `deploy/nginx.conf.example` is still there for the other arrangement — one node
 for the whole machine, a reverse proxy in front of several services, and a

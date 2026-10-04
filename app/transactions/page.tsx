@@ -1,5 +1,6 @@
 import { ledgerDb } from '../ledger.ts';
 import { attention } from '../../src/notices/notices.ts';
+import { diskUsedShare } from '../../src/system/disk.ts';
 import { requireUser } from '../auth.ts';
 import { Notices } from '../Notices.tsx';
 import TransactionsView from './TransactionsView.tsx';
@@ -30,7 +31,7 @@ export default async function TransactionsPage(props: {
 }) {
   await requireUser();
   const params = await props.searchParams;
-  const report = await attention(await ledgerDb());
+  const report = await attention(await ledgerDb(), undefined, { diskUsage: diskUsedShare });
 
   return (
     <>

@@ -59,6 +59,17 @@ describe(
       assert.deepEqual(await kinds(), ['unallocated']);
     });
 
+    test('a nearly full disk is said, and a full one is a fault', async () => {
+      const disk = async (share: number | null) =>
+        (await attention(db, '2026-09', { diskUsage: async () => share })).notices.filter(
+          (notice) => notice.kind === 'disk_nearly_full',
+        );
+      assert.deepEqual(await disk(0.5), []);
+      assert.deepEqual(await disk(null), [], 'unreadable says nothing rather than guessing');
+      assert.deepEqual(await disk(0.92), [{ kind: 'disk_nearly_full', severity: 'warn', count: 92 }]);
+      assert.deepEqual(await disk(0.985), [{ kind: 'disk_nearly_full', severity: 'bad', count: 99 }]);
+    });
+
     test('an uncategorized import is a nudge, not a broken ledger', async () => {
       await recordTransaction(db, {
         accountId,
