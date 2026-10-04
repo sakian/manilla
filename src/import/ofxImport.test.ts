@@ -28,7 +28,7 @@ import {
   truncateAll,
   type Fixture,
 } from '../ledger/testdb.ts';
-import { transactions, txnLines } from '../../db/schema.ts';
+import { importBatches, transactionExternalIds, transactions, txnLines } from '../../db/schema.ts';
 
 const available = await databaseAvailable();
 
@@ -1013,6 +1013,178 @@ describe(
       assert.equal(imported.length, 1);
       assert.equal(imported[0]!.status, 'pending_review');
       assert.ok((await checkInvariant(db)).ok);
+    });
+
+    describe('a bank feed and statement files together (FR-17, FR-18)', () => {
+      /** The bank feed's rows, which take a statement's shape with Plaid's ids. */
+      const synced = (rows: { fitId: string; posted: string; amountCents: number; name: string }[]) =>
+        statementOf(rows);
+
+      const idsOf = async (kind: 'fitid' | 'aggregator') =>
+        (await db.select().from(transactionExternalIds))
+          .filter((row) => row.kind === kind)
+          .map((row) => row.value)
+          .sort();
+
+      test('a synced transaction is imported like a file row, under its own kind of id', async () => {
+        const preview = await previewImport(
+          db,
+          synced([{ fitId: 'plaid-1', posted: '2026-09-10', amountCents: -4520, name: 'SHELL C04471' }]),
+          accountId,
+          { categorize: false, source: 'bank_sync' },
+        );
+        assert.equal(preview.rows[0]!.verdict, 'new');
+        const result = await commitImport(db, preview, new Map());
+
+        const [row] = await db.select().from(transactions);
+        assert.equal(row!.source, 'bank_sync');
+        assert.equal(row!.status, 'pending_review', 'FR-17: it waits for review like any import');
+        assert.deepEqual(await idsOf('aggregator'), ['plaid-1']);
+        assert.deepEqual(await idsOf('fitid'), []);
+        const [batch] = await db.select().from(importBatches);
+        assert.equal(batch!.id, result.batchId);
+        assert.equal(batch!.source, 'bank_sync', 'so a sync can be undone as a batch (FR-13)');
+      });
+
+      test('a statement row the feed brought in first is linked, however differently worded', async () => {
+        await commitImport(
+          db,
+          await previewImport(
+            db,
+            synced([{ fitId: 'plaid-1', posted: '2026-09-10', amountCents: -4520, name: 'Shell' }]),
+            accountId,
+            { categorize: false, source: 'bank_sync' },
+          ),
+          new Map(),
+        );
+
+        const file = statementOf([
+          { fitId: 'FIT-1', posted: '2026-09-10', amountCents: -4520, name: 'SHELL C04471 CALGARY AB' },
+        ]);
+        const preview = await previewImport(db, file, accountId, { categorize: false });
+        assert.equal(preview.rows[0]!.verdict, 'same_entry');
+        assert.match(preview.rows[0]!.reason, /from the bank feed as "Shell"/);
+        assert.equal(preview.counts.new, 0);
+
+        const result = await commitImport(db, preview, new Map());
+        assert.equal(result.linked, 1, 'linked by default');
+        assert.equal((await db.select().from(transactions)).length, 1, 'one transaction, not two');
+        assert.deepEqual(await idsOf('fitid'), ['FIT-1'], 'carrying both ids');
+        assert.deepEqual(await idsOf('aggregator'), ['plaid-1']);
+
+        const again = await previewImport(db, file, accountId, { categorize: false });
+        assert.equal(again.rows[0]!.verdict, 'duplicate', 'and recognised outright from then on');
+        assert.ok((await checkInvariant(db)).ok);
+      });
+
+      test('a synced row a statement file brought in first is linked the same way', async () => {
+        await commitImport(db, await previewImport(db, bankStatement(), accountId, { categorize: false }), acceptAll);
+        const [first] = bankStatement().transactions;
+
+        const preview = await previewImport(
+          db,
+          synced([{ fitId: 'plaid-9', posted: first!.posted, amountCents: first!.amountCents, name: 'Something else' }]),
+          accountId,
+          { categorize: false, source: 'bank_sync' },
+        );
+        assert.equal(preview.rows[0]!.verdict, 'same_entry');
+        assert.match(preview.rows[0]!.reason, /from a statement file/);
+
+        await commitImport(db, preview, new Map());
+        assert.equal((await db.select().from(transactions)).length, 5, 'nothing added');
+        assert.deepEqual(await idsOf('aggregator'), ['plaid-9']);
+      });
+
+      test('the same entry must have posted the same day; a day apart is another purchase', async () => {
+        await commitImport(
+          db,
+          await previewImport(
+            db,
+            synced([{ fitId: 'plaid-1', posted: '2026-09-10', amountCents: -450, name: 'COFFEE' }]),
+            accountId,
+            { categorize: false, source: 'bank_sync' },
+          ),
+          new Map(),
+        );
+        const preview = await previewImport(
+          db,
+          statementOf([{ fitId: 'FIT-2', posted: '2026-09-11', amountCents: -450, name: 'COFFEE' }]),
+          accountId,
+          { categorize: false },
+        );
+        assert.equal(preview.rows[0]!.verdict, 'new', "yesterday's coffee is not today's");
+      });
+
+      test('identical charges pair one to one across the two sources', async () => {
+        const vending = (prefix: string, n: number) =>
+          Array.from({ length: n }, (_, i) => ({
+            fitId: `${prefix}-${i}`,
+            posted: '2026-09-03',
+            amountCents: -375,
+            name: 'VENDING',
+          }));
+        await commitImport(
+          db,
+          await previewImport(db, synced(vending('plaid', 2)), accountId, { categorize: false, source: 'bank_sync' }),
+          new Map(),
+        );
+
+        // The file has a third one the feed has not reported yet.
+        const preview = await previewImport(db, statementOf(vending('FIT', 3)), accountId, { categorize: false });
+        assert.deepEqual(
+          preview.rows.map((row) => row.verdict),
+          ['same_entry', 'same_entry', 'new'],
+        );
+        assert.equal(new Set(preview.rows.map((row) => row.existingId).filter(Boolean)).size, 2);
+        await commitImport(db, preview, new Map());
+        assert.equal((await db.select().from(transactions)).length, 3);
+      });
+
+      test('a same-entry match can be refused, like any match', async () => {
+        await commitImport(
+          db,
+          await previewImport(
+            db,
+            synced([{ fitId: 'plaid-1', posted: '2026-09-10', amountCents: -2000, name: 'A' }]),
+            accountId,
+            { categorize: false, source: 'bank_sync' },
+          ),
+          new Map(),
+        );
+        const preview = await previewImport(
+          db,
+          statementOf([{ fitId: 'FIT-1', posted: '2026-09-10', amountCents: -2000, name: 'B' }]),
+          accountId,
+          { categorize: false },
+        );
+        const row = preview.rows[0]!;
+        await commitImport(db, preview, decisionsFor(preview, [{ index: row.index, existingId: row.existingId! }]));
+        assert.equal((await db.select().from(transactions)).length, 2);
+      });
+
+      test('a transfer half the feed brought in is not waiting for a statement', async () => {
+        const visa = await openAccount(db, { name: 'Visa', kind: 'credit_card', externalAccountId: '7654321' });
+        const { convertToTransfer } = await import('../transactions/manage.ts');
+        const payment = await recordTransaction(db, {
+          accountId,
+          date: '2026-09-10',
+          amountCents: -50000,
+          payeeRaw: 'Tfr-to C C',
+          source: 'bank_sync',
+          externalIds: [{ kind: 'aggregator', value: 'plaid-pay' }],
+        });
+        await convertToTransfer(db, payment, { toAccountId: visa });
+
+        // A second payment of the same amount two days later. The feed's half
+        // already has its bank record, so this cannot be it arriving.
+        const preview = await previewImport(
+          db,
+          statementOf([{ fitId: 'CHQ-2', posted: '2026-09-12', amountCents: -50000, name: 'TFR-TO C C' }]),
+          accountId,
+          { categorize: false },
+        );
+        assert.equal(preview.rows[0]!.verdict, 'new');
+      });
     });
   },
 );
