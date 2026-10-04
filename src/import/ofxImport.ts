@@ -89,10 +89,12 @@ export type RowVerdict =
   /**
    * The same bank entry, already here from the other source: a statement row
    * that the bank feed brought in first, or a synced one that a file did
-   * (FR-18). Both are the bank's own record, so they agree on the amount and
-   * the posting date, and the descriptions are left out of it - the feed and
-   * the file need not word one transaction the same way. Linking attaches
-   * this source's id, so each source recognises it from then on.
+   * (FR-18). Both are the bank's own record, so the amount agrees to the
+   * cent. The day need not: a card's statement can date a purchase the day it
+   * was made where the feed dates it the day it posted, a day or two later.
+   * So the same day matches whatever the wording, and the same description
+   * matches within a few days. Linking attaches this source's id, so each
+   * source recognises it from then on.
    */
   | 'same_entry'
   /** The bank's own id is already on a transaction in this account. */
@@ -341,17 +343,29 @@ export async function previewImport(
       };
     }
 
-    // The same bank entry from the other source. The bank dated both when it
-    // posted, so the day must agree: a window would pair this morning's coffee
-    // with yesterday's. Payee only breaks a tie between equal amounts.
+    // The same bank entry from the other source. The same day is enough on
+    // its own, since the two sources need not word a transaction alike. Days
+    // apart, the description has to agree too: TD's card statement dates a
+    // purchase when it was made and the feed when it posted, with the text
+    // identical, and without that the window would take any equal amount.
+    // Same day first, then the same description, then the nearest; each row
+    // here answers for one at most, so two identical coffees on consecutive
+    // days pair off one to one rather than both landing on one.
     const [sameEntry] = fromOtherSource
       .filter(
         (candidate) =>
           !claimedLookAlikes.has(candidate.id) &&
           candidate.amountCents === transaction.amountCents &&
-          candidate.date === transaction.posted,
+          (candidate.date === transaction.posted ||
+            (candidate.payeeKey === payeeKey &&
+              daysApart(candidate.date, transaction.posted) <= LOOKALIKE_WINDOW_DAYS)),
       )
-      .sort((left, right) => Number(right.payeeKey === payeeKey) - Number(left.payeeKey === payeeKey));
+      .sort(
+        (left, right) =>
+          Number(right.date === transaction.posted) - Number(left.date === transaction.posted) ||
+          Number(right.payeeKey === payeeKey) - Number(left.payeeKey === payeeKey) ||
+          daysApart(left.date, transaction.posted) - daysApart(right.date, transaction.posted),
+      );
     if (sameEntry) {
       claimedLookAlikes.add(sameEntry.id);
       const where = source === 'bank_sync' ? 'a statement file' : 'the bank feed';

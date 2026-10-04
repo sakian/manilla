@@ -1095,24 +1095,83 @@ describe(
         assert.deepEqual(await idsOf('aggregator'), ['plaid-9']);
       });
 
-      test('the same entry must have posted the same day; a day apart is another purchase', async () => {
-        await commitImport(
+      const syncFirst = async (rows: { fitId: string; posted: string; amountCents: number; name: string }[]) =>
+        commitImport(
           db,
-          await previewImport(
-            db,
-            synced([{ fitId: 'plaid-1', posted: '2026-09-10', amountCents: -450, name: 'COFFEE' }]),
-            accountId,
-            { categorize: false, source: 'bank_sync' },
-          ),
+          await previewImport(db, synced(rows), accountId, { categorize: false, source: 'bank_sync' }),
           new Map(),
         );
+
+      test("a card statement dated when bought matches the feed's posting a day or two later", async () => {
+        // Seen on a real TD Visa: the statement dated each purchase the day it
+        // was made, Plaid the day it posted, and the descriptions were identical.
+        const file = statementOf([
+          { fitId: 'FIT-1', posted: '2026-09-30', amountCents: -1581, name: 'AMZN Mktp CA*517DI9SN1' },
+          { fitId: 'FIT-2', posted: '2026-09-29', amountCents: -2653, name: 'SUBWAY 54500' },
+        ]);
+        await commitImport(db, await previewImport(db, file, accountId, { categorize: false }), new Map());
+
         const preview = await previewImport(
           db,
-          statementOf([{ fitId: 'FIT-2', posted: '2026-09-11', amountCents: -450, name: 'COFFEE' }]),
+          synced([
+            { fitId: 'plaid-1', posted: '2026-10-01', amountCents: -1581, name: 'AMZN Mktp CA*517DI9SN1' },
+            { fitId: 'plaid-2', posted: '2026-10-01', amountCents: -2653, name: 'SUBWAY 54500' },
+          ]),
+          accountId,
+          { categorize: false, source: 'bank_sync' },
+        );
+        assert.deepEqual(
+          preview.rows.map((row) => row.verdict),
+          ['same_entry', 'same_entry'],
+        );
+        await commitImport(db, preview, new Map());
+        assert.equal((await db.select().from(transactions)).length, 2, 'nothing doubled');
+      });
+
+      test('days apart, an equal amount alone is not the same entry', async () => {
+        await syncFirst([{ fitId: 'plaid-1', posted: '2026-09-10', amountCents: -2000, name: 'GROCER' }]);
+        const preview = await previewImport(
+          db,
+          statementOf([{ fitId: 'FIT-1', posted: '2026-09-11', amountCents: -2000, name: 'PHARMACY' }]),
           accountId,
           { categorize: false },
         );
-        assert.equal(preview.rows[0]!.verdict, 'new', "yesterday's coffee is not today's");
+        assert.equal(preview.rows[0]!.verdict, 'new');
+      });
+
+      test('the same description a week apart is another purchase', async () => {
+        await syncFirst([{ fitId: 'plaid-1', posted: '2026-09-10', amountCents: -1599, name: 'NETFLIX.COM' }]);
+        const preview = await previewImport(
+          db,
+          statementOf([{ fitId: 'FIT-1', posted: '2026-09-17', amountCents: -1599, name: 'NETFLIX.COM' }]),
+          accountId,
+          { categorize: false },
+        );
+        assert.equal(preview.rows[0]!.verdict, 'new');
+      });
+
+      test('a coffee a day pairs off one to one, and nothing is added twice', async () => {
+        // The statement dates each the day bought; the feed a day later.
+        await syncFirst([
+          { fitId: 'plaid-1', posted: '2026-09-11', amountCents: -450, name: 'COFFEE' },
+          { fitId: 'plaid-2', posted: '2026-09-12', amountCents: -450, name: 'COFFEE' },
+          { fitId: 'plaid-3', posted: '2026-09-13', amountCents: -450, name: 'COFFEE' },
+        ]);
+        const preview = await previewImport(
+          db,
+          statementOf([
+            { fitId: 'FIT-1', posted: '2026-09-10', amountCents: -450, name: 'COFFEE' },
+            { fitId: 'FIT-2', posted: '2026-09-11', amountCents: -450, name: 'COFFEE' },
+            { fitId: 'FIT-3', posted: '2026-09-12', amountCents: -450, name: 'COFFEE' },
+          ]),
+          accountId,
+          { categorize: false },
+        );
+        assert.deepEqual(
+          preview.rows.map((row) => row.verdict),
+          ['same_entry', 'same_entry', 'same_entry'],
+        );
+        assert.equal(new Set(preview.rows.map((row) => row.existingId)).size, 3);
       });
 
       test('identical charges pair one to one across the two sources', async () => {
@@ -1175,11 +1234,12 @@ describe(
         });
         await convertToTransfer(db, payment, { toAccountId: visa });
 
-        // A second payment of the same amount two days later. The feed's half
-        // already has its bank record, so this cannot be it arriving.
+        // A second payment of the same amount two days later, worded otherwise.
+        // The feed's half already has its bank record, so this cannot be it
+        // arriving.
         const preview = await previewImport(
           db,
-          statementOf([{ fitId: 'CHQ-2', posted: '2026-09-12', amountCents: -50000, name: 'TFR-TO C C' }]),
+          statementOf([{ fitId: 'CHQ-2', posted: '2026-09-12', amountCents: -50000, name: 'ONLINE TRANSFER 4512' }]),
           accountId,
           { categorize: false },
         );

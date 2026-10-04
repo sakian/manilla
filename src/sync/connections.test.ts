@@ -165,9 +165,28 @@ describe(
       await assert.rejects(setFeedAccount(db, (await feedNamed('Visa')).id, chequing), /investment/);
     });
 
-    test('an account with no statement rows takes the whole history', async () => {
+    test('with no statement rows, a feed starts at the latest transaction of any kind', async () => {
+      // A migrated history has no bank ids to match on; two years of feed
+      // history over it would count most of it twice.
+      await recordTransaction(db, {
+        accountId: chequing,
+        date: '2025-06-10',
+        amountCents: -500,
+        payeeRaw: 'MIGRATED',
+        source: 'goodbudget',
+      });
       await link();
-      assert.deepEqual(await setFeedAccount(db, (await feedNamed('Chequing')).id, chequing), { startDate: null });
+      assert.deepEqual(await setFeedAccount(db, (await feedNamed('Chequing')).id, chequing), {
+        startDate: '2025-06-10',
+      });
+    });
+
+    test('an empty account starts today, never with the whole history', async () => {
+      await link();
+      const { localToday } = await import('../budget/month.ts');
+      assert.deepEqual(await setFeedAccount(db, (await feedNamed('Chequing')).id, chequing), {
+        startDate: localToday(),
+      });
     });
 
     test('one Manilla account takes one feed, since two would import everything twice', async () => {

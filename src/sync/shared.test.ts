@@ -79,7 +79,15 @@ describe(
       await truncateAll(business.db);
       chequing = await openAccount(personal.db, { name: 'Chequing', kind: 'chequing' });
       operating = await openAccount(business.db, { name: 'Operating', kind: 'chequing' });
-      // The business account's statements reach the 20th.
+      // Both accounts' statements reach the 20th.
+      await recordTransaction(personal.db, {
+        accountId: chequing,
+        date: '2026-09-20',
+        amountCents: -100,
+        payeeRaw: 'FROM A STATEMENT',
+        source: 'file_import',
+        externalIds: [{ kind: 'fitid', value: 'FIT-1' }],
+      });
       await recordTransaction(business.db, {
         accountId: operating,
         date: '2026-09-20',
@@ -156,7 +164,7 @@ describe(
         ],
       );
       const payees = async (db: Database) => (await db.select().from(transactions)).map((t) => t.payeeRaw).sort();
-      assert.deepEqual(await payees(personal.db), ['plaid-chq']);
+      assert.deepEqual(await payees(personal.db), ['FROM A STATEMENT', 'plaid-chq']);
       assert.deepEqual(await payees(business.db), ['FROM A STATEMENT', 'plaid-biz']);
     });
 

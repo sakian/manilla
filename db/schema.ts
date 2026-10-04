@@ -331,8 +331,9 @@ export const bankFeedAccounts = pgTable(
      * The first day the feed imports. Its history before that is already here
      * - from statements, or a migration that carries no bank id to match on -
      * or comes before the account's opening balance, and either way would
-     * count twice. Set when the account is linked, to the day of its latest
-     * statement row, which the same-entry match still covers (FR-18).
+     * count twice. Set when the account is linked: the day of its latest
+     * statement row, which the same-entry match still covers (FR-18), or with
+     * none its latest transaction of any kind, or today.
      */
     startDate: date('start_date'),
     /**
