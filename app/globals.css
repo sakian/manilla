@@ -823,10 +823,15 @@ input[type='file'] {
   text-align: right;
 }
 
-/* On a phone the note would take the name's room; let it wrap instead. */
+/* On a phone the note, or a picker as wide as the longest account in any
+   ledger, would take the name's room; cap them instead. */
 @media (max-width: 720px) {
   .bank-account > .muted:last-child {
     max-width: 8em;
+  }
+
+  .bank-account select {
+    max-width: 10.5em;
   }
 }
 

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { homeDb } from '../../db/client.ts';
+import { connectionFor, homeDb } from '../../db/client.ts';
 import { allLedgers, currentLedger, ledgerDb } from '../ledger.ts';
 import LedgersPanel from './LedgersPanel.tsx';
 import { MAX_LEDGERS } from '../../src/ledgers/config.ts';
@@ -24,6 +24,7 @@ import DataPanel from './DataPanel.tsx';
 import AppearancePanel from './AppearancePanel.tsx';
 import BankFeedsPanel from './BankFeedsPanel.tsx';
 import { listConnections } from '../../src/sync/connections.ts';
+import { fedElsewhere, feedKey } from '../../src/sync/shared.ts';
 import { THEME_COOKIE, themeFrom } from '../../src/theme.ts';
 import RuleSuggestions from './RuleSuggestions.tsx';
 import Rules from './Rules.tsx';
@@ -70,6 +71,34 @@ export default async function SettingsPage() {
     unknownMerchantEstimate(connection),
     listConnections(connection),
   ]);
+
+  // A bank login can feed accounts in any ledger, so the bank feeds panel
+  // offers every ledger's accounts and says which ledger each one feeds.
+  const handles = ledgers.map((ledger) => ({
+    key: ledger.key,
+    name: ledger.name,
+    db: ledger.key === current.key ? connection : connectionFor(ledger.database),
+  }));
+  const [ledgerAccounts, elsewhere] = await Promise.all([
+    Promise.all(
+      handles.map(async (ledger) => ({
+        key: ledger.key,
+        name: ledger.name,
+        accounts: (ledger.key === current.key ? accountChoices : await listAccounts(ledger.db)).map(
+          ({ id, name }) => ({ id, name }),
+        ),
+      })),
+    ),
+    fedElsewhere(
+      handles.find((ledger) => ledger.key === current.key)!,
+      handles,
+      bankConnections.map((bank) => bank.itemId),
+    ),
+  ]);
+  const openFirst = [
+    ...ledgerAccounts.filter((ledger) => ledger.key === current.key),
+    ...ledgerAccounts.filter((ledger) => ledger.key !== current.key),
+  ];
 
   const theme = themeFrom((await cookies()).get(THEME_COOKIE)?.value);
 
@@ -134,16 +163,24 @@ export default async function SettingsPage() {
           errorCode: bank.errorCode,
           errorMessage: bank.errorMessage,
           lastSyncedAt: bank.lastSyncedAt?.toISOString() ?? null,
-          accounts: bank.accounts.map(({ id, name, mask, type, accountId, startDate }) => ({
-            id,
-            name,
-            mask,
-            accountId,
-            startDate,
-            investment: type === 'investment',
-          })),
+          accounts: bank.accounts.map(({ id, providerAccountId, name, mask, type, accountId, startDate }) => {
+            const other = elsewhere.get(feedKey(bank.itemId, providerAccountId));
+            return {
+              id,
+              name,
+              mask,
+              choice: accountId
+                ? `${current.key}:${accountId}`
+                : other
+                  ? `${other.ledgerKey}:${other.accountId}`
+                  : '',
+              elsewhere: !accountId && other ? other.ledgerName : null,
+              startDate: accountId ? startDate : (other?.startDate ?? null),
+              investment: type === 'investment',
+            };
+          }),
         }))}
-        accounts={accountChoices.map(({ id, name }) => ({ id, name }))}
+        ledgers={openFirst}
         missing={['PLAID_CLIENT_ID', 'PLAID_SECRET', 'MANILLA_SECRET_KEY'].filter((name) => !process.env[name])}
       />
 

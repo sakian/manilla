@@ -9,19 +9,18 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { homeDb } from '../../db/client.ts';
-import { ledgerDb } from '../ledger.ts';
+import { connectionFor, homeDb } from '../../db/client.ts';
+import { allLedgers, currentLedger, ledgerDb } from '../ledger.ts';
 import { requireUser } from '../auth.ts';
 import type { Failure } from '../login/actions.ts';
-import {
-  createLinkToken,
-  linkConnection,
-  resolveHeld,
-  revokeConnection,
-  setFeedAccount,
-} from '../../src/sync/connections.ts';
+import { createLinkToken, linkConnection, resolveHeld } from '../../src/sync/connections.ts';
 import { plaidCall, plaidConfigFromEnv } from '../../src/sync/plaidClient.ts';
-import { syncConnection } from '../../src/sync/run.ts';
+import {
+  chooseFeedAccount,
+  revokeEverywhere,
+  syncEverywhere,
+  type LedgerHandle,
+} from '../../src/sync/shared.ts';
 import { decryptSecret, secretKeyFromEnv } from '../../src/sync/secret.ts';
 
 function failed(error: unknown): Failure {
@@ -33,6 +32,16 @@ function plaid() {
   const call = plaidCall(plaidConfigFromEnv());
   const key = secretKeyFromEnv();
   return { call, key, decrypt: (stored: string) => decryptSecret(stored, key) };
+}
+
+/**
+ * Every ledger, and the open one. A connection can feed accounts in any of
+ * them, so the actions that change one reach them all (src/sync/shared.ts).
+ */
+async function ledgers(): Promise<{ all: LedgerHandle[]; current: LedgerHandle }> {
+  const [list, open] = await Promise.all([allLedgers(), currentLedger()]);
+  const all = list.map((ledger) => ({ key: ledger.key, name: ledger.name, db: connectionFor(ledger.database) }));
+  return { all, current: all.find((ledger) => ledger.key === open.key)! };
 }
 
 /** A token to open Plaid's window with: a new bank, or the same login again. */
@@ -65,13 +74,20 @@ export async function linkBankAction(publicToken: string): Promise<{ ok: true } 
   }
 }
 
+/**
+ * Feed a bank account into an account, given as `ledger:account`, or into none
+ * when `choice` is empty.
+ */
 export async function setFeedAccountAction(
   feedAccountId: string,
-  accountId: string | null,
+  choice: string,
 ): Promise<{ ok: true; startDate: string | null } | Failure> {
   try {
     await requireUser();
-    const { startDate } = await setFeedAccount(await ledgerDb(), feedAccountId, accountId);
+    const { all, current } = await ledgers();
+    const split = choice.indexOf(':');
+    const target = choice ? { ledgerKey: choice.slice(0, split), accountId: choice.slice(split + 1) } : null;
+    const { startDate } = await chooseFeedAccount(all, current, feedAccountId, target);
     revalidatePath('/settings');
     return { ok: true, startDate };
   } catch (error) {
@@ -95,9 +111,12 @@ export async function syncNowAction(connectionId: string): Promise<SyncNowResult
   try {
     await requireUser();
     const { call, key } = plaid();
-    const report = await syncConnection(await ledgerDb(), connectionId, { call, key, account: homeDb() });
+    const { all, current } = await ledgers();
+    // Every ledger this login feeds, so one press brings them all up to date.
+    const reports = await syncEverywhere(all, current, connectionId, { call, key, account: homeDb() });
     const total = (field: 'added' | 'linked' | 'held' | 'earlier') =>
-      report.accounts.reduce((sum, account) => sum + account[field], 0);
+      reports.reduce((sum, { report }) => sum + report.accounts.reduce((inner, a) => inner + a[field], 0), 0);
+    const error = reports.find(({ report }) => report.error)?.report.error;
     revalidatePath('/', 'layout');
     return {
       ok: true,
@@ -105,7 +124,7 @@ export async function syncNowAction(connectionId: string): Promise<SyncNowResult
       linked: total('linked'),
       held: total('held'),
       earlier: total('earlier'),
-      ...(report.error ? { error: report.error } : {}),
+      ...(error ? { error } : {}),
     };
   } catch (error) {
     return failed(error);
@@ -116,7 +135,8 @@ export async function revokeBankAction(connectionId: string): Promise<{ ok: true
   try {
     await requireUser();
     const { call, decrypt } = plaid();
-    await revokeConnection(await ledgerDb(), call, connectionId, decrypt);
+    const { all, current } = await ledgers();
+    await revokeEverywhere(all, current, connectionId, call, decrypt);
     revalidatePath('/', 'layout');
     return { ok: true };
   } catch (error) {

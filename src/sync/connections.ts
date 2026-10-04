@@ -210,6 +210,14 @@ export async function revokeConnection(
       if (!(error instanceof PlaidApiError && error.code === 'ITEM_NOT_FOUND')) throw error;
     }
   }
+  await forgetConnection(db, connectionId);
+}
+
+/**
+ * Erase a connection's token and free its accounts, without telling Plaid:
+ * for a copy in another ledger of a login already revoked (see shared.ts).
+ */
+export async function forgetConnection(db: Database, connectionId: string): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
       .update(bankConnections)
@@ -224,6 +232,8 @@ export async function revokeConnection(
 
 export type ConnectionSummary = {
   id: string;
+  /** Plaid's id for the login, which is what a copy in another ledger shares. */
+  itemId: string;
   institutionName: string | null;
   errorCode: string | null;
   errorMessage: string | null;
@@ -232,6 +242,7 @@ export type ConnectionSummary = {
   createdAt: Date;
   accounts: {
     id: string;
+    providerAccountId: string;
     name: string;
     mask: string | null;
     type: string | null;
@@ -255,6 +266,7 @@ export async function listConnections(db: Database): Promise<ConnectionSummary[]
     .select({
       id: bankFeedAccounts.id,
       connectionId: bankFeedAccounts.connectionId,
+      providerAccountId: bankFeedAccounts.providerAccountId,
       name: bankFeedAccounts.name,
       mask: bankFeedAccounts.mask,
       type: bankFeedAccounts.type,
@@ -270,6 +282,7 @@ export async function listConnections(db: Database): Promise<ConnectionSummary[]
 
   return connections.map((connection) => ({
     id: connection.id,
+    itemId: connection.itemId,
     institutionName: connection.institutionName,
     errorCode: connection.errorCode,
     errorMessage: connection.errorMessage,
