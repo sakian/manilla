@@ -674,6 +674,12 @@ input[type='file'] {
   padding: 4px 10px;
 }
 
+/* Its label changes as it runs - Syncing…, then what came - and must not
+   wrap inside the button while it does. */
+.topbar-end .sync-button {
+  white-space: nowrap;
+}
+
 .panel-head {
   display: flex;
   align-items: center;
