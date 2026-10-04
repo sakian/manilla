@@ -159,6 +159,27 @@ describe(
       assert.equal((await db.select().from(transactions)).length, 3);
     });
 
+    test('a line of credit cannot be fed: Plaid never syncs its transactions', async () => {
+      await link();
+      await db
+        .update(bankFeedAccounts)
+        .set({ type: 'loan', subtype: 'line of credit' })
+        .where(eq(bankFeedAccounts.name, 'Visa'));
+      await assert.rejects(setFeedAccount(db, (await feedNamed('Visa')).id, chequing), /does not sync transactions for a line of credit/);
+    });
+
+    test('only what Plaid syncs is offered', async () => {
+      const { unsyncable } = await import('./connections.ts');
+      assert.equal(unsyncable('depository', 'checking'), null);
+      assert.equal(unsyncable('credit', 'credit card'), null);
+      assert.equal(unsyncable('loan', 'mortgage'), null);
+      assert.equal(unsyncable('loan', 'student'), null);
+      assert.equal(unsyncable('loan', 'line of credit'), 'unsupported');
+      assert.equal(unsyncable('loan', 'auto'), 'unsupported');
+      assert.equal(unsyncable('investment', 'rrsp'), 'investment');
+      assert.equal(unsyncable(null, null), null, 'unknown is tried, not hidden');
+    });
+
     test('an investment account cannot be fed, since its holdings are not transactions', async () => {
       await link();
       await db.update(bankFeedAccounts).set({ type: 'investment' }).where(eq(bankFeedAccounts.name, 'Visa'));

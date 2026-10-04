@@ -138,6 +138,20 @@ async function institutionNameOf(call: PlaidCall, institutionId: string): Promis
 }
 
 /**
+ * Why Plaid's transaction sync cannot bring in an account, or null when it can.
+ * Its own words: it supports "credit, depository, and some loan-type accounts
+ * (only those with account subtype student or mortgage)". Anything else never
+ * returns a transaction - a line of credit just says "not ready" forever - so
+ * it is not offered rather than offered and silent.
+ */
+export function unsyncable(type: string | null, subtype: string | null): 'investment' | 'unsupported' | null {
+  // Plaid always says; an account it did not is tried rather than hidden.
+  if (type === null || type === 'depository' || type === 'credit') return null;
+  if (type === 'loan' && (subtype === 'student' || subtype === 'mortgage')) return null;
+  return type === 'investment' ? 'investment' : 'unsupported';
+}
+
+/**
  * Say which Manilla account a feed account is, or that it is none. Linking it
  * sets where the feed starts (see `startDateFor`), so what is already here is
  * not counted again.
@@ -149,8 +163,12 @@ export async function setFeedAccount(
 ): Promise<{ startDate: string | null }> {
   if (accountId) {
     const [feed] = await db.select().from(bankFeedAccounts).where(eq(bankFeedAccounts.id, feedAccountId));
-    if (feed?.type === 'investment') {
+    const why = feed ? unsyncable(feed.type, feed.subtype) : null;
+    if (why === 'investment') {
       throw new ConnectionError("An investment account's holdings are not transactions a sync can bring in yet");
+    }
+    if (why === 'unsupported') {
+      throw new ConnectionError(`Plaid does not sync transactions for a ${feed!.subtype ?? feed!.type ?? 'account like this'}`);
     }
     const [taken] = await db
       .select({ id: bankFeedAccounts.id, name: bankFeedAccounts.name })
