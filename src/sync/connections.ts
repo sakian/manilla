@@ -18,6 +18,7 @@ import {
   transactions,
 } from '../../db/schema.ts';
 import { commitImport, previewImport, type RowDecision } from '../import/ofxImport.ts';
+import { localToday } from '../budget/month.ts';
 import { parseJsonKeepingNumbers } from './plaid.ts';
 import { PlaidApiError, type PlaidCall } from './plaidClient.ts';
 import { encryptSecret } from './secret.ts';
@@ -138,9 +139,8 @@ async function institutionNameOf(call: PlaidCall, institutionId: string): Promis
 
 /**
  * Say which Manilla account a feed account is, or that it is none. Linking it
- * sets where the feed starts: the day of the account's latest statement row,
- * so what statements already brought in is not counted again, and the day
- * itself is still covered by matching each row against them (FR-18).
+ * sets where the feed starts (see `startDateFor`), so what is already here is
+ * not counted again.
  */
 export async function setFeedAccount(
   db: Database,
@@ -163,7 +163,7 @@ export async function setFeedAccount(
     }
   }
 
-  const startDate = accountId ? await latestStatementDate(db, accountId) : null;
+  const startDate = accountId ? await startDateFor(db, accountId) : null;
   await db
     .update(bankFeedAccounts)
     // A new account means a new history: start from nothing.
@@ -172,21 +172,33 @@ export async function setFeedAccount(
   return { startDate };
 }
 
-/** The date of the account's latest transaction that came with a bank id. */
-async function latestStatementDate(db: Database, accountId: string): Promise<string | null> {
+/**
+ * Where a newly linked account's feed starts.
+ *
+ * The day of its latest statement row, when it has one: the bank dated those,
+ * so the feed's rows from that day on are matched against them (FR-18) and
+ * nothing earlier is fetched twice. Not a later hand entry, which would skip
+ * the days between.
+ *
+ * With no statement rows, its latest transaction of any kind - a migrated
+ * history, an opening balance. Those carry no bank id to match on, so two
+ * years of feed history laid over them would count most of it twice.
+ *
+ * An empty account starts today. Its balance is what an opening balance says,
+ * and history from before that would be added to it.
+ */
+async function startDateFor(db: Database, accountId: string): Promise<string> {
   const [row] = await db
-    .select({ latest: max(transactions.date) })
+    .select({
+      statement: sql<string | null>`max(${transactions.date}) filter (where exists (
+        select 1 from ${transactionExternalIds} x
+        where x.transaction_id = ${transactions.id} and x.kind = 'fitid'
+      ))`,
+      any: max(transactions.date),
+    })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.accountId, accountId),
-        sql`exists (
-          select 1 from ${transactionExternalIds} x
-          where x.transaction_id = ${transactions.id} and x.kind = 'fitid'
-        )`,
-      ),
-    );
-  return row?.latest ?? null;
+    .where(eq(transactions.accountId, accountId));
+  return row?.statement ?? row?.any ?? localToday();
 }
 
 /**
