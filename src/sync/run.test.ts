@@ -316,6 +316,25 @@ describe(
       assert.deepEqual(await connectionsDue(db, now), []);
     });
 
+    test('straight after connecting, nothing is ready yet: no error, no cursor, not called synced', async () => {
+      const report = await sync(fakePlaid({ 'plaid-chq': [page({ next_cursor: '' })] }).call);
+      assert.equal(report.error, undefined);
+      assert.equal(report.accounts[0]!.notReady, true);
+      assert.equal(await cursorOf(), null);
+      const [connection] = await db.select().from(bankConnections);
+      assert.equal(connection!.lastSyncedAt, null, 'the screen must not say "synced just now" with nothing in');
+      assert.equal(connection!.errorCode, null);
+      assert.equal((await db.select().from(importBatches)).length, 0);
+    });
+
+    test('a response that cannot be read stops the sync and is kept on the connection', async () => {
+      const report = await sync(fakePlaid({ 'plaid-chq': ['{"added": "not a list"}'] }).call);
+      assert.equal(report.error?.code, 'UNREADABLE_RESPONSE');
+      const [connection] = await db.select().from(bankConnections);
+      assert.equal(connection!.errorCode, 'UNREADABLE_RESPONSE');
+      assert.match(connection!.errorMessage!, /has_more|not a list/);
+    });
+
     test('a revoked connection fetches nothing', async () => {
       await db.update(bankConnections).set({ accessToken: null, revokedAt: new Date() });
       const plaid = fakePlaid({});

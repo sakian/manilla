@@ -82,10 +82,12 @@ export function startDailySync(log: (line: string) => void): void {
         for (const report of await syncDue(db, { ...deps, account: home })) {
           const added = report.accounts.reduce((sum, account) => sum + account.added, 0);
           const held = report.accounts.reduce((sum, account) => sum + account.held, 0);
+          const waiting = report.accounts.filter((account) => account.notReady).length;
           log(
             report.error
               ? `bank sync in ${ledger.name} stopped: ${report.error.code}`
-              : `bank sync in ${ledger.name}: ${added} added, ${held} held for you`,
+              : `bank sync in ${ledger.name}: ${added} added, ${held} held for you` +
+                  (waiting > 0 ? `, ${waiting} accounts not ready at Plaid yet` : ''),
           );
         }
       }

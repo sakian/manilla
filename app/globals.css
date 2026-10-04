@@ -794,6 +794,36 @@ input[type='file'] {
   flex: 1 1 220px;
 }
 
+/* While a sync or a sign-in is under way: said beside the bank it is for,
+   since the first sync with a lot of history takes minutes, not seconds. */
+.sync-progress {
+  font-size: 13px;
+  margin: 2px 0 8px 12px;
+}
+
+.sync-progress::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: sync-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sync-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-progress::before {
+    animation: none;
+  }
+}
+
 /* One bank login, then the accounts it can see. */
 .bank-connection {
   border-top: 1px solid var(--border);
