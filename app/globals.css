@@ -674,6 +674,12 @@ input[type='file'] {
   padding: 4px 10px;
 }
 
+/* Its label changes as it runs - Syncing…, then what came - and must not
+   wrap inside the button while it does. */
+.topbar-end .sync-button {
+  white-space: nowrap;
+}
+
 .panel-head {
   display: flex;
   align-items: center;
@@ -792,6 +798,86 @@ input[type='file'] {
 
 .add-device input {
   flex: 1 1 220px;
+}
+
+/* While a sync or a sign-in is under way: said beside the bank it is for,
+   since the first sync with a lot of history takes minutes, not seconds. */
+.sync-progress {
+  font-size: 13px;
+  margin: 2px 0 8px 12px;
+}
+
+.sync-progress::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: sync-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sync-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-progress::before {
+    animation: none;
+  }
+}
+
+/* One bank login, then the accounts it can see. */
+.bank-connection {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+/* The name takes what is left and wraps; the choice keeps its column, so a
+   long account name does not push its picker onto a line of its own. */
+.row.bank-account {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.bank-account > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.bank-account select {
+  font-size: 13px;
+  padding: 3px 6px;
+}
+
+.bank-account > .muted:last-child {
+  font-size: 13px;
+  text-align: right;
+}
+
+/* On a phone the note, or a picker as wide as the longest account in any
+   ledger, would take the name's room; cap them instead. */
+@media (max-width: 720px) {
+  .bank-account > .muted:last-child {
+    max-width: 8em;
+  }
+
+  .bank-account select {
+    max-width: 10.5em;
+  }
+}
+
+.bank-login {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 8px 12px;
 }
 
 /* --- Budget -------------------------------------------------------------- */
@@ -1363,6 +1449,34 @@ details[open] > summary > .group-summary::before {
 .import-match-choice input {
   width: 18px;
   height: 18px;
+}
+
+/* The same grid, but a row of buttons rather than one big label. */
+.held-row {
+  cursor: default;
+}
+
+.held-row .device-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.held-row .button-link {
+  font-size: 13px;
+  padding: 3px 8px;
+}
+
+/* On a phone two buttons beside the text leave it a column a few words wide,
+   so they go underneath. */
+@media (max-width: 720px) {
+  .held-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .held-row .device-actions {
+    justify-content: flex-start;
+  }
 }
 
 .budget-warning.ok {

@@ -39,6 +39,7 @@ type Preview = {
   rows: PreviewRow[];
   counts: {
     new: number;
+    same_entry: number;
     duplicate: number;
     possible_duplicate: number;
     transfer_half: number;
@@ -73,12 +74,16 @@ type Statement = {
  * What each row does. A transfer half links, because the money is already
  * recorded on both accounts and what this statement adds is the bank's id for
  * it (FR-5). Something entered ahead links for the same reason: it was recorded
- * by hand before the bank had it. A refused match is added as its own.
+ * by hand before the bank had it. So does a row the bank feed brought in first
+ * (FR-18). A refused match is added as its own.
  */
 function decisionOf(row: PreviewRow, refused: Record<number, string> = {}): Decision {
   if (row.verdict === 'new') return 'add';
   if (row.existingId && refused[row.index] === row.existingId) return 'add';
-  if ((row.verdict === 'transfer_half' || row.verdict === 'entered_ahead') && row.existingId) {
+  if (
+    (row.verdict === 'same_entry' || row.verdict === 'transfer_half' || row.verdict === 'entered_ahead') &&
+    row.existingId
+  ) {
     return 'link';
   }
   return 'skip';
@@ -104,11 +109,14 @@ export default function ImportScreen({
   accounts,
   history,
   notices,
+  held,
 }: {
   accounts: { id: string; name: string; externalAccountId: string | null }[];
   history: ImportRecord[];
   /** What needs attention, so what an import just created is reachable from here. */
   notices?: ReactNode;
+  /** What the bank feed held back for a decision. */
+  held?: ReactNode;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -336,6 +344,8 @@ export default function ImportScreen({
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
 
+      {held}
+
       {statements.length === 0 && (
         <section className="panel">
           <h3>Choose statements</h3>
@@ -499,6 +509,7 @@ export default function ImportScreen({
 
 /** What a match does by default, in the words of the row it matched. */
 function matchVerb(row: PreviewRow): string {
+  if (row.verdict === 'same_entry') return 'Linked to the bank feed’s ';
   if (row.verdict === 'entered_ahead') return 'Linked to your entry ';
   if (row.verdict === 'transfer_half') return 'Linked to the transfer ';
   return 'Left out: looks like ';
@@ -547,6 +558,11 @@ function StatementCard({
             {preview.counts.duplicate > 0 && (
               <div className="callout">
                 <strong>{preview.counts.duplicate}</strong> already imported
+              </div>
+            )}
+            {preview.counts.same_entry > 0 && (
+              <div className="callout">
+                <strong>{preview.counts.same_entry}</strong> already here from the bank feed
               </div>
             )}
             {preview.counts.possible_duplicate > 0 && (

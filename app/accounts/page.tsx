@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { ledgerDb } from '../ledger.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
 import { attention } from '../../src/notices/notices.ts';
+import { diskUsedShare } from '../../src/system/disk.ts';
 import { requireUser } from '../auth.ts';
 import { Notices } from '../Notices.tsx';
 import AccountManager from './AccountManager.tsx';
@@ -24,7 +25,7 @@ export default async function AccountsPage(props: {
 
   const [categories, report] = await Promise.all([
     listAccountCategories(connection, { includeArchived: true }),
-    attention(connection),
+    attention(connection, undefined, { diskUsage: diskUsedShare }),
   ]);
 
   return (

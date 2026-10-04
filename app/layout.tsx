@@ -2,8 +2,10 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { currentSession } from './auth.ts';
-import { allLedgers, currentLedger } from './ledger.ts';
+import { allLedgers, currentLedger, ledgerDb } from './ledger.ts';
 import LedgerSwitch, { toneOf } from './LedgerSwitch.tsx';
+import { SyncButton } from './SyncButton.tsx';
+import { liveConnectionIds } from '../src/sync/connections.ts';
 import { signOutAction } from './login/actions.ts';
 import { THEME_COOKIE, themeColorFor, themeFrom } from '../src/theme.ts';
 import './globals.css';
@@ -34,6 +36,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // Named on screen only when there is a choice to make.
   const ledgers = session ? await allLedgers() : [];
   const ledger = ledgers.length > 1 ? await currentLedger() : null;
+  // The Sync button is only there once a bank is connected to this ledger.
+  const banked = session ? (await liveConnectionIds(await ledgerDb())).length > 0 : false;
   const theme = await chosenTheme();
 
   return (
@@ -75,6 +79,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     the user's own name, which nobody guessed was a link; who is
                     signed in is said on the Settings screen instead. */}
                 <form action={signOutAction} className="topbar-end">
+                  {banked && <SyncButton />}
                   <Link href="/settings" className="button-link">
                     Settings
                   </Link>

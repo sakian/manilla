@@ -1,5 +1,6 @@
 /**
- * OFX/QFX import (FR-7, FR-9 to FR-14).
+ * OFX/QFX import (FR-7, FR-9 to FR-14), and the path a bank feed's
+ * transactions take too (FR-17).
  *
  * Import is deliberately two-phase: `previewImport` decides what each row is
  * and changes nothing; `commitImport` writes only what the user accepted. That
@@ -26,7 +27,7 @@ import type { OfxStatement, OfxTransaction } from '../ofx/parse.ts';
 import { bandOf } from '../categorize/pipeline.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 import { buildCategorizer } from '../categorize/fromDb.ts';
-import { unallocatedEnvelope } from '../ledger/ledger.ts';
+import { unallocatedEnvelope, type Executor } from '../ledger/ledger.ts';
 import { unmatchedTransferHalves } from '../transactions/manage.ts';
 import { listTransferRules, matchTransferRule } from '../rules/rules.ts';
 import { rememberAnswers } from '../ai/ai.ts';
@@ -60,9 +61,42 @@ import type { Suggestion } from '../categorize/types.ts';
 
 export class ImportError extends Error {}
 
+/**
+ * A statement file, or one sync of a bank feed (FR-17). The two take the same
+ * path, so a synced transaction is matched, categorized and queued exactly as
+ * a file's row is, and can be undone as a batch the same way.
+ */
+export type ImportSource = 'file_import' | 'bank_sync';
+
+/**
+ * What an import needs of a statement. A bank feed's rows take the same shape
+ * as a file's: `fitId` is the bank's id for the row whichever way it came, and
+ * `posted` is when it posted, since a feed's pending charges are not imported
+ * at all (FR-19).
+ */
+export type IncomingStatement = Pick<OfxStatement, 'transactions' | 'ledgerBalanceCents' | 'ledgerBalanceAsOf'>;
+
+/** Which external-id kind a source's ids are stored under, and the other one. */
+function idKindsOf(source: ImportSource): { own: 'fitid' | 'aggregator'; other: 'fitid' | 'aggregator' } {
+  return source === 'bank_sync'
+    ? { own: 'aggregator', other: 'fitid' }
+    : { own: 'fitid', other: 'aggregator' };
+}
+
 export type RowVerdict =
   /** Not seen before. */
   | 'new'
+  /**
+   * The same bank entry, already here from the other source: a statement row
+   * that the bank feed brought in first, or a synced one that a file did
+   * (FR-18). Both are the bank's own record, so the amount agrees to the
+   * cent. The day need not: a card's statement can date a purchase the day it
+   * was made where the feed dates it the day it posted, a day or two later.
+   * So the same day matches whatever the wording, and the same description
+   * matches within a few days. Linking attaches this source's id, so each
+   * source recognises it from then on.
+   */
+  | 'same_entry'
   /** The bank's own id is already on a transaction in this account. */
   | 'duplicate'
   /**
@@ -114,6 +148,7 @@ export type BalanceCheck = {
 };
 
 export type ImportPreview = {
+  source: ImportSource;
   accountId: string;
   accountName: string;
   rows: ImportRow[];
@@ -156,10 +191,12 @@ export async function rememberAccountMapping(
  */
 export async function previewImport(
   db: Database,
-  statement: OfxStatement,
+  statement: IncomingStatement,
   accountId: string,
-  options: { categorize?: boolean; useAi?: boolean; account?: Database } = {},
+  options: { categorize?: boolean; useAi?: boolean; account?: Database; source?: ImportSource } = {},
 ): Promise<ImportPreview> {
+  const source = options.source ?? 'file_import';
+  const idKind = idKindsOf(source);
   const [account] = await db
     .select({ id: accounts.id, name: accounts.name })
     .from(accounts)
@@ -169,7 +206,7 @@ export async function previewImport(
 
   const incoming = statement.transactions;
 
-  // Every FITID already known for this account.
+  // Every id from this source already known for this account.
   const fitIds = incoming.map((t) => t.fitId).filter(Boolean);
   const knownById = new Map<string, string>();
   if (fitIds.length > 0) {
@@ -182,7 +219,7 @@ export async function previewImport(
       .where(
         and(
           eq(transactionExternalIds.accountId, accountId),
-          eq(transactionExternalIds.kind, 'fitid'),
+          eq(transactionExternalIds.kind, idKind.own),
           inArray(transactionExternalIds.value, fitIds),
         ),
       );
@@ -202,6 +239,15 @@ export async function previewImport(
   //    while its purchases kept theirs - and not the window either, which would
   //    take last week's identical charge for this one.
   const lookAlikes = new Map<string, { id: string; date: string; banked: boolean }[]>();
+  // Rows the other source brought in and this one has not seen: where the same
+  // bank entry arriving a second way finds its first record (FR-18).
+  const fromOtherSource: {
+    id: string;
+    date: string;
+    amountCents: number;
+    payeeKey: string;
+    payeeRaw: string;
+  }[] = [];
   // Typed in by hand and not yet seen on a statement: the ones waiting for this
   // file. Only `manual` rows, because a migrated history is just as unbanked
   // but years of it would match every round amount within the window.
@@ -222,22 +268,38 @@ export async function previewImport(
         payeeRaw: transactions.payeeRaw,
         source: transactions.source,
         kind: transactions.kind,
-        banked: sql<boolean>`exists (
+        ownId: sql<boolean>`exists (
           select 1 from ${transactionExternalIds} x
-          where x.transaction_id = ${transactions.id} and x.kind = 'fitid'
+          where x.transaction_id = ${transactions.id} and x.kind = ${idKind.own}
+        )`,
+        otherId: sql<boolean>`exists (
+          select 1 from ${transactionExternalIds} x
+          where x.transaction_id = ${transactions.id} and x.kind = ${idKind.other}
         )`,
       })
       .from(transactions)
       .where(eq(transactions.accountId, accountId));
 
     for (const row of rows) {
+      // Dated by the bank, from either source.
+      const banked = row.ownId || row.otherId;
       const key = `${Number(row.amountCents)}|${row.payeeKey}`;
-      const candidate = { id: row.id, date: row.date, banked: row.banked };
+      const candidate = { id: row.id, date: row.date, banked };
       const list = lookAlikes.get(key);
       if (list) list.push(candidate);
       else lookAlikes.set(key, [candidate]);
 
-      if (row.source === 'manual' && row.kind === 'spending' && !row.banked) {
+      if (row.otherId && !row.ownId) {
+        fromOtherSource.push({
+          id: row.id,
+          date: row.date,
+          amountCents: Number(row.amountCents),
+          payeeKey: row.payeeKey,
+          payeeRaw: row.payeeRaw,
+        });
+      }
+
+      if (row.source === 'manual' && row.kind === 'spending' && !banked) {
         enteredAhead.push({
           id: row.id,
           date: row.date,
@@ -278,6 +340,43 @@ export async function previewImport(
         verdict: 'duplicate',
         existingId: existingByFit,
         reason: `Already imported (bank id ${transaction.fitId})`,
+      };
+    }
+
+    // The same bank entry from the other source. The same day is enough on
+    // its own, since the two sources need not word a transaction alike. Days
+    // apart, the description has to agree too: TD's card statement dates a
+    // purchase when it was made and the feed when it posted, with the text
+    // identical, and without that the window would take any equal amount.
+    // Same day first, then the same description, then the nearest; each row
+    // here answers for one at most, so two identical coffees on consecutive
+    // days pair off one to one rather than both landing on one.
+    const [sameEntry] = fromOtherSource
+      .filter(
+        (candidate) =>
+          !claimedLookAlikes.has(candidate.id) &&
+          candidate.amountCents === transaction.amountCents &&
+          (candidate.date === transaction.posted ||
+            (candidate.payeeKey === payeeKey &&
+              daysApart(candidate.date, transaction.posted) <= LOOKALIKE_WINDOW_DAYS)),
+      )
+      .sort(
+        (left, right) =>
+          Number(right.date === transaction.posted) - Number(left.date === transaction.posted) ||
+          Number(right.payeeKey === payeeKey) - Number(left.payeeKey === payeeKey) ||
+          daysApart(left.date, transaction.posted) - daysApart(right.date, transaction.posted),
+      );
+    if (sameEntry) {
+      claimedLookAlikes.add(sameEntry.id);
+      const where = source === 'bank_sync' ? 'a statement file' : 'the bank feed';
+      return {
+        index,
+        transaction,
+        verdict: 'same_entry',
+        existingId: sameEntry.id,
+        reason:
+          `Already here from ${where} as "${sameEntry.payeeRaw}" on ${sameEntry.date}. ` +
+          'Linking attaches this id to it rather than recording the money twice.',
       };
     }
 
@@ -442,6 +541,7 @@ export async function previewImport(
 
   const counts: Record<RowVerdict, number> = {
     new: rows.filter((row) => row.verdict === 'new').length,
+    same_entry: rows.filter((row) => row.verdict === 'same_entry').length,
     duplicate: rows.filter((row) => row.verdict === 'duplicate').length,
     possible_duplicate: rows.filter((row) => row.verdict === 'possible_duplicate').length,
     transfer_half: rows.filter((row) => row.verdict === 'transfer_half').length,
@@ -465,6 +565,7 @@ export async function previewImport(
   }
 
   return {
+    source,
     accountId,
     accountName: account.name,
     rows,
@@ -501,8 +602,12 @@ export type RowDecision =
  */
 export type Refusal = { index: number; existingId: string };
 
+/** Matches whose default is to link: the money is already here, and only the id is new. */
+const LINKS_BY_DEFAULT: ReadonlySet<RowVerdict> = new Set(['same_entry', 'transfer_half', 'entered_ahead']);
+
 /** Verdicts that pair a statement row with a transaction already here. */
 export const MATCHED: ReadonlySet<RowVerdict> = new Set([
+  'same_entry',
   'possible_duplicate',
   'transfer_half',
   'entered_ahead',
@@ -547,29 +652,34 @@ export type CommitResult = {
 /**
  * Write the accepted rows in one database transaction (NF-2). Re-running the
  * same file afterwards produces a preview with zero new rows, which is FR-11.
+ * Given a transaction, it writes inside it, so a sync can store its cursor
+ * with the batch.
  */
 export async function commitImport(
-  db: Database,
+  db: Executor,
   preview: ImportPreview,
   decisions: Map<number, RowDecision>,
   meta: { filename?: string } = {},
 ): Promise<CommitResult> {
   const defaultFor = (row: ImportRow): RowDecision => {
     if (row.verdict === 'new') return { action: 'add' };
-    // A transfer half, or something entered ahead, defaults to linking: the
-    // money is already recorded, and what this statement adds is the bank's id
-    // for it.
-    if ((row.verdict === 'transfer_half' || row.verdict === 'entered_ahead') && row.existingId) {
+    // The same entry from the other source, a transfer half, or something
+    // entered ahead, defaults to linking: the money is already recorded, and
+    // what this statement adds is the bank's id for it.
+    if (LINKS_BY_DEFAULT.has(row.verdict) && row.existingId) {
       return { action: 'link', transactionId: row.existingId };
     }
     return { action: 'skip' };
   };
 
+  const { source } = preview;
+  const idKind = idKindsOf(source);
+
   return db.transaction(async (tx) => {
     const [batch] = await tx
       .insert(importBatches)
       .values({
-        source: 'file_import',
+        source,
         filename: meta.filename ?? null,
         accountId: preview.accountId,
         // A checkpoint needs its day; a balance with no date says nothing about
@@ -603,7 +713,7 @@ export async function commitImport(
             .values({
               transactionId: decision.transactionId,
               accountId: preview.accountId,
-              kind: 'fitid',
+              kind: idKind.own,
               value: row.transaction.fitId,
             })
             .onConflictDoNothing();
@@ -631,7 +741,7 @@ export async function commitImport(
               memo: row.transaction.memo ?? null,
               kind: 'account_transfer' as const,
               status: 'confirmed' as const,
-              source: 'file_import' as const,
+              source,
               importBatchId: batchId,
               transferPairId: pairId,
             },
@@ -643,7 +753,7 @@ export async function commitImport(
               payeeKey: normalizePayee(payeeRaw).key,
               kind: 'account_transfer' as const,
               status: 'confirmed' as const,
-              source: 'file_import' as const,
+              source,
               importBatchId: batchId,
               transferPairId: pairId,
             },
@@ -654,7 +764,7 @@ export async function commitImport(
           await tx.insert(transactionExternalIds).values({
             transactionId: outgoing!.id,
             accountId: preview.accountId,
-            kind: 'fitid',
+            kind: idKind.own,
             value: row.transaction.fitId,
           });
         }
@@ -676,7 +786,7 @@ export async function commitImport(
           kind: 'spending',
           // FR-12: everything arrives awaiting review, however confident we are.
           status: 'pending_review',
-          source: 'file_import',
+          source,
           importBatchId: batchId,
         })
         .returning({ id: transactions.id });
@@ -687,7 +797,7 @@ export async function commitImport(
         await tx.insert(transactionExternalIds).values({
           transactionId,
           accountId: preview.accountId,
-          kind: 'fitid',
+          kind: idKind.own,
           value: row.transaction.fitId,
         });
       }

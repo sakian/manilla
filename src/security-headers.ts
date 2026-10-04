@@ -27,7 +27,11 @@ export function securityHeaders(production: boolean): Header[] {
     // Report links and transaction searches carry what someone was looking at
     // in the query string; nothing outside Manilla needs to see it.
     { key: 'Referrer-Policy', value: 'same-origin' },
-    { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+    // A page that opens Manilla gets no handle on it. Not plain `same-origin`:
+    // Plaid Link signs into most banks in a popup it opens from its iframe, and
+    // reports back through that popup's opener, which `same-origin` severs -
+    // the bank sign-in would succeed and Manilla would never hear about it.
+    { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
     // Nothing here uses them. WebAuthn's own permissions are left at their
     // defaults on purpose: listing them wrong is how passkeys stop working.
     { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },

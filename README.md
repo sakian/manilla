@@ -15,7 +15,7 @@ by hand.
 | Sign-in | Passkeys (WebAuthn) with single-use recovery codes |
 | Access | Its own node on your tailnet — no port open to anything; optionally public through Tailscale Funnel |
 | Classifier | Your rules → payee history → optionally the Claude API, with an off switch |
-| Banking | File import. Canada; automatic feeds deliberately deferred |
+| Banking | File import, or a daily feed through Plaid. Canada |
 | Users | One |
 
 ## What it does
@@ -28,6 +28,14 @@ every write. A discrepancy is shown, not swallowed.
 transaction ID, look-alikes are flagged rather than dropped, something you typed
 in before the bank had it is linked rather than counted twice, a stated closing
 balance is checked against the result, and a whole import can be undone.
+
+**A bank feed is an import nobody watches.** Through Plaid, once a day: posted
+transactions take the same path as a statement's rows and wait in the same queue,
+a transaction a file already brought in is linked rather than doubled, and anything
+a person would have had to decide is held for one rather than guessed. You sign in
+to your bank in Plaid's window; Manilla keeps only an encrypted token that
+Disconnect revokes. Each install brings its own Plaid keys, and Plaid's free plan
+covers a household.
 
 **Categorization proposes; you confirm.** Rules fire first, then recency-weighted
 payee history, then — if you leave it on — a model, only for what the free layers
@@ -68,8 +76,9 @@ credentials, not records of your money.
 - **One currency, and it is dollars.** The symbol is one constant
   (`src/money.ts`); thousands separators follow the server's locale. Nobody has
   tried it anywhere else.
-- **Canada-shaped.** OFX/QFX only, and the argument for deferring automatic feeds
-  is specifically about Canadian banking. See [docs/measurements.md](docs/measurements.md).
+- **Canada-shaped.** OFX/QFX files, or Plaid, and the case for using an
+  aggregator before open banking arrives, and for which one, is specifically about
+  Canadian banking. See [docs/measurements.md](docs/measurements.md).
 - **Automatic categorization tops out around 72%** of transactions accepted
   unchanged, because 68% of transactions happen at merchants used for more than one
   envelope. This was measured, not guessed, and it is why the review queue matters
@@ -89,8 +98,8 @@ credentials, not records of your money.
 - [docs/design-decisions.md](docs/design-decisions.md) — the choices that would be
   expensive to reverse, and why.
 - [docs/measurements.md](docs/measurements.md) — what was measured against real
-  data: the accuracy ceiling, the four silent-corruption defects, and the case for
-  waiting on open banking.
+  data: the accuracy ceiling, the four silent-corruption defects, and why bank
+  feeds go through an aggregator until open banking arrives.
 
 ## Getting set up
 
@@ -250,6 +259,7 @@ cp .env.example .env            # then fill in TS_AUTHKEY, POSTGRES_PASSWORD, MA
 # 3. Up it goes. The app migrates the database itself on start.
 docker compose up -d --build
 docker compose logs -f app      # "database is up to schema", then the origin
+docker image prune -f && docker builder prune -f --filter until=168h   # see below
 
 # 4. Clear TS_AUTHKEY from .env - the node keeps its identity in a volume.
 ```
@@ -274,6 +284,22 @@ In production the boot check refuses to start on a localhost relying-party ID or
 a schema it could not bring up to date, with the reason in
 `docker compose logs app`. Serving against a half-migrated schema is how a ledger
 ends up half-written, so both are fatal rather than warnings.
+
+**Every rebuild leaves the last one behind.** `--build` keeps the previous image
+and the build cache, and Docker never clears either: on this project's own
+server that reached 64 GB and filled the disk, which stops Postgres writing.
+So an update is the same three steps every time:
+
+```bash
+git pull
+docker compose up -d --build
+docker image prune -f && docker builder prune -f --filter until=168h
+```
+
+The prune removes untagged images no container uses, and build cache older
+than a week - nothing running, and never a volume. Both are machine-wide, so
+another project's leftovers go too. Past 90% full, the app says so on every
+screen and the nightly backup log does too.
 
 `deploy/nginx.conf.example` is still there for the other arrangement — one node
 for the whole machine, a reverse proxy in front of several services, and a

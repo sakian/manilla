@@ -20,6 +20,10 @@ test('passkeys are not switched off by the permissions policy', () => {
   assert.doesNotMatch(byKey(true).get('Permissions-Policy') ?? '', /publickey-credentials/);
 });
 
+test("the bank sign-in popup can still report back to the page that opened it", () => {
+  assert.equal(byKey(true).get('Cross-Origin-Opener-Policy'), 'same-origin-allow-popups');
+});
+
 test('HSTS only in production', () => {
   assert.equal(byKey(true).get('Strict-Transport-Security'), 'max-age=31536000');
   assert.equal(byKey(false).has('Strict-Transport-Security'), false);
