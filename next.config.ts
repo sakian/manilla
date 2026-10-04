@@ -27,6 +27,10 @@ const config: NextConfig = {
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders(process.env.NODE_ENV === 'production') },
+      // Always checked for a newer copy, so a change to how notifications are
+      // shown reaches phones on their next visit rather than whenever a cache
+      // lets go.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
     ];
   },
 

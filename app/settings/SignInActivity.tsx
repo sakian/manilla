@@ -27,9 +27,8 @@ export default function SignInActivity({ events }: { events: Activity[] }) {
       <p className="muted footnote">
         Passkeys added and removed, recovery codes used or tried, and people invited, joining or
         removed. Signing in with a passkey is not listed: that is what is supposed to happen.
-        {process.env.MANILLA_ALERT_URL
-          ? ' Each is also sent to the alert webhook.'
-          : ' Set MANILLA_ALERT_URL to have each sent to your phone as well.'}
+        {' '}Turn on Notifications, above, to have each sent to your phone as it happens.
+        {process.env.MANILLA_ALERT_URL && ' Each is also sent to the alert webhook.'}
       </p>
     </section>
   );

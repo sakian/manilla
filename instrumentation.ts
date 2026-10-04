@@ -18,6 +18,19 @@ export async function register(): Promise<void> {
   await checkAuthConfig(production);
   await checkTimeZone(production);
   await startBankSync(production);
+  await startProblemWatch(production);
+}
+
+/**
+ * Look hourly for a ledger that no longer adds up or a disk filling, and tell
+ * the phones that asked (#87). Production only, like the bank sync, and
+ * whether or not bank feeds are on.
+ */
+async function startProblemWatch(production: boolean): Promise<void> {
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+  if (!production || !process.env.DATABASE_URL) return;
+  const { startProblemWatch } = await import('./src/push/problems.ts');
+  startProblemWatch((line) => console.log(`[manilla] ${line}`));
 }
 
 /**

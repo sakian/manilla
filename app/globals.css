@@ -856,6 +856,26 @@ input[type='file'] {
   flex: 1 1 220px;
 }
 
+/* What each device hears about, beside it; wraps under its name on a phone. */
+.notify-kinds {
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.notify-kinds label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.notify-kinds input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
 /* While a sync or a sign-in is under way: said beside the bank it is for,
    since the first sync with a lot of history takes minutes, not seconds. */
 .sync-progress {

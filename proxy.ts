@@ -39,6 +39,10 @@ const PUBLIC_FILES = new Set([
   '/icon-512.png',
   '/icon-maskable-512.png',
   '/robots.txt',
+  // The service worker that shows notifications. A browser fetches it again on
+  // its own schedule, cookie or none, and a sign-in page in its place would
+  // fail the update and leave an old one running.
+  '/sw.js',
 ]);
 
 function isPublic(pathname: string): boolean {
