@@ -126,8 +126,8 @@ async function balancesForNotices(db: Database, month: MonthKey) {
 }
 
 /** Past this share in use, the disk is worth a notice; past the second, it is a fault. */
-const DISK_WARN = 0.9;
-const DISK_BAD = 0.97;
+export const DISK_WARN = 0.9;
+export const DISK_BAD = 0.97;
 
 export async function attention(
   db: Database,

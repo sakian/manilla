@@ -1,16 +1,22 @@
 /**
- * What the nightly sync tells a phone (FR-16), when MANILLA_SYNC_NOTIFY_URL is set.
+ * What the nightly sync tells a phone (FR-16): the browsers that turned each
+ * kind on in Settings (src/push/push.ts), and MANILLA_SYNC_NOTIFY_URL if set.
  *
- * One notification for a whole run, and none for a run that needs nothing:
- * a daily "nothing new" is how a feed teaches you to swipe it away unread.
- * Three things are worth a phone buzzing - transactions waiting for you to
- * review, an envelope the sync took below zero, and a bank that has stopped
- * until you sign in again, which is otherwise silent: the feed simply goes
- * quiet, and nothing says why until someone opens the app.
+ * Up to three notifications for a whole run, each its own so each can be
+ * turned off on its own, and none for a run that needs nothing: a daily
+ * "nothing new" is how a feed teaches you to swipe it away unread.
  *
- * Bank names, envelope names and counts only. The topic is on someone else's
- * server, so what it carries should be harmless to anyone who reads it: no
- * amounts, no payees, no account names.
+ *  - The bank sync itself: transactions waiting for you to review, income that
+ *    has arrived to give to envelopes, and a bank that has stopped until you
+ *    sign in again, which is otherwise silent - the feed simply goes quiet, and
+ *    nothing says why until someone opens the app.
+ *  - Envelopes the sync took below zero.
+ *  - Charges the sync brought in that look out of the ordinary (AI-1).
+ *
+ * Bank names, envelope names and counts only. An ntfy topic is on someone
+ * else's server, and a lock screen is read by whoever holds the phone, so what
+ * it carries should be harmless to anyone who reads it: no amounts, no payees,
+ * no account names.
  *
  * A separate topic from the sign-in alerts (src/auth/activity.ts), on purpose:
  * those must never be the thing you have learned to ignore.
@@ -18,6 +24,7 @@
 
 import { push } from '../notify.ts';
 import type { ManagedGroup } from '../envelopes/manage.ts';
+import type { Insight } from '../insights/insights.ts';
 
 export type SyncOutcome = {
   /** The ledger's name, said only when there is more than one. */
@@ -35,12 +42,28 @@ export type LedgerAfterSync = {
   waiting: number;
   /** Envelopes this run took below zero, by name (see `newlyOverdrawn`). */
   overdrawn: string[];
+  /** Whether this run put money in the income pool (see `incomeArrived`). */
+  income?: boolean;
+  /** Unusual charges this run brought in (see `newlyUnusual`). */
+  unusual?: Insight[];
 };
 
-export type SyncNotice = { text: string; priority: 'high' | 'default' };
+/** Which switch in Settings each one answers to. */
+export type SyncNoticeKind = 'sync' | 'overspent' | 'unusual';
+
+export type SyncNotice = { kind: SyncNoticeKind; text: string; priority: 'high' | 'default' };
+
+export const TITLES: Record<SyncNoticeKind, string> = {
+  sync: 'Manilla bank sync',
+  overspent: 'Manilla overspent envelopes',
+  unusual: 'Manilla unusual charges',
+};
 
 /** Past this many, the rest of the overdrawn envelopes are a count. */
 const NAMED = 3;
+
+const envelopesOf = (groups: ManagedGroup[]) =>
+  groups.flatMap((group) => group.envelopes).filter((envelope) => envelope.archivedAt === null);
 
 /**
  * The envelopes that went below zero between two looks at a ledger: before its
@@ -54,14 +77,35 @@ const NAMED = 3;
  */
 export function newlyOverdrawn(before: ManagedGroup[], after: ManagedGroup[]): string[] {
   const overdrawn = (groups: ManagedGroup[]) =>
-    groups
-      .flatMap((group) => group.envelopes)
-      .filter((envelope) => !envelope.isUnallocated && envelope.archivedAt === null && envelope.balanceCents < 0);
+    envelopesOf(groups).filter((envelope) => !envelope.isUnallocated && envelope.balanceCents < 0);
   const already = new Set(overdrawn(before).map((envelope) => envelope.id));
   return overdrawn(after)
     .filter((envelope) => !already.has(envelope.id))
     .map((envelope) => envelope.name)
     .sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Whether the sync left more in the income pool than it found, and something
+ * there to give out.
+ *
+ * Only income a rule or the payee's history placed counts: a deposit nothing
+ * recognised waits in the review queue with no envelope, and is said as one
+ * more to review instead.
+ */
+export function incomeArrived(before: ManagedGroup[], after: ManagedGroup[]): boolean {
+  const pool = (groups: ManagedGroup[]) =>
+    envelopesOf(groups)
+      .filter((envelope) => envelope.isUnallocated)
+      .reduce((sum, envelope) => sum + envelope.balanceCents, 0);
+  const now = pool(after);
+  return now > pool(before) && now > 0;
+}
+
+/** Unusual charges found after the sync and not before it: the ones it brought in. */
+export function newlyUnusual(before: Insight[], after: Insight[]): Insight[] {
+  const already = new Set(before.map((insight) => insight.transactionId));
+  return after.filter((insight) => !already.has(insight.transactionId));
 }
 
 /** "Groceries is", "Groceries and Dining are", "Dining, Fuel, Groceries and 2 more are". */
@@ -73,9 +117,21 @@ function overdrawnLine(names: string[]): string {
   return `${list} ${names.length === 1 ? 'is' : 'are'} now overdrawn.`;
 }
 
+/** What was found, without the payee or the amount: the app has both, a lock screen should not. */
+function unusualLine(insights: Insight[]): string {
+  const jumped = insights.filter((insight) => insight.kind === 'charge_jumped').length;
+  const large = insights.length - jumped;
+  const parts = [
+    jumped === 1 ? 'a regular charge came in well above its usual' : jumped > 1 ? `${jumped} regular charges came in well above their usual` : '',
+    large === 1 ? 'a large first charge from a new payee' : large > 1 ? `${large} large first charges from new payees` : '',
+  ].filter(Boolean);
+  const text = parts.join(', and ');
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
+
 const LOGIN_REQUIRED = 'ITEM_LOGIN_REQUIRED';
 
-/** @param ledgers each synced ledger after its sync, by name. */
+/** The bank sync's own notice: what came in, and banks that stopped. */
 export function syncNotice(
   outcomes: SyncOutcome[],
   ledgers: Map<string, LedgerAfterSync>,
@@ -112,16 +168,43 @@ export function syncNotice(
       const count = after?.waiting ?? 0;
       lines.push(`${prefix}${news.join('; ')}.${count > 0 ? ` ${count} to review.` : ''}`);
     }
-    if (after && after.overdrawn.length > 0) lines.push(`${prefix}${overdrawnLine(after.overdrawn)}`);
+    if (after?.income) lines.push(`${prefix}Income came in: Available has money to give to envelopes.`);
   }
 
-  return lines.length > 0 ? { text: lines.join('\n'), priority: urgent ? 'high' : 'default' } : null;
+  return lines.length > 0 ? { kind: 'sync', text: lines.join('\n'), priority: urgent ? 'high' : 'default' } : null;
 }
 
-/** Send it, tapping through to the app's home screen, where every notice is. */
+/** One line per ledger from what each ledger said after its sync, or nothing. */
+function perLedger(
+  kind: SyncNoticeKind,
+  ledgers: Map<string, LedgerAfterSync>,
+  options: { manyLedgers: boolean },
+  line: (after: LedgerAfterSync) => string | null,
+): SyncNotice | null {
+  const lines = [...ledgers].flatMap(([ledger, after]) => {
+    const text = line(after);
+    return text ? [`${options.manyLedgers ? `${ledger}: ` : ''}${text}`] : [];
+  });
+  return lines.length > 0 ? { kind, text: lines.join('\n'), priority: 'default' } : null;
+}
+
+/** Everything a run has to say, one notice per kind that has something. */
+export function syncNotices(
+  outcomes: SyncOutcome[],
+  ledgers: Map<string, LedgerAfterSync>,
+  options: { manyLedgers: boolean },
+): SyncNotice[] {
+  return [
+    syncNotice(outcomes, ledgers, options),
+    perLedger('overspent', ledgers, options, (after) => (after.overdrawn.length > 0 ? overdrawnLine(after.overdrawn) : null)),
+    perLedger('unusual', ledgers, options, (after) => (after.unusual?.length ? unusualLine(after.unusual) : null)),
+  ].filter((notice): notice is SyncNotice => notice !== null);
+}
+
+/** Send one to ntfy, tapping through to the app's home screen, where every notice is. */
 export async function sendSyncNotice(url: string, notice: SyncNotice, origin: string | undefined): Promise<void> {
   await push(url, notice.text, {
-    title: 'Manilla bank sync',
+    title: TITLES[notice.kind],
     priority: notice.priority,
     ...(origin ? { click: new URL('/', origin).toString() } : {}),
   });

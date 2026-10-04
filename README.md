@@ -35,10 +35,15 @@ a transaction a file already brought in is linked rather than doubled, and anyth
 a person would have had to decide is held for one rather than guessed. You sign in
 to your bank in Plaid's window; Manilla keeps only an encrypted token that
 Disconnect revokes. Each install brings its own Plaid keys, and Plaid's free plan
-covers a household. Set `MANILLA_SYNC_NOTIFY_URL` to an ntfy topic and the nightly
-sync says so on your phone when something came in, which envelopes it took below
-zero, or when a bank wants you to sign in again — names and counts, never
-amounts, and nothing on a quiet night.
+covers a household. Press **Turn on** under **Settings → Notifications** on your
+phone and the nightly sync says so there when something or some income came in,
+or when a bank wants you to sign in again, with envelopes it took below zero and
+unusual charges it brought in as notifications of their own — names and counts,
+never amounts or payees, and nothing on a quiet night. Each kind has its own
+switch, and **Problems** adds an hourly look for a ledger that no longer adds up
+or a server disk filling. No second app: the notification comes from Manilla
+itself (on an iPhone, once it is on the Home Screen). An ntfy topic in
+`MANILLA_SYNC_NOTIFY_URL` still gets the sync's.
 
 **Categorization proposes; you confirm.** Rules fire first, then recency-weighted
 payee history, then — if you leave it on — a model, only for what the free layers
@@ -353,8 +358,9 @@ What changes once it is public:
 Everything that changes who can sign in — a passkey added or removed, a recovery
 code used or tried, someone invited, joining or removed — is listed under
 **Settings → Sign-in activity**, and shown as a notice to every member who did not
-do it until they press *Seen*. Set `MANILLA_ALERT_URL` (see `.env.example`) to
-have each one sent to your phone through ntfy as it happens.
+do it until they press *Seen*. With notifications turned on, each is sent to
+their phone as it happens; `MANILLA_ALERT_URL` (see `.env.example`) sends them to
+an ntfy topic too.
 
 To bring someone else in, open **Settings → People**, type their name and send
 them the link it makes. It works once, for three days, and can be withdrawn; on

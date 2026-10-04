@@ -28,6 +28,8 @@ import AiPanel from './AiPanel.tsx';
 import DataPanel from './DataPanel.tsx';
 import AppearancePanel from './AppearancePanel.tsx';
 import BankFeedsPanel from './BankFeedsPanel.tsx';
+import NotificationsPanel from './NotificationsPanel.tsx';
+import { applicationServerKey, listDevices as listPushDevices } from '../../src/push/push.ts';
 import { listConnections, unsyncable } from '../../src/sync/connections.ts';
 import { fedElsewhere, feedKey } from '../../src/sync/shared.ts';
 import { THEME_COOKIE, themeFrom } from '../../src/theme.ts';
@@ -81,6 +83,10 @@ export default async function SettingsPage() {
     accuracy(connection),
     unknownMerchantEstimate(connection),
     listConnections(connection),
+  ]);
+  const [pushDevices, serverKey] = await Promise.all([
+    listPushDevices(homeDb(), session.userId),
+    applicationServerKey(homeDb()),
   ]);
 
   // A bank login can feed accounts in any ledger, so the bank feeds panel
@@ -217,6 +223,8 @@ export default async function SettingsPage() {
         envelopes={envelopeChoices.map(({ id, name, groupName }) => ({ id, name, groupName }))}
         accounts={accountChoices.map(({ id, name }) => ({ id, name }))}
       />
+
+      <NotificationsPanel devices={pushDevices} serverKey={serverKey} manyLedgers={ledgers.length > 1} />
 
       <AppearancePanel current={theme} />
 

@@ -17,8 +17,19 @@ import { syncConnection, type SyncReport } from './run.ts';
 import { secretKeyFromEnv } from './secret.ts';
 import { runAs } from '../audit/actor.ts';
 import { pendingCount } from '../queue/queue.ts';
-import { newlyOverdrawn, sendSyncNotice, syncNotice, type LedgerAfterSync, type SyncOutcome } from './notice.ts';
+import {
+  TITLES,
+  incomeArrived,
+  newlyOverdrawn,
+  newlyUnusual,
+  sendSyncNotice,
+  syncNotices,
+  type LedgerAfterSync,
+  type SyncOutcome,
+} from './notice.ts';
+import { unusualCharges } from '../insights/insights.ts';
 import { listEnvelopes } from '../envelopes/manage.ts';
+import { anyoneListening, notifyMembers } from '../push/push.ts';
 
 /** Under a day, so a sync that ran at 6:05 is due again by 6:00 tomorrow. */
 const DUE_AFTER_MS = 20 * 60 * 60 * 1000;
@@ -82,23 +93,32 @@ export function startDailySync(log: (line: string) => void): void {
   const check = () => runAs({ id: null, name: 'Daily bank sync' }, checkAll);
   const checkAll = async () => {
     const notifyUrl = process.env.MANILLA_SYNC_NOTIFY_URL;
+    // What to say is worked out only when someone will hear it: the ntfy
+    // topic, or a browser that turned on any of what a sync says.
+    let telling = Boolean(notifyUrl);
     const outcomes: SyncOutcome[] = [];
     const after = new Map<string, LedgerAfterSync>();
     let ledgerCount = 0;
     try {
       const home = homeDb();
+      for (const kind of ['sync', 'overspent', 'unusual'] as const) telling ||= await anyoneListening(home, kind);
       const ledgers = await listLedgers(home, databaseOf(process.env.DATABASE_URL ?? ''));
       ledgerCount = ledgers.length;
       for (const ledger of ledgers) {
         const db = connectionFor(ledger.database);
-        // A look before the sync, so afterwards it can say which envelopes the
-        // sync itself took below zero rather than every one that is.
-        const before = notifyUrl ? await listEnvelopes(db) : [];
+        // Most hours nothing is due, and then there is nothing to look at.
+        if ((await connectionsDue(db, new Date())).length === 0) continue;
+        // A look before the sync, so afterwards it can say what the sync itself
+        // did - the envelopes it took below zero, the income and the unusual
+        // charges it brought in - rather than everything that is.
+        const before = telling
+          ? { envelopes: await listEnvelopes(db), unusual: await unusualCharges(db) }
+          : { envelopes: [], unusual: [] };
         const reports = await syncDue(db, { ...deps, account: home });
         for (const report of reports) {
           const added = report.accounts.reduce((sum, account) => sum + account.added, 0);
           const held = report.accounts.reduce((sum, account) => sum + account.held, 0);
-          if (notifyUrl) {
+          if (telling) {
             outcomes.push({
               ledger: ledger.name,
               bank: await bankName(db, report.connectionId),
@@ -115,10 +135,13 @@ export function startDailySync(log: (line: string) => void): void {
                   (notReady > 0 ? `, ${notReady} accounts not ready at Plaid yet` : ''),
           );
         }
-        if (notifyUrl && reports.length > 0) {
+        if (telling && reports.length > 0) {
+          const envelopes = await listEnvelopes(db);
           after.set(ledger.name, {
             waiting: await pendingCount(db),
-            overdrawn: newlyOverdrawn(before, await listEnvelopes(db)),
+            overdrawn: newlyOverdrawn(before.envelopes, envelopes),
+            income: incomeArrived(before.envelopes, envelopes),
+            unusual: newlyUnusual(before.unusual, await unusualCharges(db)),
           });
         }
       }
@@ -128,8 +151,17 @@ export function startDailySync(log: (line: string) => void): void {
       log(`bank sync failed: ${error instanceof Error ? error.message : String(error)}`);
     }
     // Whatever was synced before a failure is still worth saying.
-    const notice = notifyUrl ? syncNotice(outcomes, after, { manyLedgers: ledgerCount > 1 }) : null;
-    if (notice) await sendSyncNotice(notifyUrl!, notice, process.env.MANILLA_ORIGIN);
+    const notices = telling ? syncNotices(outcomes, after, { manyLedgers: ledgerCount > 1 }) : [];
+    for (const notice of notices) {
+      if (notifyUrl) await sendSyncNotice(notifyUrl, notice, process.env.MANILLA_ORIGIN);
+      const { sent } = await notifyMembers(
+        homeDb(),
+        { kind: notice.kind },
+        // The home screen, where every notice is.
+        { title: TITLES[notice.kind], body: notice.text, path: '/', urgent: notice.priority === 'high' },
+      );
+      await sent;
+    }
   };
 
   setTimeout(check, 60_000).unref();

@@ -170,6 +170,40 @@ export const sessions = pgTable(
 );
 
 /**
+ * Browsers that have said yes to notifications from Manilla (FR-16, NF-3).
+ *
+ * One row per browser, not per person: someone with a phone and a laptop
+ * chooses on each, and a lost phone is removed on its own, like its passkey.
+ * The endpoint is the push service's address for that one browser, and the two
+ * keys are what each message is encrypted to (src/push/webpush.ts).
+ *
+ * What each browser hears about is a switch per kind (src/push/push.ts).
+ * Only the two about spending start on: they are why most people turn
+ * notifications on, and the rest are a choice to make in Settings.
+ */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    /** "Android · Chrome": what the browser said it was, so the list can tell them apart. */
+    label: text('label').notNull(),
+    sync: boolean('sync').notNull().default(false),
+    overspent: boolean('overspent').notNull().default(true),
+    unusual: boolean('unusual').notNull().default(true),
+    problems: boolean('problems').notNull().default(false),
+    signin: boolean('signin').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('push_subscriptions_user_idx').on(table.userId)],
+);
+
+/**
  * An invitation for another member of the household (NF-3).
  *
  * The link carries a random token and only its hash is kept, so the table cannot

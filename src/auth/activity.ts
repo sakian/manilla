@@ -4,9 +4,10 @@
  *
  * Each of these is something a member would want to know about even when they
  * did not do it - most of all then. So every one is kept, each member is shown
- * the ones since they last looked, and an optional webhook (MANILLA_ALERT_URL)
- * carries them to a phone as they happen, for the one that matters at 3am: a
- * recovery code that somebody is guessing at.
+ * the ones since they last looked, and each is sent as it happens - to the
+ * browsers that turned notifications on (src/push/push.ts), and to an optional
+ * webhook (MANILLA_ALERT_URL) - for the one that matters at 3am: a recovery
+ * code that somebody is guessing at.
  *
  * Plain sign-ins with a passkey are not here. They are what is supposed to
  * happen, and a list of them would bury the rest.
@@ -16,6 +17,7 @@ import { and, desc, eq, gt, inArray, ne, or, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import { securityEvents, users } from '../../db/schema.ts';
 import { push } from '../notify.ts';
+import { notifyMembers } from '../push/push.ts';
 
 export type ActivityKind = NonNullable<(typeof securityEvents.$inferInsert)['kind']>;
 
@@ -46,10 +48,11 @@ export type Activity = {
 const ALWAYS_SHOWN: ActivityKind[] = ['recovery_code_used', 'recovery_code_failed'];
 
 /**
- * Keep an event, and send it on if a webhook is set and `alert` allows.
+ * Keep an event, and send it on unless `alert` is false.
  *
- * The webhook is never awaited and never fails the action that raised it: a
- * notification service being down is no reason to refuse a sign-in.
+ * Neither the webhook nor the push services are waited for, and neither can
+ * fail the action that raised it: a notification service being down is no
+ * reason to refuse a sign-in.
  */
 export async function recordActivity(
   db: Database,
@@ -70,11 +73,23 @@ export async function recordActivity(
     })
     .returning();
 
-  const url = options.alertUrl ?? process.env.MANILLA_ALERT_URL;
+  if (options.alert === false) return;
   // Names and nothing else: no amounts, no addresses.
-  if (url && options.alert !== false) {
-    void push(url, `Manilla: ${describeActivity(row!)}`, { title: 'Manilla sign-in' });
-  }
+  const url = options.alertUrl ?? process.env.MANILLA_ALERT_URL;
+  if (url) void push(url, `Manilla: ${describeActivity(row!)}`, { title: 'Manilla sign-in' });
+  // The same people the in-app notice goes to (`unseenActivity`): everyone but
+  // whoever did it, except for a recovery code, which its owner needs to hear
+  // about most of all.
+  await notifyMembers(
+    db,
+    { kind: 'signin', except: ALWAYS_SHOWN.includes(row!.kind) ? null : row!.actorId },
+    {
+      title: 'Manilla sign-in',
+      body: describeActivity(row!),
+      path: '/settings',
+      urgent: ALWAYS_SHOWN.includes(row!.kind),
+    },
+  );
 }
 
 export async function personOf(db: Database, userId: string): Promise<Person | null> {
