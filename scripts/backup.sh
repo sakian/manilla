@@ -185,6 +185,16 @@ for database in "${DATABASES[@]}"; do
 done
 echo "backup: restore one with scripts/restore.sh <file>"
 
+# The disk these are written to - on a single-box install, the one Postgres
+# writes to as well. Full, it stops every write in the app and tomorrow's dump;
+# Docker's build cache filled one to 100%, 64 GB of it, a rebuild at a time. A
+# warning rather than a failure: tonight's backup is good. The app says the
+# same on every screen, since nobody reads this log.
+USED=$(df -P "$DIR" 2>/dev/null | awk 'NR == 2 { sub("%", "", $5); print $5 }')
+if [[ "${USED:-0}" -ge "${MANILLA_DISK_WARN:-90}" ]]; then
+  echo "backup: WARNING the disk holding $DIR is ${USED}% full - docker builder prune -f frees Docker's build cache" >&2
+fi
+
 if [[ ${#FAILED[@]} -gt 0 ]]; then
   echo "backup: FAILED for ${FAILED[*]} - the other ledgers were backed up" >&2
   exit 1

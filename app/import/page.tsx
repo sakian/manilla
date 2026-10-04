@@ -2,6 +2,7 @@ import { ledgerDb } from '../ledger.ts';
 import { listAccounts } from '../../src/accounts/manage.ts';
 import { importHistory } from '../../src/import/ofxImport.ts';
 import { attention } from '../../src/notices/notices.ts';
+import { diskUsedShare } from '../../src/system/disk.ts';
 import { listHeld } from '../../src/sync/connections.ts';
 import HeldRows from './HeldRows.tsx';
 import { requireUser } from '../auth.ts';
@@ -17,7 +18,7 @@ export default async function ImportPage() {
   const [accounts, history, report, held] = await Promise.all([
     listAccounts(connection),
     importHistory(connection),
-    attention(connection),
+    attention(connection, undefined, { diskUsage: diskUsedShare }),
     listHeld(connection),
   ]);
 
