@@ -343,6 +343,9 @@ What changes once it is public:
   empty database is not claimable from outside.
 - **Sign-in logs name a Funnel visitor by address**, marked "over Funnel", where
   a tailnet user is named by their login.
+- **The health check is not there.** `/api/health` answers Docker and the
+  tailnet; over Funnel it is a 404, so whether the books balance is nobody
+  else's business.
 
 Everything that changes who can sign in — a passkey added or removed, a recovery
 code used or tried, someone invited, joining or removed — is listed under

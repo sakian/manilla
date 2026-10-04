@@ -15,16 +15,23 @@
  *
  * With several ledgers it is still one yes or no - balanced only if every one
  * is - and names none of them, for the same reason.
+ *
+ * Not over Funnel at all. Docker asks on 127.0.0.1, and nobody on the internet
+ * needs to know whether the books balance, or to read a database error when
+ * they do not; every request would also be a check of every ledger, run for
+ * whoever cares to ask.
  */
 
 import { connectionFor, homeDb } from '../../../db/client.ts';
 import { databaseOf } from '../../../src/ledgers/config.ts';
 import { listLedgers } from '../../../src/ledgers/registry.ts';
 import { checkInvariant } from '../../../src/ledger/ledger.ts';
+import { requestReach } from '../../../src/auth/reach.ts';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (requestReach(request.headers) === 'funnel') return new Response('Not found', { status: 404 });
   try {
     const checks = await Promise.all(
       (await listLedgers(homeDb(), databaseOf(process.env.DATABASE_URL ?? ''))).map((ledger) =>
