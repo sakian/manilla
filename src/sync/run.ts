@@ -29,7 +29,7 @@ import {
 import { formatCents } from '../money.ts';
 import { commitImport, previewImport, type ImportPreview } from '../import/ofxImport.ts';
 import type { OfxTransaction } from '../ofx/parse.ts';
-import type { PlaidTransaction } from './plaid.ts';
+import { PlaidDataError, type PlaidTransaction } from './plaid.ts';
 import { PlaidApiError, syncTransactions, type PlaidCall } from './plaidClient.ts';
 import { decryptSecret } from './secret.ts';
 
@@ -44,6 +44,8 @@ export type AccountSyncReport = {
   held: number;
   /** Dated before the feed's start, so already here or before the account began. */
   earlier: number;
+  /** Plaid is still gathering the bank's transactions; nothing came this time. */
+  notReady: boolean;
   batchId?: string;
 };
 
@@ -113,21 +115,27 @@ export async function syncConnection(
     try {
       report.accounts.push(await syncFeed(db, feed as typeof feed & { accountId: string }, token, deps));
     } catch (error) {
-      if (!(error instanceof PlaidApiError)) throw error;
+      if (!(error instanceof PlaidApiError || error instanceof PlaidDataError)) throw error;
       // The login, not the account, is what failed - ITEM_LOGIN_REQUIRED and
-      // the like - so the other accounts on it would fail the same way.
-      report.error = { code: error.code, message: error.message };
+      // the like - so the other accounts on it would fail the same way. A
+      // response that could not be read is kept the same way, so it shows on
+      // the connection rather than only in a log.
+      const code = error instanceof PlaidApiError ? error.code : 'UNREADABLE_RESPONSE';
+      report.error = { code, message: error.message };
       await db
         .update(bankConnections)
-        .set({ errorCode: error.code, errorMessage: error.message })
+        .set({ errorCode: code, errorMessage: error.message })
         .where(eq(bankConnections.id, connectionId));
       return report;
     }
   }
 
+  // Not "synced" while Plaid is still gathering: the screen says how old the
+  // data is, and there is none yet.
+  const waiting = report.accounts.some((account) => account.notReady);
   await db
     .update(bankConnections)
-    .set({ lastSyncedAt: now(), errorCode: null, errorMessage: null })
+    .set({ ...(waiting ? {} : { lastSyncedAt: now() }), errorCode: null, errorMessage: null })
     .where(eq(bankConnections.id, connectionId));
   return report;
 }
@@ -141,6 +149,18 @@ async function syncFeed(
   const result = await syncTransactions(deps.call, token, feed.cursor ?? undefined, {
     accountId: feed.providerAccountId,
   });
+  if (result.notReady) {
+    return {
+      feedAccountId: feed.id,
+      accountId: feed.accountId,
+      name: feed.name,
+      added: 0,
+      linked: 0,
+      held: 0,
+      earlier: 0,
+      notReady: true,
+    };
+  }
 
   const posted = result.added.filter((t) => !t.pending);
   const added = posted.filter((t) => !feed.startDate || t.date >= feed.startDate);
@@ -268,6 +288,7 @@ async function syncFeed(
       linked: committed?.linked ?? 0,
       held: fresh.length,
       earlier: posted.length - added.length,
+      notReady: false,
       ...(committed ? { batchId: committed.batchId } : {}),
     };
   });

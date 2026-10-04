@@ -18,6 +18,7 @@ import {
   revokeBankAction,
   setFeedAccountAction,
   syncNowAction,
+  type SyncNowResult,
 } from './bankActions.ts';
 
 type PlaidHandler = { open(): void; destroy(): void };
@@ -69,6 +70,31 @@ export type BankConnectionView = {
   }[];
 };
 
+/** What a sync did, as the panel says it: a note, or an error worth showing. */
+function describeSync(result: SyncNowResult, bank: string): { note?: string; error?: string } {
+  if (!result.ok) return { error: result.error };
+  if (result.error) {
+    // A lapsed login is said in plain words beside the connection, with the
+    // way to fix it; Plaid's own message is written for developers.
+    return result.error.code === 'ITEM_LOGIN_REQUIRED' ? {} : { error: result.error.message };
+  }
+  const parts = [
+    ...(result.added > 0 || result.notReady === 0 ? [`${result.added} added for review`] : []),
+    ...(result.linked > 0 ? [`${result.linked} already here`] : []),
+    ...(result.held > 0 ? [`${result.held} held for you on the import screen`] : []),
+    ...(result.earlier > 0 ? [`${result.earlier} from before the feed starts left out`] : []),
+  ];
+  const waiting =
+    result.notReady > 0
+      ? `Plaid is still gathering ${bank}'s transactions, which takes a few minutes after connecting. ` +
+        'Press Sync now again shortly.'
+      : '';
+  return { note: [parts.length > 0 ? `Synced: ${parts.join(', ')}.` : '', waiting].filter(Boolean).join(' ') };
+}
+
+/** What the panel is doing, so a press that takes a while says so. */
+type Busy = { connectionId: string | null; kind: 'connect' | 'sync' | 'signin'; message: string };
+
 function ago(iso: string | null): string {
   if (!iso) return 'not synced yet';
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -98,16 +124,22 @@ export default function BankFeedsPanel({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Busy | null>(null);
 
   /** Open Plaid's window: for a new bank, or to sign in to one again. */
   const openPlaid = useCallback(
-    (connectionId?: string) => {
+    (connection?: BankConnectionView) => {
+      const connectionId = connection?.id ?? null;
+      const bank = connection?.institutionName ?? 'the bank';
+      const kind = connection ? 'signin' : 'connect';
       setError(null);
       setNote(null);
+      setBusy({ connectionId, kind, message: "Opening Plaid's sign-in window…" });
       startTransition(async () => {
-        const token = await createLinkTokenAction(connectionId);
+        const token = await createLinkTokenAction(connectionId ?? undefined);
         if (!token.ok) {
           setError(token.error);
+          setBusy(null);
           return;
         }
         let plaid: PlaidLink;
@@ -115,6 +147,7 @@ export default function BankFeedsPanel({
           plaid = await loadPlaid();
         } catch (failure) {
           setError(failure instanceof Error ? failure.message : String(failure));
+          setBusy(null);
           return;
         }
         await new Promise<void>((done) => {
@@ -122,25 +155,36 @@ export default function BankFeedsPanel({
             token: token.linkToken,
             onSuccess: (publicToken) => {
               handler.destroy();
+              setBusy({
+                connectionId,
+                kind,
+                message: connectionId
+                  ? `Signed in. Syncing with ${bank}…`
+                  : 'Signed in. Connecting and listing the accounts…',
+              });
               startTransition(async () => {
-                if (connectionId) {
-                  // Signing in again keeps the connection, so there is nothing
-                  // to exchange; a sync is what shows it worked.
-                  const synced = await syncNowAction(connectionId);
-                  if (!synced.ok) setError(synced.error);
-                  else if (synced.error) setError(synced.error.message);
-                  else setNote(`Signed in again: ${synced.added} added for review.`);
-                } else {
-                  const linked = await linkBankAction(publicToken);
-                  if (!linked.ok) setError(linked.error);
-                  else setNote('Connected. Say which account each one is.');
+                try {
+                  if (connectionId) {
+                    // Signing in again keeps the connection, so there is
+                    // nothing to exchange; a sync is what shows it worked.
+                    const said = describeSync(await syncNowAction(connectionId), bank);
+                    if (said.error) setError(said.error);
+                    else setNote(`Signed in again. ${said.note ?? ''}`.trim());
+                  } else {
+                    const linked = await linkBankAction(publicToken);
+                    if (!linked.ok) setError(linked.error);
+                    else setNote('Connected. Say which account each one is, then press Sync now.');
+                  }
+                  router.refresh();
+                } finally {
+                  setBusy(null);
                 }
-                router.refresh();
               });
               done();
             },
             onExit: (exit) => {
               handler.destroy();
+              setBusy(null);
               if (exit) setError(exit.display_message || exit.error_message || 'The bank sign-in stopped.');
               done();
             },
@@ -166,27 +210,26 @@ export default function BankFeedsPanel({
   );
 
   const syncNow = useCallback(
-    (connectionId: string) => {
+    (connection: BankConnectionView) => {
+      const bank = connection.institutionName ?? 'the bank';
       setError(null);
       setNote(null);
+      setBusy({
+        connectionId: connection.id,
+        kind: 'sync',
+        message:
+          `Syncing with ${bank}. Each transaction is matched and given a suggested envelope, ` +
+          'so a first sync with a lot of history can take a few minutes.',
+      });
       startTransition(async () => {
-        const result = await syncNowAction(connectionId);
-        if (!result.ok) {
-          setError(result.error);
-        } else if (result.error) {
-          // A lapsed login is said in plain words beside the connection, with
-          // the way to fix it; Plaid's own message is written for developers.
-          if (result.error.code !== 'ITEM_LOGIN_REQUIRED') setError(result.error.message);
-        } else {
-          const parts = [
-            `${result.added} added for review`,
-            ...(result.linked > 0 ? [`${result.linked} already here`] : []),
-            ...(result.held > 0 ? [`${result.held} held for you on the import screen`] : []),
-            ...(result.earlier > 0 ? [`${result.earlier} from before the feed starts left out`] : []),
-          ];
-          setNote(`Synced: ${parts.join(', ')}.`);
+        try {
+          const said = describeSync(await syncNowAction(connection.id), bank);
+          if (said.error) setError(said.error);
+          if (said.note) setNote(said.note);
+          router.refresh();
+        } finally {
+          setBusy(null);
         }
-        router.refresh();
       });
     },
     [router],
@@ -218,9 +261,15 @@ export default function BankFeedsPanel({
       <div className="panel-head">
         <h3>Bank feeds</h3>
         <button className="primary" onClick={() => openPlaid()} disabled={pending || missing.length > 0}>
-          Connect a bank
+          {busy?.kind === 'connect' ? 'Connecting…' : 'Connect a bank'}
         </button>
       </div>
+
+      {busy?.kind === 'connect' && (
+        <p className="muted sync-progress" role="status">
+          {busy.message}
+        </p>
+      )}
 
       {error && <p className="signin-error">{error}</p>}
       {note && <p className="queue-note">{note}</p>}
@@ -254,8 +303,8 @@ export default function BankFeedsPanel({
                 <span className="muted"> · {ago(connection.lastSyncedAt)}</span>
               </span>
               <span className="device-actions">
-                <button onClick={() => syncNow(connection.id)} disabled={pending || loginNeeded}>
-                  Sync now
+                <button onClick={() => syncNow(connection)} disabled={pending || loginNeeded}>
+                  {busy?.kind === 'sync' && busy.connectionId === connection.id ? 'Syncing…' : 'Sync now'}
                 </button>
                 <button onClick={() => disconnect(connection)} disabled={pending}>
                   Disconnect
@@ -263,11 +312,17 @@ export default function BankFeedsPanel({
               </span>
             </div>
 
+            {busy && busy.connectionId === connection.id && (
+              <p className="muted sync-progress" role="status">
+                {busy.message}
+              </p>
+            )}
+
             {loginNeeded ? (
               <div className="budget-warning bank-login">
                 <span>The bank wants you to sign in again before anything more comes in.</span>
-                <button className="primary" onClick={() => openPlaid(connection.id)} disabled={pending}>
-                  Sign in again
+                <button className="primary" onClick={() => openPlaid(connection)} disabled={pending}>
+                  {busy?.kind === 'signin' && busy.connectionId === connection.id ? 'Signing in…' : 'Sign in again'}
                 </button>
               </div>
             ) : (

@@ -70,6 +70,11 @@ export type SyncPage = {
   modified: PlaidTransaction[];
   removed: PlaidRemoval[];
   accounts: PlaidAccount[];
+  /**
+   * Where the next sync starts. Empty when Plaid has not gathered the bank's
+   * transactions yet - in the first minutes after a bank is connected - which
+   * is "nothing yet", not a fault.
+   */
   nextCursor: string;
   hasMore: boolean;
   /** `transactions_update_status`: whether the first or the full history has arrived yet. */
@@ -138,6 +143,10 @@ function array(value: unknown, what: string): unknown[] {
 function string(value: unknown, what: string): string {
   if (typeof value !== 'string' || value === '') throw new PlaidDataError(`${what} is missing`);
   return value;
+}
+
+function missing(what: string): never {
+  throw new PlaidDataError(`${what} is missing`);
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -230,7 +239,7 @@ export function parseSyncResponse(text: string): SyncPage {
       };
     }),
     accounts: array(raw.accounts ?? [], 'accounts').map((a, i) => readAccount(a, `accounts[${i}]`)),
-    nextCursor: string(raw.next_cursor, 'next_cursor'),
+    nextCursor: typeof raw.next_cursor === 'string' ? raw.next_cursor : missing('next_cursor'),
     hasMore: raw.has_more,
     ...(status ? { status } : {}),
   };

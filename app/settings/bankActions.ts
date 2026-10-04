@@ -102,6 +102,8 @@ export type SyncNowResult =
       linked: number;
       held: number;
       earlier: number;
+      /** Accounts Plaid has not gathered transactions for yet. */
+      notReady: number;
       /** Why it stopped: Plaid's code, and its words for developers. */
       error?: { code: string; message: string };
     }
@@ -124,6 +126,10 @@ export async function syncNowAction(connectionId: string): Promise<SyncNowResult
       linked: total('linked'),
       held: total('held'),
       earlier: total('earlier'),
+      notReady: reports.reduce(
+        (sum, { report }) => sum + report.accounts.filter((account) => account.notReady).length,
+        0,
+      ),
       ...(error ? { error } : {}),
     };
   } catch (error) {

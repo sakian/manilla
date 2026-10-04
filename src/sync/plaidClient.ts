@@ -83,6 +83,11 @@ export function plaidCall(config: PlaidConfig, fetchImpl: typeof fetch = fetch):
 export type SyncResult = Omit<SyncPage, 'nextCursor' | 'hasMore'> & {
   /** Where the next sync starts. Stored only once these changes are applied. */
   cursor: string;
+  /**
+   * Plaid has not gathered the bank's transactions yet, which is the first
+   * few minutes after connecting: nothing came, and the cursor is where it was.
+   */
+  notReady?: boolean;
 };
 
 /** How many times an update that changed while it was being paged is started again. */
@@ -136,6 +141,11 @@ async function syncPages(
     result.removed.push(...page.removed);
     result.accounts = page.accounts;
     if (page.status) result.status = page.status;
+    if (page.nextCursor === '') {
+      // "Not yet": keep the cursor this sync started from.
+      result.notReady = true;
+      return result;
+    }
     if (page.nextCursor === cursor && page.hasMore) {
       throw new PlaidDataError('Plaid said there was more but returned the same cursor');
     }

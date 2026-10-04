@@ -107,6 +107,14 @@ describe('reading a sync response', () => {
     assert.equal(parsed.added[0]!.description, 'COFFEE SHOP #12 TORONTO ON');
   });
 
+  test("an empty cursor is Plaid's \"not gathered yet\", not a fault; a missing one is", () => {
+    // Plaid: "If transactions are not yet available, this will be an empty string."
+    assert.equal(parseSyncResponse(page({ next_cursor: '' })).nextCursor, '');
+    const without = JSON.parse(page({})) as Record<string, unknown>;
+    delete without.next_cursor;
+    assert.throws(() => parseSyncResponse(JSON.stringify(without)), /next_cursor is missing/);
+  });
+
   test('a date that is an instant rather than a calendar day is refused', () => {
     assert.throws(
       () => parseSyncResponse(page({ added: [transaction({ amount: '1.00', date: '2026-09-03T05:00:00Z' })] })),
@@ -185,6 +193,14 @@ describe('syncing', () => {
       ['a', 'b'],
     );
     assert.equal(result.cursor, 'c3');
+  });
+
+  test('before Plaid has gathered anything, the sync says so and keeps its cursor', async () => {
+    const { call } = fakePlaid([page({ next_cursor: '' })]);
+    const result = await syncTransactions(call, 'token', 'c1');
+    assert.equal(result.notReady, true);
+    assert.equal(result.cursor, 'c1');
+    assert.deepEqual(result.added, []);
   });
 
   test('the first sync sends no cursor', async () => {
