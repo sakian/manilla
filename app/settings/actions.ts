@@ -25,6 +25,8 @@ import {
   renameDevice,
 } from '../../src/auth/passkeys.ts';
 import { destroyAllSessions } from '../../src/auth/session.ts';
+import { authConfig } from '../../src/auth/config.ts';
+import { createInvite, removeMember, withdrawInvite } from '../../src/auth/invites.ts';
 import {
   createEnvelopeRule,
   deleteRule,
@@ -98,6 +100,45 @@ export async function removeDeviceAction(
   try {
     const session = await requireUser();
     await removeDevice(homeDb(), session.userId, credentialId);
+    revalidatePath('/settings');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/**
+ * A link for someone joining the household. Returned once, because only its
+ * hash is kept: closing the panel without copying it means making another.
+ */
+export async function createInviteAction(
+  name: string,
+): Promise<{ ok: true; link: string; expiresAt: Date } | Failure> {
+  try {
+    const session = await requireUser();
+    const { token, expiresAt } = await createInvite(homeDb(), { createdBy: session.userId, name });
+    revalidatePath('/settings');
+    return { ok: true, link: `${authConfig().origin}/login/join#${token}`, expiresAt };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function withdrawInviteAction(inviteId: string): Promise<{ ok: true } | Failure> {
+  try {
+    await requireUser();
+    await withdrawInvite(homeDb(), inviteId);
+    revalidatePath('/settings');
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function removeMemberAction(userId: string): Promise<{ ok: true } | Failure> {
+  try {
+    const session = await requireUser();
+    await removeMember(homeDb(), { actingUserId: session.userId, userId });
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {

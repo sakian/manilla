@@ -21,6 +21,8 @@
  *    register a new passkey.
  *  - **The last passkey cannot be deleted.** Removing it would lock the account to
  *    recovery codes alone, which is a decision nobody makes deliberately.
+ *  - **Open registration is for the very first passkey only.** Everyone after
+ *    that arrives with an invitation (src/auth/invites.ts) or is already signed in.
  */
 
 import { createHash, randomBytes } from 'node:crypto';
@@ -60,10 +62,11 @@ export const RECOVERY_CODE_COUNT = 10;
 export type Identity = { id: string; name: string };
 
 /**
- * The single user, if there is one.
+ * The first person to have set Manilla up, if anybody has.
  *
- * Version 1 is single-user (section 2), but the schema is keyed by row so a second
- * login is additive later. Until then "the user" means the only one.
+ * Everyone in a household is equal - the books are shared, not owned - so this
+ * matters only to setup: an install whose passkeys have all gone is set up again
+ * as this person rather than as a stranger.
  */
 export async function primaryUser(db: Database): Promise<Identity | undefined> {
   const [row] = await db
@@ -75,7 +78,7 @@ export async function primaryUser(db: Database): Promise<Identity | undefined> {
 }
 
 export type SetupState = {
-  /** True before anybody has registered: the first visit sets up the account. */
+  /** True while nobody has a passkey: the first visit sets up the account. */
   needsSetup: boolean;
   user?: Identity;
   credentialCount: number;
@@ -86,16 +89,19 @@ export async function setupState(db: Database): Promise<SetupState> {
   const user = await primaryUser(db);
   if (!user) return { needsSetup: true, credentialCount: 0, unusedRecoveryCodes: 0 };
 
-  const [keys, codes] = await Promise.all([
+  const [keys, codes, [anyKey]] = await Promise.all([
     db.select({ id: credentials.id }).from(credentials).where(eq(credentials.userId, user.id)),
     db
       .select({ id: recoveryCodes.id })
       .from(recoveryCodes)
       .where(and(eq(recoveryCodes.userId, user.id), isNull(recoveryCodes.usedAt))),
+    // Anybody's, not only the first person's: while one member can sign in, the
+    // install is somebody's and the sign-in page must not offer it to a stranger.
+    db.select({ id: credentials.id }).from(credentials).limit(1),
   ]);
 
   return {
-    needsSetup: keys.length === 0,
+    needsSetup: !anyKey,
     user,
     credentialCount: keys.length,
     unusedRecoveryCodes: codes.length,
@@ -106,7 +112,7 @@ export async function setupState(db: Database): Promise<SetupState> {
 // Challenges
 // ---------------------------------------------------------------------------
 
-async function createChallenge(
+export async function createChallenge(
   db: Database,
   challenge: string,
   purpose: 'registration' | 'authentication',
@@ -134,7 +140,7 @@ async function createChallenge(
  * Read a challenge and delete it in the same statement, so it can only be spent
  * once even if two responses arrive together.
  */
-async function consumeChallenge(
+export async function consumeChallenge(
   db: Database,
   challengeId: string,
   purpose: 'registration' | 'authentication',
@@ -253,20 +259,7 @@ export async function finishRegistration(
     throw new AuthError('That registration was started by a different sign-in.');
   }
 
-  const verification = await verifyRegistrationResponse({
-    response: input.response,
-    expectedChallenge: pending.challenge,
-    expectedOrigin: config.origin,
-    expectedRPID: config.rpId,
-    requireUserVerification: true,
-  });
-
-  if (!verification.verified) {
-    throw new AuthError('That authenticator could not be verified.');
-  }
-
-  const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-  const label = (input.label ?? '').trim() || describeDevice(credentialDeviceType, credentialBackedUp);
+  const passkey = await verifyNewPasskey(pending.challenge, input.response, input.label, config);
 
   return db.transaction(async (tx) => {
     let userId = pending.userId ?? input.userId;
@@ -286,14 +279,7 @@ export async function finishRegistration(
       issueRecoveryCodes = true;
     }
 
-    await tx.insert(credentials).values({
-      id: credential.id,
-      userId,
-      publicKey: Buffer.from(credential.publicKey).toString('base64url'),
-      counter: credential.counter,
-      transports: credential.transports?.length ? credential.transports.join(',') : null,
-      label,
-    });
+    await tx.insert(credentials).values({ ...passkey, userId });
 
     let codes: string[] | undefined;
     if (issueRecoveryCodes) {
@@ -305,10 +291,45 @@ export async function finishRegistration(
 
     return {
       userId: userId!,
-      credentialId: credential.id,
+      credentialId: passkey.id,
       ...(codes ? { recoveryCodes: codes } : {}),
     };
   });
+}
+
+/** A verified new passkey, as the row it becomes once somebody owns it. */
+export type NewPasskey = Omit<typeof credentials.$inferInsert, 'userId'> & { id: string };
+
+/**
+ * Check an authenticator's registration response against the challenge it was
+ * given. Nothing is written: the caller decides whose passkey it is.
+ */
+export async function verifyNewPasskey(
+  challenge: string,
+  response: RegistrationResponseJSON,
+  label: string | undefined,
+  config: AuthConfig,
+): Promise<NewPasskey> {
+  const verification = await verifyRegistrationResponse({
+    response,
+    expectedChallenge: challenge,
+    expectedOrigin: config.origin,
+    expectedRPID: config.rpId,
+    requireUserVerification: true,
+  });
+
+  if (!verification.verified) {
+    throw new AuthError('That authenticator could not be verified.');
+  }
+
+  const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+  return {
+    id: credential.id,
+    publicKey: Buffer.from(credential.publicKey).toString('base64url'),
+    counter: credential.counter,
+    transports: credential.transports?.length ? credential.transports.join(',') : null,
+    label: (label ?? '').trim() || describeDevice(credentialDeviceType, credentialBackedUp),
+  };
 }
 
 function describeDevice(deviceType: string, backedUp: boolean): string {

@@ -58,9 +58,12 @@ credentials, not records of your money.
 
 ## Honest limitations
 
-- **One user.** The schema is keyed by row so a second login is additive, but
-  nothing is built. The first visitor to a fresh install claims it by registering a
-  passkey, so do that before it is reachable by anyone else.
+- **One household, no permissions.** Several people can sign in, each with their
+  own passkeys and recovery codes, but everyone sees and changes the same books and
+  anyone can invite or remove anyone else. The first visitor to a fresh install
+  claims it by registering a passkey, so do that before anyone else can reach it.
+- **The audit trail does not say who.** It records what changed and when, from a
+  database trigger that has no idea which person was signed in.
 - **One currency, and it is dollars.** The symbol is one constant
   (`src/money.ts`); thousands separators follow the server's locale. Nobody has
   tried it anywhere else.
@@ -146,7 +149,7 @@ src/
   transactions/urlQuery.ts the filters as they live in the URL, so a search is a link
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
-  auth/                 passkeys, sessions, recovery codes, RP config, who may set up
+  auth/                 passkeys, sessions, recovery codes, invitations, who may set up
   security-headers.ts   what the browser is told about framing, HTTPS and referrers
   categorize/
     normalize.ts        payee normalization (CA-1)
@@ -177,7 +180,8 @@ fails with nothing useful on screen.
 
 The first visit asks you to create a passkey, and shows ten recovery codes once.
 Save them: they are stored hashed, and they are the only way in if the device
-holding your passkey is lost. More devices can be added from Settings.
+holding your passkey is lost. More devices can be added from Settings, and more
+people from **Settings → People**.
 
 ```bash
 npm test                         # no network, no spend
@@ -309,10 +313,13 @@ What changes once it is public:
 - **Sign-in logs name a Funnel visitor by address**, marked "over Funnel", where
   a tailnet user is named by their login.
 
-To add someone's phone, sign in on it once with one of your unused recovery codes
-and choose **Settings → Add a passkey**; then use the browser's *Add to Home
-screen* and it opens like an app. Manilla has one user, so they share your login
-and its books.
+To bring someone else in, open **Settings → People**, type their name and send
+them the link it makes. It works once, for three days, and can be withdrawn; on
+their phone it asks for a passkey, gives them recovery codes of their own, and
+signs them in. Then the browser's *Add to Home screen* makes it open like an app.
+The token is in the link's `#` part, which a browser never sends, so it does not
+end up in a request log. Anyone holding the link can join, so send it somewhere
+private.
 
 ### Where your own configuration lives
 

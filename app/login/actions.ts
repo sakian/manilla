@@ -12,6 +12,10 @@
  *  - `beginSignIn` / `finishSignIn` prove possession of a registered passkey.
  *  - `signInWithRecoveryCode` spends a single-use code that only the user has,
  *    and after a few wrong ones makes each further try wait longer (#14).
+ *  - `lookUpInvite` / `beginJoin` / `finishJoin` need an invitation token: 256
+ *    random bits that a member made in Settings, which lapse in days and work
+ *    once (src/auth/invites.ts). They are open to Funnel on purpose - reaching
+ *    someone without Tailscale is what an invitation is for.
  *
  * Failures come back as values rather than exceptions, because a thrown error in
  * a server action reaches the browser as a blank "something went wrong" in
@@ -35,6 +39,7 @@ import {
   redeemRecoveryCode,
   setupState,
 } from '../../src/auth/passkeys.ts';
+import { beginJoin, finishJoin, lookUpInvite, type InviteView } from '../../src/auth/invites.ts';
 import { firstSetupGate, requestReach } from '../../src/auth/reach.ts';
 import { describeWait, recoveryThrottle } from '../../src/auth/throttle.ts';
 import { currentSession, endSession, startSession } from '../auth.ts';
@@ -157,6 +162,54 @@ export async function recoveryCodeSignInAction(code: string): Promise<SignInResu
 }
 
 const RECOVERY = 'recovery-code';
+
+export async function lookUpInviteAction(
+  token: string,
+): Promise<{ ok: true; invite: InviteView } | Failure> {
+  try {
+    const invite = await lookUpInvite(homeDb(), token);
+    if (!invite) {
+      return {
+        ok: false,
+        error:
+          'This invitation has expired, been withdrawn, or already been used. Ask for a new link.',
+      };
+    }
+    return { ok: true, invite };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function beginJoinAction(
+  token: string,
+  name: string,
+): Promise<BeginResult<PublicKeyCredentialCreationOptionsJSON>> {
+  try {
+    const begun = await beginJoin(homeDb(), { token, name });
+    return { ok: true, ...begun };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function finishJoinAction(input: {
+  token: string;
+  challengeId: string;
+  response: RegistrationResponseJSON;
+  name: string;
+}): Promise<SetupResult> {
+  try {
+    const { userId, recoveryCodes } = await finishJoin(homeDb(), input);
+    console.info(
+      `[manilla] ${JSON.stringify(input.name.trim().slice(0, 60))} joined with an invitation, from ${await who()}`,
+    );
+    await startSession(userId);
+    return { ok: true, recoveryCodes };
+  } catch (error) {
+    return failed(error);
+  }
+}
 
 /**
  * Who tried, for the log: the tailnet login `tailscale serve` puts on every

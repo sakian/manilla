@@ -229,7 +229,7 @@ model rank above features.
 | --- | --- | --- | --- |
 | NF-1 | Money accuracy | Store amounts as integers in the currency's smallest unit, never floating point. Balances must always be reproducible from the transaction, allocation and transfer records. | Built |
 | NF-2 | Integrity | Imports and migrations are atomic: they fully apply or not at all. Edits and deletions keep an audit trail. | Built. Every writer runs in one database transaction. Updates to and deletions of transactions, envelope lines and envelope moves are recorded in `audit_log` by a trigger, in the same transaction as the change; it is in the JSON export, and there is no screen for it yet. |
-| NF-3 | Authentication | Strong sign-in: passkeys, with session timeouts. | Built. Passkeys plus single-use recovery codes; sessions lapse after 12 idle hours and end after 30 days. After five wrong recovery codes each try waits longer, up to 15 minutes, and each is logged. |
+| NF-3 | Authentication | Strong sign-in: passkeys, with session timeouts. | Built. Passkeys plus single-use recovery codes; sessions lapse after 12 idle hours and end after 30 days. After five wrong recovery codes each try waits longer, up to 15 minutes, and each is logged. More people join by a single-use invitation link that lapses after three days, each with their own passkeys and codes. |
 | NF-4 | Data protection | Encrypt in transit and at rest. No bank credentials are ever stored. | Partial. TLS via the Tailscale node (with HSTS once it can be public through Funnel), and no credentials exist to store; at-rest encryption is the host's disk, not the app's. |
 | NF-5 | AI data minimization | Send the model only what the task needs. Settings show exactly what is sent, with an off switch. | Built. Payee text, amount, date, memo and envelope names — see the note in the README about what a bank writes into a memo. |
 | NF-6 | Data ownership | Full export of all data as CSV and JSON at any time, and a delete-everything option. | Built |
@@ -283,12 +283,13 @@ The schema is `db/schema.ts`, and it is the authority; this table is the summary
 
 ## Scope
 
-Version 1 is a single-household tool for one primary user.
+Version 1 is a single-household tool.
 
-**Assumptions.** One primary user — a second login is a later phase. One or more
-independent ledgers behind that sign-in (business and household books, say),
-each a separate database that shares nothing with the others; money moving
-between them is entered on both sides ([#23](https://github.com/sakian/manilla/issues/23)).
+**Assumptions.** One household, whose members each sign in as themselves and
+share everything: there are no roles. One or more independent ledgers behind
+that sign-in (business and household books, say), each a separate database that
+shares nothing with the others; money moving between them is entered on both
+sides ([#23](https://github.com/sakian/manilla/issues/23)).
 One currency. A responsive web app, usable on phone and desktop. Bank data enters
 by file import. AI features call a hosted model, so a cost and privacy control is
 required.
