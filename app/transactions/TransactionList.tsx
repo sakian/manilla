@@ -239,6 +239,7 @@ function MoveRow({
   href?: string | undefined;
 }) {
   const coming = move.amountCents > 0;
+  const aside = [move.note, move.by && `by ${move.by}`].filter(Boolean).join(' · ');
   const what = move.otherIsPool
     ? coming
       ? 'Filled'
@@ -263,7 +264,7 @@ function MoveRow({
       <Money cents={move.amountCents} />
       <span className="muted txn-meta">
         <span className="txn-date">{displayDate(move.date)}</span>
-        {move.note && <span className="txn-env">{move.note}</span>}
+        {aside && <span className="txn-env">{aside}</span>}
       </span>
       <span className="txn-balance" title="The envelope's balance after this">
         <Money cents={balanceAfterCents} />

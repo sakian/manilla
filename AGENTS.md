@@ -80,10 +80,12 @@ the audit trail can say who made the change (`src/audit/actor.ts`;
 request, like the daily bank sync, runs inside `runAs(...)` instead. The only
 exceptions are in `app/login/actions.ts`, and each says why it is safe to be public.
 
-The name reaches the audit trigger only through `db.transaction(...)`, which sets
-it for that transaction (`db/client.ts`). An update or delete on `transactions`,
-`txn_lines` or `envelope_moves` made outside one is still logged, but with nobody's
-name on it — so those writes go through `tx`, even when there is only one.
+The name reaches the database only through `db.transaction(...)`, which sets it
+for that transaction (`db/client.ts`). The audit trigger reads it for updates and
+deletes on `transactions`, `txn_lines` and `envelope_moves`, and new transactions
+and envelope moves take it as `created_by_name`. A write made outside a
+transaction still succeeds, but with nobody's name on it — so every write to
+those tables goes through `tx`, even when there is only one.
 
 **Never commit real financial data.** `data/private/`, `.env`, `certs/` and
 `backups/` are gitignored and stay that way. Fixtures in `data/samples/` are

@@ -402,17 +402,21 @@ export async function moveBetweenEnvelopes(
     throw new LedgerError('Cannot move money from an envelope to itself');
   }
 
-  const [row] = await db
-    .insert(envelopeMoves)
-    .values({
-      fromEnvelopeId: input.fromEnvelopeId,
-      toEnvelopeId: input.toEnvelopeId,
-      amountCents: input.amountCents,
-      date: input.date,
-      kind: input.kind,
-      note: input.note ?? null,
-    })
-    .returning({ id: envelopeMoves.id });
+  // A transaction for one insert, because that is what tells the database who
+  // is moving the money (db/client.ts); a caller's own becomes a savepoint.
+  const [row] = await db.transaction((tx) =>
+    tx
+      .insert(envelopeMoves)
+      .values({
+        fromEnvelopeId: input.fromEnvelopeId,
+        toEnvelopeId: input.toEnvelopeId,
+        amountCents: input.amountCents,
+        date: input.date,
+        kind: input.kind,
+        note: input.note ?? null,
+      })
+      .returning({ id: envelopeMoves.id }),
+  );
 
   return row!.id;
 }

@@ -8,7 +8,7 @@ import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
-import { auditLog, transactions } from '../../db/schema.ts';
+import { auditLog, envelopeMoves, transactions } from '../../db/schema.ts';
 import { openAccount } from '../ledger/ledger.ts';
 import {
   createManualTransaction,
@@ -16,6 +16,10 @@ import {
   updateTransaction,
 } from '../transactions/manage.ts';
 import { confirmTransactions } from '../queue/queue.ts';
+import { fundEnvelopes, reverseAllocation } from '../budget/budget.ts';
+import { envelopeHistory } from '../envelopes/manage.ts';
+import { envelopeActivity } from '../envelopes/activity.ts';
+import { transferBetweenEnvelopes } from '../envelopes/transfer.ts';
 import { closeDb, databaseAvailable, seedEnvelopes, setupTestDb, truncateAll, type Fixture } from '../ledger/testdb.ts';
 import { actAs, actorSetting, currentActor, runAs } from './actor.ts';
 import { transactionHistory } from './history.ts';
@@ -145,6 +149,62 @@ describe(
       assert.equal(rows.find((row) => row.rowId === second)!.actorName, 'Sam');
     });
 
+    test('whoever adds a transaction is kept on it, since the trail records only changes', async () => {
+      const id = await runAs(ALEX, groceries);
+      const [row] = await db.select().from(transactions).where(eq(transactions.id, id));
+      assert.equal(row!.createdById, ALEX.id);
+      assert.equal(row!.createdByName, 'Alex');
+
+      const unclaimed = await groceries();
+      const [other] = await db.select().from(transactions).where(eq(transactions.id, unclaimed));
+      assert.equal(other!.createdByName, null, 'nobody said, so it does not guess');
+    });
+
+    test('every way of moving money between envelopes says who did it', async () => {
+      await createManualTransaction(db, {
+        accountId: chequing,
+        date: '2026-09-01',
+        amountCents: 100000,
+        payeeRaw: 'Pay',
+        lines: [{ envelopeId: env.unallocatedId, amountCents: 100000 }],
+      });
+      await runAs(ALEX, () =>
+        fundEnvelopes(db, '2026-09', [{ envelopeId: env.groceriesId, amountCents: 30000 }], {
+          today: '2026-09-02',
+        }),
+      );
+      // These two used to write outside a transaction, where no name reached
+      // the database at all.
+      await runAs(SAM, () =>
+        transferBetweenEnvelopes(db, {
+          fromEnvelopeId: env.groceriesId,
+          toEnvelopeId: env.gasId,
+          amountCents: 5000,
+          date: '2026-09-03',
+        }),
+      );
+      const [allocation] = await db.select().from(envelopeMoves).where(eq(envelopeMoves.toEnvelopeId, env.groceriesId));
+      await runAs(SAM, () => reverseAllocation(db, allocation!.id));
+
+      const moves = await db.select().from(envelopeMoves).orderBy(asc(envelopeMoves.createdAt), asc(envelopeMoves.date));
+      assert.deepEqual(
+        moves.map((move) => [move.kind, move.createdById, move.createdByName]),
+        [
+          ['allocation', ALEX.id, 'Alex'],
+          ['transfer', SAM.id, 'Sam'],
+          ['allocation', SAM.id, 'Sam'],
+        ],
+      );
+
+      // Both places an envelope's moves are listed.
+      const history = await envelopeHistory(db, env.groceriesId);
+      const listed = history.flatMap((event) => (event.kind === 'transaction' ? [] : [event.by]));
+      assert.deepEqual(listed.sort(), ['Alex', 'Sam', 'Sam']);
+      const { rows } = await envelopeActivity(db, env.groceriesId);
+      const shown = rows.flatMap((row) => (row.type === 'move' ? [row.move.by] : []));
+      assert.deepEqual(shown.sort(), ['Alex', 'Sam', 'Sam']);
+    });
+
     test('the history reads as sentences, newest first, one entry per save', async () => {
       const id = await groceries();
       await updateTransaction(db, id, { date: '2026-09-20' });
@@ -162,6 +222,7 @@ describe(
           { who: 'Sam', changes: [`envelopes changed (was Groceries ${formatMoney(-2250)})`] },
           { who: 'Alex', changes: ['date 2026-09-20 → 2026-09-21', 'payee "Farmers market" → "Market"'] },
           { who: null, changes: ['date 2026-09-19 → 2026-09-20'] },
+          { who: null, changes: ['added'] },
         ].map((entry) => ({ ...entry, changes: entry.changes.sort() })),
         'compared with each entry sorted, since column order is not promised',
       );
@@ -176,12 +237,19 @@ describe(
         }),
       );
       const history = await transactionHistory(db, id);
-      assert.deepEqual(history.map((entry) => entry.changes), [['payee "Farmers market" → "Market"']]);
+      assert.deepEqual(history.map((entry) => entry.changes), [
+        ['payee "Farmers market" → "Market"'],
+        ['added'],
+      ]);
     });
 
-    test('a transaction nobody has changed has no history', async () => {
-      const id = await groceries();
-      assert.deepEqual(await transactionHistory(db, id), []);
+    test('a transaction nobody has changed has only its arrival, and who brought it', async () => {
+      const id = await runAs(SAM, groceries);
+      const history = await transactionHistory(db, id);
+      assert.deepEqual(
+        history.map(({ who, changes }) => ({ who, changes })),
+        [{ who: 'Sam', changes: ['added'] }],
+      );
     });
   },
 );

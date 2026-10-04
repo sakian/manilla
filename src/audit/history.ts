@@ -7,13 +7,14 @@
  * and they share the moment their database transaction began, so rows with the
  * same moment and the same person are one entry.
  *
- * Only updates and deletions are in the trail (the trigger skips inserts: a
- * row says when it came), so a history starts at the first change.
+ * Only updates and deletions are in the trail (the trigger skips inserts), so
+ * the oldest entry - how it arrived, and who brought it - comes from the
+ * transaction itself, which says when it came and who made it.
  */
 
 import { asc, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
-import { accounts, auditLog, envelopes } from '../../db/schema.ts';
+import { accounts, auditLog, envelopes, transactions } from '../../db/schema.ts';
 import { formatMoney } from '../money.ts';
 
 export type HistoryEntry = {
@@ -33,12 +34,17 @@ export async function transactionHistory(
   db: Database,
   transactionId: string,
 ): Promise<HistoryEntry[]> {
-  const rows = await db
-    .select()
-    .from(auditLog)
-    .where(eq(auditLog.transactionId, transactionId))
-    .orderBy(asc(auditLog.id));
-  if (rows.length === 0) return [];
+  const [rows, [arrival]] = await Promise.all([
+    db.select().from(auditLog).where(eq(auditLog.transactionId, transactionId)).orderBy(asc(auditLog.id)),
+    db
+      .select({ at: transactions.createdAt, who: transactions.createdByName, source: transactions.source })
+      .from(transactions)
+      .where(eq(transactions.id, transactionId)),
+  ]);
+  const arrived: HistoryEntry[] = arrival
+    ? [{ at: arrival.at, who: arrival.who, changes: [ARRIVED[arrival.source]] }]
+    : [];
+  if (rows.length === 0) return arrived;
 
   const names = await namesFor(db, rows);
   const entries: HistoryEntry[] = [];
@@ -56,8 +62,16 @@ export async function transactionHistory(
 
   // A save that deleted several lines says so once.
   for (const entry of entries) entry.changes = mergeLineRemovals(entry.changes);
-  return entries.filter((entry) => entry.changes.length > 0).reverse();
+  return [...entries.filter((entry) => entry.changes.length > 0).reverse(), ...arrived];
 }
+
+const ARRIVED: Record<(typeof transactions.$inferSelect)['source'], string> = {
+  manual: 'added',
+  file_import: 'imported from a file',
+  bank_sync: 'synced from the bank',
+  goodbudget: 'brought over from GoodBudget',
+  opening_balance: 'added as the opening balance',
+};
 
 type Names = { account: Map<string, string>; envelope: Map<string, string> };
 

@@ -483,6 +483,15 @@ export const transactions = pgTable(
     importBatchId: uuid('import_batch_id').references(() => importBatches.id),
     /** Links the two halves of an account transfer (FR-5). */
     transferPairId: uuid('transfer_pair_id'),
+    /**
+     * Who entered, imported or synced it. The audit trigger records changes,
+     * not arrivals, so this is the only place that says. Filled by the
+     * database from the transaction's `manilla.actor` (src/audit/actor.ts), so
+     * no write path has to remember it; null for rows from before it was kept.
+     * No foreign key, for the reason `audit_log.actor_id` has none.
+     */
+    createdById: uuid('created_by_id').default(sql`manilla_actor_id()`),
+    createdByName: text('created_by_name').default(sql`manilla_actor_name()`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -602,6 +611,13 @@ export const envelopeMoves = pgTable(
      * are never replayed from anywhere.
      */
     externalId: text('external_id'),
+    /**
+     * Who moved the money. Moves are only ever added - undo is another move -
+     * so the audit trail, which records changes, never sees one being made.
+     * Filled by the database, as on `transactions`.
+     */
+    createdById: uuid('created_by_id').default(sql`manilla_actor_id()`),
+    createdByName: text('created_by_name').default(sql`manilla_actor_name()`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

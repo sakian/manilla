@@ -85,11 +85,14 @@ credentials, not records of your money.
   It counts per install, not per person, so someone hammering it delays your own
   recovery too — a passkey still works.
 - **The audit trail is shown per transaction** (NF-2). Every edit and deletion
-  of a transaction, envelope line or envelope move is recorded with who made it;
-  a transaction's own history is under *History* in its dialog. There is no
-  screen for envelope moves or for everything at once - those are read from the
-  JSON export or the `audit_log` table. Changes made before who was recorded say
-  "not recorded who".
+  of a transaction, envelope line or envelope move is recorded with who made it,
+  and each transaction and envelope move also keeps who created it - a move is
+  never edited, so that is the only record of who moved the money. A
+  transaction's history is under *History* in its dialog, ending with who added
+  it; an envelope's history says who made each fill and transfer. There is no
+  screen for every change at once - read that from the JSON export or the
+  `audit_log` table. Anything from before who was recorded says "not recorded
+  who", or nothing at all on a move.
 
 ## Documentation
 

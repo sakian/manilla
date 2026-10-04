@@ -28,6 +28,8 @@ export type EnvelopeMoveRow = {
   otherEnvelopeName: string;
   otherIsPool: boolean;
   note: string | null;
+  /** Who moved it; null for moves from before that was kept. */
+  by: string | null;
 };
 
 export type EnvelopeActivityRow =
@@ -114,8 +116,9 @@ export async function envelopeActivity(
           other_name: string;
           other_is_pool: boolean;
           note: string | null;
+          created_by_name: string | null;
         }>(sql`
-          select m.id, m.date::text as date, m.kind, m.amount_cents, m.to_envelope_id, m.note,
+          select m.id, m.date::text as date, m.kind, m.amount_cents, m.to_envelope_id, m.note, m.created_by_name,
             other.name as other_name, other.is_unallocated as other_is_pool
           from envelope_moves m
           join envelopes other on other.id =
@@ -149,6 +152,7 @@ export async function envelopeActivity(
           otherEnvelopeName: move.other_name,
           otherIsPool: move.other_is_pool,
           note: move.note,
+          by: move.created_by_name,
         },
       });
     }
