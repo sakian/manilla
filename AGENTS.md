@@ -74,8 +74,11 @@ cannot see. Use a scratch database, never the live one, and if a screen could no
 reached, say so rather than reporting the change as done.
 
 Every server action is a POST endpoint reachable without the page that renders its
-button, so each one calls `requireUser()` itself. The only exceptions are in
-`app/login/actions.ts`, and each says why it is safe to be public.
+button, so each one calls `requireUser()` itself, as `actAs(await requireUser())` so
+the audit trail can say who made the change (`src/audit/actor.ts`;
+`src/audit/actions.test.ts` checks every action file). Work that starts outside a
+request, like the daily bank sync, runs inside `runAs(...)` instead. The only
+exceptions are in `app/login/actions.ts`, and each says why it is safe to be public.
 
 **Never commit real financial data.** `data/private/`, `.env`, `certs/` and
 `backups/` are gitignored and stay that way. Fixtures in `data/samples/` are

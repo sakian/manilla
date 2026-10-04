@@ -8,10 +8,12 @@
  * reason - a calendar day must not drift across a timezone boundary.
  */
 
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema.ts';
 import { databaseOf, urlFor } from '../src/ledgers/config.ts';
+import { actorSetting } from '../src/audit/actor.ts';
 
 const DATE_OID = 1082;
 
@@ -44,7 +46,20 @@ export function createConnection(
 export type Database = ReturnType<typeof createDb>;
 
 export function createDb(url?: string, options: { quiet?: boolean } = {}) {
-  return drizzle(createConnection(url, options), { schema });
+  const db = drizzle(createConnection(url, options), { schema });
+
+  // Every transaction says who it is for, so the audit trigger can (NF-2,
+  // src/audit/actor.ts). `true` makes the setting end with the transaction;
+  // a nested `tx.transaction` is a savepoint inside it and inherits it.
+  const transaction = db.transaction.bind(db);
+  db.transaction = ((work, config) =>
+    transaction(async (tx) => {
+      const actor = actorSetting();
+      if (actor) await tx.execute(sql`select set_config('manilla.actor', ${actor}, true)`);
+      return work(tx);
+    }, config)) as typeof db.transaction;
+
+  return db;
 }
 
 /** One pool per database for the life of the process. Tests make their own. */

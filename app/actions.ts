@@ -9,6 +9,7 @@ import { convertToTransfer, transactionDetail } from '../src/transactions/manage
 import { createTransferRule } from '../src/rules/rules.ts';
 import { dismissInsight } from '../src/insights/insights.ts';
 import { requireUser } from './auth.ts';
+import { actAs } from '../src/audit/actor.ts';
 
 // A server action is a POST endpoint, reachable without going through the page
 // that renders the button, so each one checks the session itself (NF-3).
@@ -20,7 +21,7 @@ import { requireUser } from './auth.ts';
  * half-finished sitting leaves the ledger exactly as it was.
  */
 export async function saveReviewAction(decisions: ReviewDecision[]) {
-  await requireUser();
+  actAs(await requireUser());
   const connection = await ledgerDb();
   const result = await saveReview(connection, decisions);
   // Confirming rows is how a payee becomes worth a rule, so the count is stale
@@ -43,7 +44,7 @@ export async function markAsTransferAction(
   options: { createRule?: boolean } = {},
 ) {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
 
     // Read the normalized payee before converting, since the rule matches on it.
@@ -87,7 +88,7 @@ export async function markAsTransferAction(
  */
 export async function pairTransferAction(firstId: string, secondId: string) {
   try {
-    await requireUser();
+    actAs(await requireUser());
     await pairTransferHalves(await ledgerDb(), firstId, secondId);
     revalidatePath('/review');
     revalidatePath('/transactions');
@@ -111,7 +112,7 @@ export async function pairTransferAction(firstId: string, secondId: string) {
  * books and means nothing in this one.
  */
 export async function switchLedgerAction(form: FormData) {
-  await requireUser();
+  actAs(await requireUser());
   const wanted = String(form.get('ledger') ?? '');
   const ledger = (await allLedgers()).find((candidate) => candidate.key === wanted);
   if (!ledger) throw new Error('No such ledger');
@@ -123,7 +124,7 @@ export async function switchLedgerAction(form: FormData) {
 
 /** AI-6, in part: "that charge was expected", so it is not mentioned again. */
 export async function dismissInsightAction(transactionId: string) {
-  await requireUser();
+  actAs(await requireUser());
   await dismissInsight(await ledgerDb(), transactionId);
   revalidatePath('/', 'layout');
   return { ok: true as const };

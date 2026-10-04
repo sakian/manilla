@@ -70,9 +70,6 @@ credentials, not records of your money.
   own passkeys and recovery codes, but everyone sees and changes the same books and
   anyone can invite or remove anyone else. The first visitor to a fresh install
   claims it by registering a passkey, so do that before anyone else can reach it.
-- **The audit trail does not say who.** It records what changed and when, from a
-  database trigger that has no idea which person was signed in. Changes to who
-  can sign in are the exception: **Settings → Sign-in activity** names them.
 - **One currency, and it is dollars.** The symbol is one constant
   (`src/money.ts`); thousands separators follow the server's locale. Nobody has
   tried it anywhere else.
@@ -87,9 +84,12 @@ credentials, not records of your money.
   each try waits longer, doubling to 15 minutes, and every wrong one is logged.
   It counts per install, not per person, so someone hammering it delays your own
   recovery too — a passkey still works.
-- **The audit trail has no screen yet** (NF-2). Every edit and deletion of a
-  transaction, envelope line or envelope move is recorded, but it is read from the
-  JSON export or the `audit_log` table, not from the app.
+- **The audit trail is shown per transaction** (NF-2). Every edit and deletion
+  of a transaction, envelope line or envelope move is recorded with who made it;
+  a transaction's own history is under *History* in its dialog. There is no
+  screen for envelope moves or for everything at once - those are read from the
+  JSON export or the `audit_log` table. Changes made before who was recorded say
+  "not recorded who".
 
 ## Documentation
 

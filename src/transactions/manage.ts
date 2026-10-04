@@ -250,12 +250,29 @@ export async function setTransactionNote(
   transactionId: string,
   note: string | null,
 ): Promise<void> {
-  const updated = await db
-    .update(transactions)
-    .set({ note: cleanNote(note), updatedAt: new Date() })
-    .where(eq(transactions.id, transactionId))
-    .returning({ id: transactions.id });
+  // In a transaction, like every other write here, so the audit trail can say
+  // who changed it (src/audit/actor.ts).
+  const updated = await db.transaction((tx) =>
+    tx
+      .update(transactions)
+      .set({ note: cleanNote(note), updatedAt: new Date() })
+      .where(eq(transactions.id, transactionId))
+      .returning({ id: transactions.id }),
+  );
   if (updated.length === 0) throw new TransactionError(`No such transaction: ${transactionId}`);
+}
+
+/** The same envelopes for the same amounts, in any order. */
+function sameSplit(
+  left: { envelopeId: string; amountCents: number }[],
+  right: { envelopeId: string; amountCents: number }[],
+): boolean {
+  const key = (lines: { envelopeId: string; amountCents: number }[]) =>
+    lines
+      .map((line) => `${line.envelopeId}:${line.amountCents}`)
+      .sort()
+      .join(',');
+  return left.length === right.length && key(left) === key(right);
 }
 
 export type TransactionEdit = {
@@ -347,7 +364,17 @@ export async function updateTransaction(
 
     await tx.update(transactions).set(changes).where(eq(transactions.id, transactionId));
 
-    if (lines !== undefined) {
+    // The dialog sends the split with every save. Rewriting one that has not
+    // changed would put "envelopes changed" in the audit trail for an edit to
+    // the payee, so an identical split is left as it is.
+    const current =
+      lines === undefined
+        ? []
+        : await tx
+            .select({ envelopeId: txnLines.envelopeId, amountCents: txnLines.amountCents })
+            .from(txnLines)
+            .where(eq(txnLines.transactionId, transactionId));
+    if (lines !== undefined && !sameSplit(current, lines)) {
       await tx.delete(txnLines).where(eq(txnLines.transactionId, transactionId));
       if (lines.length > 0) {
         await tx.insert(txnLines).values(

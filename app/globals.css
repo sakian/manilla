@@ -1282,6 +1282,38 @@ details[open] > summary > .group-summary::before {
   overflow-x: auto;
 }
 
+/* A transaction's history (NF-2): closed until asked for, at the foot of its dialog. */
+.history {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  font-size: 13px;
+}
+
+.history summary {
+  cursor: pointer;
+}
+
+.history ol {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-wrap: anywhere;
+}
+
+.history p {
+  margin: 8px 0 0;
+}
+
 .diagnostics {
   margin-top: 18px;
   border-top: 1px solid var(--border);

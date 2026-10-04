@@ -277,24 +277,28 @@ export async function confirmTransactions(db: Database, ids: string[]): Promise<
   const confirmable = [...new Set(assigned.map((row) => row.id))];
   if (confirmable.length === 0) return 0;
 
-  await db
-    .update(transactions)
-    .set({ status: 'confirmed', updatedAt: new Date() })
-    .where(inArray(transactions.id, confirmable));
+  // Together, and in a transaction so the audit trail can say who confirmed
+  // them (src/audit/actor.ts).
+  await db.transaction(async (tx) => {
+    await tx
+      .update(transactions)
+      .set({ status: 'confirmed', updatedAt: new Date() })
+      .where(inArray(transactions.id, confirmable));
 
-  // Record what was accepted, so suggestion accuracy stays measurable.
-  // A split has several lines; the first is enough here, because a suggestion
-  // only ever proposes a single envelope.
-  await db
-    .update(suggestions)
-    .set({
-      acceptedEnvelopeId: sql`(
-        select l.envelope_id from txn_lines l
-        where l.transaction_id = ${suggestions.transactionId}
-        limit 1
-      )`,
-    })
-    .where(inArray(suggestions.transactionId, confirmable));
+    // Record what was accepted, so suggestion accuracy stays measurable.
+    // A split has several lines; the first is enough here, because a suggestion
+    // only ever proposes a single envelope.
+    await tx
+      .update(suggestions)
+      .set({
+        acceptedEnvelopeId: sql`(
+          select l.envelope_id from txn_lines l
+          where l.transaction_id = ${suggestions.transactionId}
+          limit 1
+        )`,
+      })
+      .where(inArray(suggestions.transactionId, confirmable));
+  });
 
   return confirmable.length;
 }

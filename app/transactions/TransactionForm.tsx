@@ -31,6 +31,7 @@ import {
   type TransactionFields,
 } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';
+import TransactionHistory from './TransactionHistory.tsx';
 import { displayDate, localToday } from '../../src/budget/month.ts';
 import {
   fillBlankLine,
@@ -518,6 +519,8 @@ export default function TransactionForm({
           )}
 
           {error && <p className="signin-error">{error}</p>}
+
+          {editing && <TransactionHistory transactionId={editing.id} />}
         </div>
 
         <div className="picker-foot dialog-foot">

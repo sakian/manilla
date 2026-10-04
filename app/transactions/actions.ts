@@ -25,6 +25,9 @@ import {
   updateTransfer,
 } from '../../src/transactions/manage.ts';
 import { requireUser } from '../auth.ts';
+import { actAs } from '../../src/audit/actor.ts';
+import { transactionHistory } from '../../src/audit/history.ts';
+import { displayInstant } from '../../src/budget/month.ts';
 import { centsFromInput } from '../../src/amount.ts';
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -69,7 +72,7 @@ export async function transactionDetailAction(transactionId: string): Promise<
   | { ok: false; error: string }
 > {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const detail = await transactionDetail(await ledgerDb(), transactionId);
     if (!detail) return { ok: false, error: 'That transaction is no longer there.' };
 
@@ -134,7 +137,7 @@ export async function createTransactionAction(
   fields: TransactionFields,
 ): Promise<{ ok: true; message: string; saved: SavedEntry } | { ok: false; error: string }> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const lines = linesFrom(fields);
     const amountCents = signed(fields.amount, fields.direction);
 
@@ -166,7 +169,7 @@ export async function updateTransactionAction(
   fields: TransactionFields,
 ): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const lines = linesFrom(fields);
 
     await updateTransaction(await ledgerDb(), transactionId, {
@@ -196,7 +199,7 @@ export async function setTransactionNoteAction(
   note: string,
 ): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     await setTransactionNote(await ledgerDb(), transactionId, note);
     revalidatePath('/transactions');
     return { ok: true, message: note.trim() ? 'Note saved.' : 'Note removed.' };
@@ -207,7 +210,7 @@ export async function setTransactionNoteAction(
 
 export async function deleteTransactionAction(transactionId: string): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const result = await deleteTransaction(await ledgerDb(), transactionId);
     refreshed();
 
@@ -237,7 +240,7 @@ export async function deleteTransactionAction(transactionId: string): Promise<Ac
  */
 export async function sendBackToReviewAction(transactionId: string): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const result = await sendBackToReview(await ledgerDb(), transactionId);
     refreshed();
 
@@ -272,7 +275,7 @@ export type TransferFields = {
 
 export async function createTransferAction(fields: TransferFields): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     await createTransfer(await ledgerDb(), {
       fromAccountId: fields.fromAccountId,
       toAccountId: fields.toAccountId,
@@ -293,7 +296,7 @@ export async function updateTransferAction(
   fields: TransferFields,
 ): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     await updateTransfer(await ledgerDb(), pairId, {
       fromAccountId: fields.fromAccountId,
       toAccountId: fields.toAccountId,
@@ -311,7 +314,7 @@ export async function updateTransferAction(
 
 export async function deleteTransferAction(pairId: string): Promise<ActionResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     await deleteTransfer(await ledgerDb(), pairId);
     refreshed();
     return { ok: true, message: 'Both halves of the transfer are gone.' };
@@ -329,7 +332,7 @@ export async function deleteTransferAction(pairId: string): Promise<ActionResult
  * what was saved, and checked again when the form reads it.
  */
 export async function recordOtherSideAction(ledgerKey: string, saved: SavedEntry): Promise<void> {
-  await requireUser();
+  actAs(await requireUser());
   const from = await currentLedger();
   const to = (await allLedgers()).find((ledger) => ledger.key === ledgerKey);
   if (!to || to.key === from.key) throw new Error('No such ledger to record it in');
@@ -338,4 +341,34 @@ export async function recordOtherSideAction(ledgerKey: string, saved: SavedEntry
   await rememberLedger(to.key);
   revalidatePath('/', 'layout');
   redirect(`/transactions?${new URLSearchParams({ new: 'transaction', ...draftQuery(draft) })}`);
+}
+
+/** One entry in a transaction's history, ready to show. */
+export type HistoryView = { key: string; when: string; who: string | null; changes: string[] };
+
+/** The server's own clock and zone, like every other date on screen. */
+const timeOfDay = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+
+/**
+ * What has been changed on a transaction, and by whom (NF-2). Asked for when
+ * the history is opened rather than with every row in a list.
+ */
+export async function transactionHistoryAction(
+  transactionId: string,
+): Promise<{ ok: true; history: HistoryView[] } | { ok: false; error: string }> {
+  try {
+    actAs(await requireUser());
+    const history = await transactionHistory(await ledgerDb(), transactionId);
+    return {
+      ok: true,
+      history: history.map((entry, index) => ({
+        key: `${entry.at.toISOString()}-${index}`,
+        when: `${displayInstant(entry.at)}, ${timeOfDay.format(entry.at)}`,
+        who: entry.who,
+        changes: entry.changes,
+      })),
+    };
+  } catch (error) {
+    return failed(error);
+  }
 }

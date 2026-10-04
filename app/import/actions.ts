@@ -33,6 +33,7 @@ import { bandOf, type Band } from '../../src/categorize/pipeline.ts';
 import { envelopes, transactions } from '../../db/schema.ts';
 import { inArray } from 'drizzle-orm';
 import { requireUser } from '../auth.ts';
+import { actAs } from '../../src/audit/actor.ts';
 
 export type Failure = { ok: false; error: string };
 
@@ -103,7 +104,7 @@ export async function previewImportAction(
   accountId?: string,
 ): Promise<PreviewResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     const document = parseOfx(fileText);
     const statement = document.statements[0];
@@ -263,7 +264,7 @@ export async function commitImportAction(
   meta: { filename?: string; rememberMapping?: boolean } = {},
 ): Promise<CommitResult> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     const statement = parseOfx(fileText).statements[0];
     if (!statement) return { ok: false, error: 'No statement in that file.' };
@@ -291,7 +292,7 @@ export async function revertImportAction(
   batchId: string,
 ): Promise<{ ok: true; removed: number } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const removed = await revertImport(await ledgerDb(), batchId);
     refreshed();
     return { ok: true, removed };

@@ -31,6 +31,7 @@ import {
 } from '../../src/migrate/sources.ts';
 import { refreshRuleSuggestionCount } from '../../src/rules/rules.ts';
 import { requireUser } from '../auth.ts';
+import { actAs } from '../../src/audit/actor.ts';
 
 export type Failure = { ok: false; error: string };
 
@@ -125,7 +126,7 @@ export async function planMigrationAction(
   from: string,
 ): Promise<{ ok: true; summary: PlanSummary } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const { texts } = await readUpload(upload);
     const plan = planMigration(texts, { from: sourceFrom(from) });
 
@@ -180,7 +181,7 @@ export async function commitMigrationAction(
   | Failure
 > {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     const { texts, names } = await readUpload(upload);
     const plan = planMigration(texts, { from: sourceFrom(from) });
@@ -202,7 +203,7 @@ export async function applyReconciliationAction(
   expected: Record<string, number>,
 ): Promise<{ ok: true; written: number } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     const date = await migrationDate(connection);
     if (!date) throw new Error('There is no migrated history to reconcile against.');
@@ -218,7 +219,7 @@ export async function revertMigrationAction(
   batchId: string,
 ): Promise<{ ok: true; removed: number } | Failure> {
   try {
-    await requireUser();
+    actAs(await requireUser());
     const connection = await ledgerDb();
     const removed = await revertMigration(connection, batchId);
     refreshed();
