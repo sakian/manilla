@@ -118,7 +118,7 @@ export function encrypt(
 export type Delivery =
   | { ok: true }
   /** The browser has unsubscribed, or the push service has forgotten it: stop sending. */
-  | { ok: false; gone: true; status: number }
+  | { ok: false; gone: true; status: number; reason: string }
   | { ok: false; gone: false; status: number | null; reason: string };
 
 export type SendOptions = {
@@ -150,8 +150,9 @@ export async function deliver(
       signal: AbortSignal.timeout(5000),
     });
     if (response.ok) return { ok: true };
-    if (response.status === 404 || response.status === 410) return { ok: false, gone: true, status: response.status };
-    return { ok: false, gone: false, status: response.status, reason: (await response.text()).slice(0, 200) };
+    const reason = (await response.text()).slice(0, 200).trim();
+    if (response.status === 404 || response.status === 410) return { ok: false, gone: true, status: response.status, reason };
+    return { ok: false, gone: false, status: response.status, reason };
   } catch (error) {
     return { ok: false, gone: false, status: null, reason: String(error) };
   }

@@ -218,14 +218,30 @@ export async function anyoneListening(db: Database, kind: PushKind): Promise<boo
   return Boolean(row);
 }
 
-export type Recipients =
-  | {
-      kind: PushKind;
-      /** Someone who should not be told, because they did it. */
-      except?: string | null;
-    }
-  /** One of a person's own browsers, whatever it has turned off: the test button. */
-  | { kind: 'test'; user: string; endpoint: string };
+export type Recipients = {
+  kind: PushKind;
+  /** Someone who should not be told, because they did it. */
+  except?: string | null;
+};
+
+/** What goes to the push service: the message for the browser, and who is sending it. */
+function prepare(tag: string, message: PushMessage, options: PushOptions) {
+  const origin = options.origin ?? process.env.MANILLA_ORIGIN;
+  const payload = JSON.stringify({
+    title: message.title,
+    body: message.body.slice(0, 1000),
+    url: origin && message.path ? new URL(message.path, origin).toString() : (message.path ?? '/'),
+    // A newer one of the same kind replaces the last on the lock screen.
+    tag,
+  });
+  // Apple refuses a request that does not say who is sending. Over plain http
+  // (a dev server) there is no address worth giving, and nothing will check.
+  const subject = origin?.startsWith('https:') ? origin : 'mailto:manilla@example.invalid';
+  return { payload, subject };
+}
+
+/** A day: a phone off overnight still hears about last night's sync. */
+const TTL = 24 * 60 * 60;
 
 export type PushOptions = {
   /** MANILLA_ORIGIN: where a tap goes, and who the push services are told is sending. */
@@ -252,17 +268,10 @@ export async function notifyMembers(
   let targets: (typeof pushSubscriptions.$inferSelect)[];
   let keys: VapidKeys;
   try {
-    if (recipients.kind === 'test') {
-      targets = await db
-        .select()
-        .from(pushSubscriptions)
-        .where(and(eq(pushSubscriptions.userId, recipients.user), eq(pushSubscriptions.endpoint, recipients.endpoint)));
-    } else {
-      const except = recipients.except;
-      targets = (await db.select().from(pushSubscriptions).where(eq(COLUMNS[recipients.kind], true))).filter(
-        (row) => row.userId !== except,
-      );
-    }
+    const except = recipients.except;
+    targets = (await db.select().from(pushSubscriptions).where(eq(COLUMNS[recipients.kind], true))).filter(
+      (row) => row.userId !== except,
+    );
     if (targets.length === 0) return none;
     keys = await vapidKeys(db);
   } catch (error) {
@@ -270,17 +279,7 @@ export async function notifyMembers(
     return none;
   }
 
-  const origin = options.origin ?? process.env.MANILLA_ORIGIN;
-  const payload = JSON.stringify({
-    title: message.title,
-    body: message.body.slice(0, 1000),
-    url: origin && message.path ? new URL(message.path, origin).toString() : (message.path ?? '/'),
-    // A newer one of the same kind replaces the last on the lock screen.
-    tag: recipients.kind,
-  });
-  // Apple refuses a request that does not say who is sending. Over plain http
-  // (a dev server) there is no address worth giving, and nothing will check.
-  const subject = origin?.startsWith('https:') ? origin : 'mailto:manilla@example.invalid';
+  const { payload, subject } = prepare(recipients.kind, message, options);
 
   const sent = (async () => {
     const results = await Promise.all(
@@ -290,16 +289,22 @@ export async function notifyMembers(
           { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
           payload,
           keys,
-          // A day: a phone off overnight still hears about last night's sync.
-          { ttl: 24 * 60 * 60, urgent: message.urgent, subject, fetch: options.fetch },
+          { ttl: TTL, urgent: message.urgent, subject, fetch: options.fetch },
         ),
       })),
     );
     const gone = results.filter(({ result }) => !result.ok && result.gone).map(({ row }) => row.id);
+    // Every refusal is logged with what the push service said, a forgotten
+    // browser included: "gone" is also how some services answer a request
+    // they could not make sense of, and without its words that is a guess.
     for (const { row, result } of results) {
-      if (!result.ok && !result.gone) {
-        console.warn(`[manilla] a notification to ${row.label} failed: ${result.status ?? ''} ${result.reason}`.trim());
-      }
+      if (result.ok) continue;
+      const answer = `${result.status ?? 'no answer'}${result.reason ? ` ${result.reason}` : ''}`;
+      console.warn(
+        result.gone
+          ? `[manilla] forgot ${row.label}, whose push service answered ${answer}`
+          : `[manilla] a notification to ${row.label} failed: ${answer}`,
+      );
     }
     try {
       if (gone.length > 0) await db.delete(pushSubscriptions).where(inArray(pushSubscriptions.id, gone));
@@ -309,4 +314,44 @@ export async function notifyMembers(
     return results.filter(({ result }) => result.ok).length;
   })();
   return { sent };
+}
+
+/**
+ * The test button: one of a person's own browsers, whatever it has turned off,
+ * waited for, and answered in words. When it fails, what the push service said
+ * is the only clue to why, so it is shown rather than summarised.
+ */
+export async function testDevice(
+  db: Database,
+  userId: string,
+  endpoint: string,
+  options: PushOptions = {},
+): Promise<{ ok: true } | { ok: false; error: string; forgotten: boolean }> {
+  const [row] = await db
+    .select()
+    .from(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
+  if (!row) {
+    return { ok: false, forgotten: true, error: 'Manilla no longer has this device on its list. Turn notifications on again.' };
+  }
+  const { payload, subject } = prepare('test', { title: 'Manilla', body: 'Notifications are working on this device.', path: '/settings' }, options);
+  const result = await deliver(
+    { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+    payload,
+    await vapidKeys(db),
+    { ttl: TTL, subject, fetch: options.fetch },
+  );
+  if (result.ok) return { ok: true };
+  const service = new URL(row.endpoint).hostname;
+  const answer = `${result.status ?? 'no answer'}${result.reason ? `: ${result.reason}` : ''}`;
+  console.warn(`[manilla] a test notification to ${row.label} was refused by ${service}: ${answer}`);
+  if (result.gone) {
+    await removeDevice(db, userId, row.id);
+    return {
+      ok: false,
+      forgotten: true,
+      error: `The push service (${service}) says this device is not subscribed (${answer}). Turn notifications on again.`,
+    };
+  }
+  return { ok: false, forgotten: false, error: `The push service (${service}) refused it (${answer}).` };
 }

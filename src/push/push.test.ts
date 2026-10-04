@@ -14,6 +14,7 @@ import {
   removeDevice,
   saveSubscription,
   setDeviceKinds,
+  testDevice,
 } from './push.ts';
 import type { Subscription } from './webpush.ts';
 
@@ -192,23 +193,39 @@ describe(
       await saveSubscription(db, alex, browserAt('https://fcm.googleapis.com/fcm/send/two'), 'two');
       const service = pushService();
       const [, two] = await listDevices(db, alex);
-      await setDeviceKinds(db, alex, two!.id, { sync: false, signin: false });
-      const test = (user: string) =>
-        notifyMembers(
-          db,
-          { kind: 'test', user, endpoint: 'https://fcm.googleapis.com/fcm/send/two' },
-          { title: 't', body: 'b' },
-          { fetch: service.fetch },
-        );
-      assert.equal(await (await test(alex)).sent, 1, 'even with everything turned off');
-      assert.deepEqual(service.posted, ['https://fcm.googleapis.com/fcm/send/two']);
-      assert.equal(await (await test(sam)).sent, 0, "not someone else's browser");
+      await setDeviceKinds(db, alex, two!.id, { sync: false, signin: false, overspent: false, unusual: false });
+      const endpoint = 'https://fcm.googleapis.com/fcm/send/two';
+      assert.deepEqual(await testDevice(db, alex, endpoint, { fetch: service.fetch }), { ok: true }, 'even with everything off');
+      assert.deepEqual(service.posted, [endpoint]);
+      assert.deepEqual(
+        await testDevice(db, sam, endpoint, { fetch: service.fetch }),
+        { ok: false, forgotten: true, error: 'Manilla no longer has this device on its list. Turn notifications on again.' },
+        "not someone else's browser",
+      );
+      assert.equal(service.posted.length, 1);
+
+      const warn = console.warn;
+      console.warn = () => {};
+      try {
+        const refused = await testDevice(db, alex, endpoint, {
+          fetch: (async () => new Response('push subscription has unsubscribed or expired.', { status: 410 })) as typeof fetch,
+        });
+        assert.deepEqual(refused, {
+          ok: false,
+          forgotten: true,
+          error:
+            'The push service (fcm.googleapis.com) says this device is not subscribed (410: push subscription has unsubscribed or expired.). Turn notifications on again.',
+        });
+      } finally {
+        console.warn = warn;
+      }
+      assert.deepEqual((await listDevices(db, alex)).map((device) => device.label), ['one'], 'and it is forgotten');
 
       const [one] = await listDevices(db, alex);
       await removeDevice(db, sam, one!.id);
-      assert.equal((await listDevices(db, alex)).length, 2);
+      assert.equal((await listDevices(db, alex)).length, 1);
       await removeDevice(db, alex, one!.id);
-      assert.deepEqual((await listDevices(db, alex)).map((device) => device.label), ['two']);
+      assert.deepEqual(await listDevices(db, alex), []);
     });
 
     test('nobody listening means nothing is sent and no key is made', async () => {

@@ -14,10 +14,10 @@ import { homeDb } from '../../db/client.ts';
 import {
   checkSubscription,
   deviceLabel,
-  notifyMembers,
   removeDevice,
   saveSubscription,
   setDeviceKinds,
+  testDevice,
   type PushKinds,
 } from '../../src/push/push.ts';
 import { requireUser } from '../auth.ts';
@@ -35,7 +35,12 @@ export async function turnOnNotificationsAction(subscription: unknown): Promise<
   try {
     const session = actAs(await requireUser());
     const label = deviceLabel((await headers()).get('user-agent') ?? '');
-    await saveSubscription(homeDb(), session.userId, checkSubscription(subscription), label);
+    const checked = checkSubscription(subscription);
+    await saveSubscription(homeDb(), session.userId, checked, label);
+    // Which service and which kind of address, for when one is refused later;
+    // not the token itself, which is as good as the subscription.
+    const url = new URL(checked.endpoint);
+    console.log(`[manilla] notifications on for ${label}, through ${url.host}${url.pathname.replace(/[^/]+$/, '…')}`);
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {
@@ -66,19 +71,17 @@ export async function setNotificationKindsAction(id: string, kinds: Partial<Push
   }
 }
 
-/** Waits for the push service's answer, so the button can say whether it took. */
-export async function sendTestNotificationAction(endpoint: string): Promise<Result> {
+/**
+ * Waits for the push service's answer, so the button can say whether it took
+ * and, if not, what the push service said. `forgotten` means the panel should
+ * show this device as off again.
+ */
+export async function sendTestNotificationAction(endpoint: string): Promise<Result | (Failure & { forgotten: boolean })> {
   try {
     const session = actAs(await requireUser());
-    const { sent } = await notifyMembers(
-      homeDb(),
-      { kind: 'test', user: session.userId, endpoint },
-      { title: 'Manilla', body: 'Notifications are working on this device.', path: '/settings' },
-    );
-    if ((await sent) === 0) {
-      return { ok: false, error: 'The push service did not take it. Try turning notifications off and on again.' };
-    }
-    return { ok: true };
+    const result = await testDevice(homeDb(), session.userId, endpoint);
+    if (!result.ok) revalidatePath('/settings');
+    return result;
   } catch (error) {
     return failed(error);
   }
