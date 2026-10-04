@@ -7,6 +7,7 @@ import { MAX_LEDGERS } from '../../src/ledgers/config.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { countUnusedRecoveryCodes, listDevices } from '../../src/auth/passkeys.ts';
 import { listMembers, listPendingInvites } from '../../src/auth/invites.ts';
+import { recentActivity } from '../../src/auth/activity.ts';
 import {
   SUGGESTION_COUNT_CAP,
   dismissedRuleSuggestions,
@@ -21,6 +22,7 @@ import { requireUser } from '../auth.ts';
 import { signOutEverywhereAction } from './actions.ts';
 import Devices from './Devices.tsx';
 import People from './People.tsx';
+import SignInActivity from './SignInActivity.tsx';
 import AiPanel from './AiPanel.tsx';
 import DataPanel from './DataPanel.tsx';
 import AppearancePanel from './AppearancePanel.tsx';
@@ -42,6 +44,7 @@ export default async function SettingsPage() {
     unusedRecoveryCodes,
     members,
     invites,
+    activity,
     rules,
     { suggestions, total: suggestionTotal },
     declined,
@@ -58,6 +61,7 @@ export default async function SettingsPage() {
     countUnusedRecoveryCodes(homeDb(), session.userId),
     listMembers(homeDb()),
     listPendingInvites(homeDb()),
+    recentActivity(homeDb()),
     listRules(connection),
     // Searched and counted together, so the notice that leads here always
     // agrees with what it finds.
@@ -157,6 +161,8 @@ export default async function SettingsPage() {
       <People members={members} invites={invites} currentUserId={session.userId} />
 
       <Devices devices={devices} unusedRecoveryCodes={unusedRecoveryCodes} />
+
+      <SignInActivity events={activity} />
 
       <section className="panel">
         <h3>This session</h3>

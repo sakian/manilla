@@ -11,7 +11,8 @@
  *    exists, registration needs a session and happens in Settings.
  *  - `beginSignIn` / `finishSignIn` prove possession of a registered passkey.
  *  - `signInWithRecoveryCode` spends a single-use code that only the user has,
- *    and after a few wrong ones makes each further try wait longer (#14).
+ *    after a few wrong ones makes each further try wait longer (#14), and is
+ *    refused over Funnel, so the internet has nothing to guess at.
  *  - `lookUpInvite` / `beginJoin` / `finishJoin` need an invitation token: 256
  *    random bits that a member made in Settings, which lapse in days and work
  *    once (src/auth/invites.ts). They are open to Funnel on purpose - reaching
@@ -39,8 +40,14 @@ import {
   redeemRecoveryCode,
   setupState,
 } from '../../src/auth/passkeys.ts';
+import { personOf, recordActivity } from '../../src/auth/activity.ts';
 import { beginJoin, finishJoin, lookUpInvite, type InviteView } from '../../src/auth/invites.ts';
-import { firstSetupGate, requestReach } from '../../src/auth/reach.ts';
+import {
+  RECOVERY_NEEDS_TAILNET,
+  firstSetupGate,
+  recoveryAllowed,
+  requestReach,
+} from '../../src/auth/reach.ts';
 import { describeWait, recoveryThrottle } from '../../src/auth/throttle.ts';
 import { currentSession, endSession, startSession } from '../auth.ts';
 
@@ -134,6 +141,12 @@ export async function finishSignInAction(input: {
  */
 export async function recoveryCodeSignInAction(code: string): Promise<SignInResult> {
   try {
+    // Before the throttle, so a stranger's guesses never count against the
+    // owner's own attempts from home.
+    if (!recoveryAllowed(requestReach(await headers()))) {
+      return { ok: false, error: RECOVERY_NEEDS_TAILNET };
+    }
+
     // Checked before the code is: while the wait runs, no code is looked at or
     // spent, right or wrong, or the wait would be no wait at all.
     const wait = recoveryThrottle.waitFor(RECOVERY);
@@ -147,13 +160,28 @@ export async function recoveryCodeSignInAction(code: string): Promise<SignInResu
     const userId = await redeemRecoveryCode(homeDb(), code);
     if (!userId) {
       const { failures, waitMs } = recoveryThrottle.failed(RECOVERY);
+      const source = await who();
       console.warn(
-        `[manilla] a recovery code did not match (${failures} in a row) from ${await who()}` +
+        `[manilla] a recovery code did not match (${failures} in a row) from ${source}` +
           (waitMs > 0 ? `; the next try waits ${describeWait(waitMs)}` : ''),
+      );
+      // Every one is kept and shown; a phone hears at five in a row, when it
+      // stops looking like a typo, and at every five after.
+      await recordActivity(
+        homeDb(),
+        { kind: 'recovery_code_failed', source },
+        { alert: failures % 5 === 0 },
       );
       return { ok: false, error: 'That recovery code is not one of yours, or has been used already.' };
     }
     recoveryThrottle.succeeded(RECOVERY);
+    const person = await personOf(homeDb(), userId);
+    await recordActivity(homeDb(), {
+      kind: 'recovery_code_used',
+      subject: person,
+      actor: person,
+      source: await who(),
+    });
     await startSession(userId);
     return { ok: true };
   } catch (error) {
@@ -200,10 +228,19 @@ export async function finishJoinAction(input: {
   name: string;
 }): Promise<SetupResult> {
   try {
-    const { userId, recoveryCodes } = await finishJoin(homeDb(), input);
+    const { userId, recoveryCodes, invitedBy } = await finishJoin(homeDb(), input);
+    const source = await who();
     console.info(
-      `[manilla] ${JSON.stringify(input.name.trim().slice(0, 60))} joined with an invitation, from ${await who()}`,
+      `[manilla] ${JSON.stringify(input.name.trim().slice(0, 60))} joined with an invitation, from ${source}`,
     );
+    const person = await personOf(homeDb(), userId);
+    await recordActivity(homeDb(), {
+      kind: 'member_joined',
+      subject: person,
+      actor: person,
+      detail: invitedBy,
+      source,
+    });
     await startSession(userId);
     return { ok: true, recoveryCodes };
   } catch (error) {

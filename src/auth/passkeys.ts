@@ -462,12 +462,15 @@ export async function renameDevice(
     .where(and(eq(credentials.id, credentialId), eq(credentials.userId, userId)));
 }
 
-/** Removing the last passkey would leave recovery codes as the only way in. */
+/**
+ * Removing the last passkey would leave recovery codes as the only way in.
+ * Returns the removed passkey's label, for the activity log.
+ */
 export async function removeDevice(
   db: Database,
   userId: string,
   credentialId: string,
-): Promise<void> {
+): Promise<string | null> {
   const devices = await listDevices(db, userId);
   if (devices.length <= 1) {
     throw new AuthError(
@@ -478,6 +481,7 @@ export async function removeDevice(
   await db
     .delete(credentials)
     .where(and(eq(credentials.id, credentialId), eq(credentials.userId, userId)));
+  return devices.find((device) => device.id === credentialId)?.label ?? null;
 }
 
 // ---------------------------------------------------------------------------

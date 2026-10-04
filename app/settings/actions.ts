@@ -27,6 +27,7 @@ import {
 import { destroyAllSessions } from '../../src/auth/session.ts';
 import { authConfig } from '../../src/auth/config.ts';
 import { createInvite, removeMember, withdrawInvite } from '../../src/auth/invites.ts';
+import { markActivitySeen, recordActivity } from '../../src/auth/activity.ts';
 import {
   createEnvelopeRule,
   deleteRule,
@@ -43,6 +44,11 @@ import type { BeginResult, Failure } from '../login/actions.ts';
 
 function failed(error: unknown): Failure {
   return { ok: false, error: error instanceof Error ? error.message : String(error) };
+}
+
+/** The signed-in member, as the activity log names them. */
+function me(session: { userId: string; userName: string }) {
+  return { id: session.userId, name: session.userName };
 }
 
 export async function beginAddDeviceAction(): Promise<
@@ -73,6 +79,12 @@ export async function finishAddDeviceAction(input: {
       userId: session.userId,
       label: input.label,
     });
+    await recordActivity(homeDb(), {
+      kind: 'passkey_added',
+      subject: me(session),
+      actor: me(session),
+      detail: input.label.trim() || null,
+    });
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {
@@ -99,7 +111,13 @@ export async function removeDeviceAction(
 ): Promise<{ ok: true } | Failure> {
   try {
     const session = await requireUser();
-    await removeDevice(homeDb(), session.userId, credentialId);
+    const label = await removeDevice(homeDb(), session.userId, credentialId);
+    await recordActivity(homeDb(), {
+      kind: 'passkey_removed',
+      subject: me(session),
+      actor: me(session),
+      detail: label,
+    });
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {
@@ -117,6 +135,7 @@ export async function createInviteAction(
   try {
     const session = await requireUser();
     const { token, expiresAt } = await createInvite(homeDb(), { createdBy: session.userId, name });
+    await recordActivity(homeDb(), { kind: 'invite_created', actor: me(session), detail: name.trim() });
     revalidatePath('/settings');
     return { ok: true, link: `${authConfig().origin}/login/join#${token}`, expiresAt };
   } catch (error) {
@@ -126,8 +145,11 @@ export async function createInviteAction(
 
 export async function withdrawInviteAction(inviteId: string): Promise<{ ok: true } | Failure> {
   try {
-    await requireUser();
-    await withdrawInvite(homeDb(), inviteId);
+    const session = await requireUser();
+    const forName = await withdrawInvite(homeDb(), inviteId);
+    if (forName) {
+      await recordActivity(homeDb(), { kind: 'invite_withdrawn', actor: me(session), detail: forName });
+    }
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {
@@ -138,12 +160,20 @@ export async function withdrawInviteAction(inviteId: string): Promise<{ ok: true
 export async function removeMemberAction(userId: string): Promise<{ ok: true } | Failure> {
   try {
     const session = await requireUser();
-    await removeMember(homeDb(), { actingUserId: session.userId, userId });
+    const removed = await removeMember(homeDb(), { actingUserId: session.userId, userId });
+    await recordActivity(homeDb(), { kind: 'member_removed', subject: removed, actor: me(session) });
     revalidatePath('/settings');
     return { ok: true };
   } catch (error) {
     return failed(error);
   }
+}
+
+/** Plain form action: the notice's "Seen" button works before any script has loaded. */
+export async function markActivitySeenAction(): Promise<void> {
+  const session = await requireUser();
+  await markActivitySeen(homeDb(), session.userId);
+  revalidatePath('/', 'layout');
 }
 
 /**
@@ -255,6 +285,11 @@ export async function regenerateRecoveryCodesAction(): Promise<
   try {
     const session = await requireUser();
     const codes = await regenerateRecoveryCodes(homeDb(), session.userId);
+    await recordActivity(homeDb(), {
+      kind: 'recovery_codes_replaced',
+      subject: me(session),
+      actor: me(session),
+    });
     revalidatePath('/settings');
     return { ok: true, codes };
   } catch (error) {

@@ -121,6 +121,8 @@ services:
       MANILLA_ORIGIN: ${MANILLA_ORIGIN:-http://localhost:3000}
       # Unset is right for a tailnet user's first visit; see .env.example.
       MANILLA_ALLOW_SETUP: ${MANILLA_ALLOW_SETUP:-}
+      # Where sign-in activity is posted as it happens, e.g. an ntfy topic.
+      MANILLA_ALERT_URL: ${MANILLA_ALERT_URL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     healthcheck:
       test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']

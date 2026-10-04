@@ -3,7 +3,12 @@ import { redirect } from 'next/navigation';
 import { homeDb } from '../../db/client.ts';
 import { authConfig, isSecureOrigin } from '../../src/auth/config.ts';
 import { setupState } from '../../src/auth/passkeys.ts';
-import { firstSetupGate, requestReach } from '../../src/auth/reach.ts';
+import {
+  RECOVERY_NEEDS_TAILNET,
+  firstSetupGate,
+  recoveryAllowed,
+  requestReach,
+} from '../../src/auth/reach.ts';
 import { currentSession } from '../auth.ts';
 import SignIn from './SignIn.tsx';
 
@@ -66,6 +71,7 @@ export default async function LoginPage(props: {
         <SignIn
           needsSetup={state.needsSetup}
           setupBlocked={gate.allowed ? null : gate.reason}
+          recoveryBlocked={recoveryAllowed(requestReach(request)) ? null : RECOVERY_NEEDS_TAILNET}
           secureOrigin={isSecureOrigin(origin)}
           origin={origin}
           next={safeNext(searchParams.next)}

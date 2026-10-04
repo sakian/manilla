@@ -67,3 +67,22 @@ export function firstSetupGate(
       'MANILLA_ALLOW_SETUP=1 until the first passkey is registered.',
   };
 }
+
+/**
+ * Whether a recovery code may be tried from here.
+ *
+ * A code is 60 bits and the throttle makes guessing hopeless, but it is still
+ * a secret that can be guessed at, where a passkey is not. With invitations
+ * nobody needs a code to get in for the first time, so the only thing they are
+ * for - a lost device - can wait until you are on the tailnet, and the open
+ * internet gets nothing to guess at. Only Funnel is refused: behind Nginx there
+ * is no telling, and refusing `unknown` would take recovery away from that
+ * arrangement altogether.
+ */
+export function recoveryAllowed(reach: Reach): boolean {
+  return reach !== 'funnel';
+}
+
+export const RECOVERY_NEEDS_TAILNET =
+  'Recovery codes only work from a device on your tailnet. Sign in with a passkey, or connect ' +
+  'to Tailscale and try again.';

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { firstSetupGate, requestReach } from './reach.ts';
+import { firstSetupGate, recoveryAllowed, requestReach } from './reach.ts';
 
 const headers = (values: Record<string, string>) => new Headers(values);
 
@@ -54,4 +54,10 @@ test('production follows NODE_ENV when not given', () => {
 test('a refusal says what to do about it', () => {
   const gate = firstSetupGate('unknown', {}, true);
   assert.ok(!gate.allowed && gate.reason.includes('MANILLA_ALLOW_SETUP=1'));
+});
+
+test('recovery codes are refused over Funnel and nowhere else', () => {
+  assert.equal(recoveryAllowed('funnel'), false);
+  assert.equal(recoveryAllowed('tailnet'), true);
+  assert.equal(recoveryAllowed('unknown'), true, 'behind Nginx there is no telling');
 });

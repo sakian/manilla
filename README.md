@@ -63,7 +63,8 @@ credentials, not records of your money.
   anyone can invite or remove anyone else. The first visitor to a fresh install
   claims it by registering a passkey, so do that before anyone else can reach it.
 - **The audit trail does not say who.** It records what changed and when, from a
-  database trigger that has no idea which person was signed in.
+  database trigger that has no idea which person was signed in. Changes to who
+  can sign in are the exception: **Settings → Sign-in activity** names them.
 - **One currency, and it is dollars.** The symbol is one constant
   (`src/money.ts`); thousands separators follow the server's locale. Nobody has
   tried it anywhere else.
@@ -304,14 +305,21 @@ Turning it off again is removing that line and running `docker compose up -d`.
 What changes once it is public:
 
 - **Anyone can load the sign-in page**, and the name is in public certificate
-  logs already. Everything past it needs a session; passkeys cannot be guessed,
-  and recovery codes are 60 bits each and slow down after five wrong ones.
-- **Someone hammering recovery codes delays yours too**, since the throttle counts
-  per install. A passkey is unaffected.
+  logs already. Everything past it needs a session, and passkeys cannot be
+  guessed.
+- **Recovery codes only work from the tailnet.** Over Funnel the sign-in page
+  says so and the action refuses, so the internet has nothing to guess at;
+  someone who has lost their device recovers from home or over Tailscale.
 - **The first passkey cannot be registered over Funnel**, so an install with an
   empty database is not claimable from outside.
 - **Sign-in logs name a Funnel visitor by address**, marked "over Funnel", where
   a tailnet user is named by their login.
+
+Everything that changes who can sign in — a passkey added or removed, a recovery
+code used or tried, someone invited, joining or removed — is listed under
+**Settings → Sign-in activity**, and shown as a notice to every member who did not
+do it until they press *Seen*. Set `MANILLA_ALERT_URL` (see `.env.example`) to
+have each one sent to your phone through ntfy as it happens.
 
 To bring someone else in, open **Settings → People**, type their name and send
 them the link it makes. It works once, for three days, and can be withdrawn; on

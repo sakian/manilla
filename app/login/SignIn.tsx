@@ -82,6 +82,7 @@ export function SignInMark() {
 export default function SignIn({
   needsSetup,
   setupBlocked,
+  recoveryBlocked,
   secureOrigin,
   origin,
   next,
@@ -89,6 +90,8 @@ export default function SignIn({
   needsSetup: boolean;
   /** Why this request may not register the first passkey, or null if it may. */
   setupBlocked: string | null;
+  /** Why a recovery code cannot be used from here, or null if it can. */
+  recoveryBlocked: string | null;
   secureOrigin: boolean;
   origin: string;
   next: string;
@@ -317,6 +320,20 @@ export default function SignIn({
           </button>
         </div>
         <Diagnostics browser={browser} rpOrigin={origin} />
+      </div>
+    );
+  }
+
+  // The action refuses on its own; this says so before a code is typed.
+  if (mode === 'recovery' && recoveryBlocked) {
+    return (
+      <div className="signin">
+        <SignInMark />
+        <h2>Use a recovery code</h2>
+        <p className="muted">{recoveryBlocked}</p>
+        <div className="signin-actions">
+          <button onClick={() => setMode('passkey')}>Back</button>
+        </div>
       </div>
     );
   }

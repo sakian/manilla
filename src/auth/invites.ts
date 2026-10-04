@@ -119,9 +119,16 @@ export async function listPendingInvites(
     .orderBy(asc(invites.createdAt));
 }
 
-/** Withdraw an invitation nobody has used. A spent one is history and stays. */
-export async function withdrawInvite(db: Database, inviteId: string): Promise<void> {
-  await db.delete(invites).where(and(eq(invites.id, inviteId), isNull(invites.usedAt)));
+/**
+ * Withdraw an invitation nobody has used. A spent one is history and stays.
+ * Returns who it was for, or null if there was nothing to withdraw.
+ */
+export async function withdrawInvite(db: Database, inviteId: string): Promise<string | null> {
+  const [row] = await db
+    .delete(invites)
+    .where(and(eq(invites.id, inviteId), isNull(invites.usedAt)))
+    .returning({ name: invites.name });
+  return row?.name ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +172,7 @@ export async function beginJoin(
   return { challengeId, options };
 }
 
-export type Joined = { userId: string; recoveryCodes: string[] };
+export type Joined = { userId: string; recoveryCodes: string[]; invitedBy: string | null };
 
 /**
  * Register the newcomer's passkey and spend the invitation, together or not at
@@ -201,8 +208,12 @@ export async function finishJoin(
       .update(invites)
       .set({ usedAt: now })
       .where(usable(hashInviteToken(input.token), now))
-      .returning({ id: invites.id });
+      .returning({ id: invites.id, createdBy: invites.createdBy });
     if (!invite) throw new AuthError(SPENT);
+    const [inviter] = await tx
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, invite.createdBy));
 
     const [user] = await tx.insert(users).values({ name }).returning({ id: users.id });
     const userId = user!.id;
@@ -214,7 +225,7 @@ export async function finishJoin(
       .values(codes.map((code) => ({ userId, codeHash: hashRecoveryCode(code) })));
     await tx.update(invites).set({ usedBy: userId }).where(eq(invites.id, invite.id));
 
-    return { userId, recoveryCodes: codes };
+    return { userId, recoveryCodes: codes, invitedBy: inviter?.name ?? null };
   });
 }
 
@@ -248,13 +259,14 @@ export async function listMembers(db: Database): Promise<Member[]> {
 export async function removeMember(
   db: Database,
   input: { actingUserId: string; userId: string },
-): Promise<void> {
+): Promise<{ id: string; name: string }> {
   if (input.actingUserId === input.userId) {
     throw new AuthError('You cannot remove yourself. Someone else in the household can.');
   }
   const removed = await db
     .delete(users)
     .where(eq(users.id, input.userId))
-    .returning({ id: users.id });
-  if (removed.length === 0) throw new AuthError('That person is no longer a member.');
+    .returning({ id: users.id, name: users.name });
+  if (!removed[0]) throw new AuthError('That person is no longer a member.');
+  return removed[0];
 }
