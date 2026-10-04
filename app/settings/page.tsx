@@ -20,6 +20,7 @@ import { exportLedger } from '../../src/export/export.ts';
 import { accuracy, aiSettings, aiUsage, unknownMerchantEstimate } from '../../src/ai/ai.ts';
 import { requireUser } from '../auth.ts';
 import { signOutEverywhereAction } from './actions.ts';
+import { signOutAction } from '../login/actions.ts';
 import Devices from './Devices.tsx';
 import People from './People.tsx';
 import SignInActivity from './SignInActivity.tsx';
@@ -233,7 +234,12 @@ export default async function SettingsPage() {
             different hostname means your existing passkeys will not be offered.
           </p>
         )}
+        {/* Plain Sign out as well: on a phone the header leaves it out, and
+            this is where it went. */}
         <form action={signOutEverywhereAction} className="signin-actions">
+          <button type="submit" formAction={signOutAction}>
+            Sign out
+          </button>
           <button type="submit">Sign out everywhere</button>
         </form>
       </section>

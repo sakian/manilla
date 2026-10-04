@@ -166,6 +166,62 @@ a {
   border-bottom: 2px solid var(--accent);
 }
 
+/*
+ * On a phone the bar is two rows rather than three, so the envelopes start
+ * near the top of the screen instead of after a scroll: the mark, the ledger
+ * and the buttons on one, the navigation spread under them. Sign out moves to
+ * Settings to make the room, and the name beside the mark goes when a ledger
+ * switch needs its place - the mark is still the way home.
+ */
+@media (max-width: 720px) {
+  .shell {
+    padding-top: 14px;
+  }
+
+  .topbar {
+    align-items: center;
+    gap: 10px 12px;
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+  }
+
+  .topbar:has(.ledger-switch) .wordmark-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .nav {
+    order: 1;
+    flex-basis: 100%;
+    justify-content: space-between;
+  }
+
+  /* A finger's worth of height, without spreading the row further apart. */
+  .nav a {
+    padding: 4px 0;
+  }
+
+  .topbar-end .topbar-signout {
+    display: none;
+  }
+}
+
+/* The smallest phones: four places still on one row. */
+@media (max-width: 360px) {
+  .topbar {
+    column-gap: 8px;
+  }
+
+  .nav {
+    column-gap: 10px;
+    font-size: 13px;
+  }
+}
+
 .money {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -2433,6 +2489,42 @@ details[open] > summary > .group-summary::before {
   min-width: 0;
   margin-right: 0;
   padding-right: 0;
+}
+
+/* The folded rest: one line that looks like the notices it holds, and opens
+   them in place under it. */
+.notices-more summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.notices-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.notices-more summary::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.notices-more details[open] > summary::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+
+.notices-more summary:hover {
+  color: var(--text);
+}
+
+.notices-more .notices {
+  margin: 6px 0 0;
 }
 
 .notice-action {

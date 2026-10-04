@@ -55,7 +55,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     avoid. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo.png" alt="" width={26} height={26} />
-                Manilla
+                <span className="wordmark-name">Manilla</span>
               </Link>
             </h1>
             {session && (
@@ -77,13 +77,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 </nav>
                 {/* Two buttons that say what they do (#48). Settings used to be
                     the user's own name, which nobody guessed was a link; who is
-                    signed in is said on the Settings screen instead. */}
+                    signed in is said on the Settings screen instead. On a
+                    phone Sign out is only there, beside it, so the bar fits
+                    on one row above the navigation. */}
                 <form action={signOutAction} className="topbar-end">
                   {banked && <SyncButton />}
                   <Link href="/settings" className="button-link">
                     Settings
                   </Link>
-                  <button type="submit" className="button-link">
+                  <button type="submit" className="button-link topbar-signout">
                     Sign out
                   </button>
                 </form>
