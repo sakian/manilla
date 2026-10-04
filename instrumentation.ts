@@ -17,6 +17,19 @@ export async function register(): Promise<void> {
   await migrateIfNeeded(production);
   await checkAuthConfig(production);
   await checkTimeZone(production);
+  await startBankSync(production);
+}
+
+/**
+ * Sync linked bank accounts about once a day (FR-16). Only in production, for
+ * the reason migrations are: `next dev` pointed at a ledger should not start
+ * fetching from a bank because it was started. In development a sync is the
+ * Sync now button.
+ */
+async function startBankSync(production: boolean): Promise<void> {
+  if (!production || !process.env.DATABASE_URL) return;
+  const { startDailySync } = await import('./src/sync/schedule.ts');
+  startDailySync((line) => console.log(`[manilla] ${line}`));
 }
 
 /**

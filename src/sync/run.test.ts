@@ -17,6 +17,7 @@ import { commitImport, previewImport } from '../import/ofxImport.ts';
 import { page, transaction } from './plaidFixtures.ts';
 import { PlaidApiError, type PlaidCall } from './plaidClient.ts';
 import { syncConnection } from './run.ts';
+import { connectionsDue } from './schedule.ts';
 import { encryptSecret } from './secret.ts';
 
 const available = await databaseAvailable();
@@ -293,6 +294,26 @@ describe(
       await sync(fakePlaid({ 'plaid-chq': [page({ next_cursor: 'c1' })] }).call);
       const [after] = await db.select().from(bankConnections);
       assert.equal(after!.errorCode, null);
+    });
+
+    test('a connection is due a day after its last attempt, unless it is waiting for its login', async () => {
+      const now = new Date('2026-10-04T12:00:00Z');
+      const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3_600_000);
+      assert.deepEqual(await connectionsDue(db, now), [connectionId], 'never tried');
+
+      await db.update(bankConnections).set({ lastAttemptAt: hoursAgo(3) });
+      assert.deepEqual(await connectionsDue(db, now), []);
+      await db.update(bankConnections).set({ lastAttemptAt: hoursAgo(21) });
+      assert.deepEqual(await connectionsDue(db, now), [connectionId]);
+
+      // A bank that was down is tried again tomorrow; a login only a person can fix is not.
+      await db.update(bankConnections).set({ errorCode: 'INSTITUTION_DOWN' });
+      assert.deepEqual(await connectionsDue(db, now), [connectionId]);
+      await db.update(bankConnections).set({ errorCode: 'ITEM_LOGIN_REQUIRED' });
+      assert.deepEqual(await connectionsDue(db, now), []);
+
+      await db.update(bankConnections).set({ errorCode: null, accessToken: null, revokedAt: now });
+      assert.deepEqual(await connectionsDue(db, now), []);
     });
 
     test('a revoked connection fetches nothing', async () => {

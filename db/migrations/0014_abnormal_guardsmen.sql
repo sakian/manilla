@@ -1,0 +1,1 @@
+ALTER TABLE "bank_feed_accounts" ADD COLUMN "start_date" date;

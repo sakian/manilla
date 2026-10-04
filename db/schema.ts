@@ -328,6 +328,14 @@ export const bankFeedAccounts = pgTable(
     subtype: text('subtype'),
     accountId: uuid('account_id').references(() => accounts.id),
     /**
+     * The first day the feed imports. Its history before that is already here
+     * - from statements, or a migration that carries no bank id to match on -
+     * or comes before the account's opening balance, and either way would
+     * count twice. Set when the account is linked, to the day of its latest
+     * statement row, which the same-entry match still covers (FR-18).
+     */
+    startDate: date('start_date'),
+    /**
      * Where the next sync starts. Written in the same database transaction as
      * the batch it produced, so a sync that fails part way fetches the same
      * changes again, and a repeat finds them already imported (FR-11).
