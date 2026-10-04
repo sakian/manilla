@@ -125,31 +125,80 @@ repeat-merchant coverage rose from 80.6% to 90.7%. Bank descriptors turned out t
 carry postal codes, masked e-transfer recipients, rotating transfer prefixes and
 mixed letter-digit reference codes; all are handled.
 
-## Automatic bank feeds: deliberately not built
+## Automatic bank feeds: an aggregator until the framework arrives
 
 Direct OFX is a dead end in Canada. There is no Direct Connect with Canadian
 institutions, and Quicken Canada's "Express Web Connect" is aggregator-backed
 scraping in an OFX costume.
 
-That leaves the aggregators — Plaid, Flinks, Mastercard Open Banking — which mostly
-work by holding your online banking credentials and signing in as you where no real
-API exists. That breaches the banks' own agreements and moves liability for fraud
-onto the customer, which is a poor trade for saving a monthly download.
+That leaves the aggregators, and in Canada every one of them still signs in as you.
+Plaid's own documentation says OAuth "is not currently used by financial
+institutions in Canada", and every Canadian bank in Flinks' institution search
+reports `IsOauth: false`. The private agreements of 2020 to 2023 — TD with Finicity
+and Plaid, RBC with Plaid and Yodlee, CIBC with MX, National Bank with Flinks — have
+not changed that in anything an aggregator exposes. Holding your online banking
+password breaches the banks' own agreements, and their online security guarantees
+exclude losses that follow from disclosing it.
 
-The alternative has a date. The Consumer-Driven Banking Act passed in June 2024;
-the Bank of Canada is lead regulator; draft regulations were published on 27 June
-2026 with comments closing 26 August 2026, and the framework comes into force
-within a year of final publication. The large banks must participate from the
-outset, and phase one is read access.
+The first decision here was to wait for the legislated alternative rather than
+accept that. The wait has turned out longer than it looked. As of October 2026:
 
-One wrinkle worth remembering: phase one phases data in *by account type* — deposit
-and payment accounts first, then lending, and registered and non-registered
-investment accounts last. Chequing and credit cards will arrive well before a
-retirement account does, and those may stay a manual download for a while after the
-rest is automatic.
+- The Consumer-Driven Banking Act of June 2024 was rewritten by the Budget 2025
+  Implementation Act (Bill C-15, Royal Assent 26 March 2026), which made the Bank
+  of Canada the regulator.
+- Draft regulations were published on 27 June 2026 and comments closed on 26
+  August 2026. Final regulations have not been published, and everything comes
+  into force within a year of them: accreditation first, then data, product by
+  product. Read access is a 2027 event at the earliest.
+- Only banks above a retail-volume threshold must take part. The threshold has not
+  been published, so which banks are mandated is still an assumption.
+- Data phases in *by account type* — deposit and payment accounts first, then
+  lending, and registered and non-registered investment accounts last. Whether a
+  credit card is a payment product or lending is not settled. A retirement account
+  may stay a manual download for a while after the rest is automatic.
 
-So the decision is to wait, rather than integrate an aggregator in the meantime.
-This reasoning is specific to Canada; elsewhere the trade-off may be different.
+So the decision now is the opposite one: **connect through an aggregator in the
+meantime, accepting the credential trade knowingly, and move to framework access
+when the bank offers it.** The password goes into the aggregator's own sign-in
+window and never reaches Manilla (FR-20); Manilla holds only a revocable token.
+
+### Why Plaid
+
+| | Plaid | Flinks | MX via SimpleFIN Bridge |
+| --- | --- | --- | --- |
+| Access for one household | Free Trial plan: 10 connections for the life of the account, self-serve, for teams created since 15 April 2026 | C$500/month minimum on a one-year contract | US$15/year |
+| Changes between syncs | Cursor feed of added, modified and removed | Full snapshot each pull | Polled date window |
+| Pending to posted | The posted transaction names the pending one it replaced | Posted only | A `pending` flag only |
+| Dates | `YYYY-MM-DD` strings | Date strings | Epoch timestamps with no stated timezone |
+
+Plaid is the only one a household can run in production without a contract, and
+its data model is the closest to FR-17 to FR-19. Mastercard's published API is
+US-only, and Yodlee and Salt Edge have little Canadian coverage for an individual
+to reach. Every provider sends amounts as JSON numbers, so the cents have to be
+read from the number's text rather than from `JSON.parse`.
+
+A connection that has to be re-authenticated must be repaired in place (Plaid's
+"update mode"); deleting and re-adding it spends one of the ten for good.
+
+### What is still unknown
+
+**Whether the sync survives one-time codes.** Most Canadian banks now ask for a
+texted or app code on many logins, and Flinks' documentation says that means "a
+significant share of connections will not refresh on their own". If the bank asks
+every time, a daily sync becomes a button pressed while you are there to type the
+code. Linking once through Plaid's quickstart and watching it for a week or two
+answers this before anything is built on it.
+
+**Whether framework data can reach Manilla at all.** Accreditation costs $2,500 to
+apply and $10,000 or more a year, plus a Canadian place of business, insurance, a
+security attestation and a complaints process — not something a self-hosted app
+will hold. The draft regulations do not say whether an accredited aggregator may
+pass framework data on to an unaccredited app. If the final regulations forbid it,
+the credential route is the only automatic one until scraping itself is banned,
+and that ban waits until the framework is fully running.
+
+Revisit this when the final regulations are published. This reasoning is specific
+to Canada; elsewhere the trade-off may be different.
 
 ## Reproducing any of this
 

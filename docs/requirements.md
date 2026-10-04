@@ -55,18 +55,20 @@ all account balances.
 
 ## Automatic bank feeds
 
-Deferred as a group, on a decision rather than for lack of time: every route
-available today either does not exist in Canada or works by holding your online
-banking credentials. See [measurements.md](measurements.md) and the README.
+Not built yet. Until Canada's consumer-driven banking framework gives read access,
+the only route is an aggregator that signs in with your online banking password;
+that trade is accepted for now, and Plaid is the aggregator. The password goes into
+Plaid's own sign-in window and never reaches the app. See
+[measurements.md](measurements.md) for the reasoning and what is still unknown.
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
-| FR-15 | Connect accounts through a bank-data aggregator, chosen per account. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-16 | Sync at least daily and on demand. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-17 | Synced transactions follow the same pending-review path as imports. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-18 | A synced transaction and a file-imported one for the same bank entry must merge into one, never duplicate. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-19 | Handle the pending-to-posted change (new ID, changed amount) without creating duplicates. | S | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-20 | Bank login credentials never touch the app. Only the aggregator's access token is stored, encrypted, and can be revoked in one click. | M | Deferred ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-15 | Connect accounts through a bank-data aggregator, chosen per account. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-16 | Sync at least daily and on demand. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-17 | Synced transactions follow the same pending-review path as imports. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-18 | A synced transaction and a file-imported one for the same bank entry must merge into one, never duplicate. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-19 | Handle the pending-to-posted change (new ID, changed amount) without creating duplicates. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
+| FR-20 | Bank login credentials never touch the app. Only the aggregator's access token is stored, encrypted, and can be revoked in one click. | M | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
 
 The schema is shaped for this already: `bank_sync` is a transaction source and
 `aggregator` an external-id kind, so a feed is additive rather than a rewrite.
