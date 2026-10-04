@@ -148,6 +148,10 @@ export async function setFeedAccount(
   accountId: string | null,
 ): Promise<{ startDate: string | null }> {
   if (accountId) {
+    const [feed] = await db.select().from(bankFeedAccounts).where(eq(bankFeedAccounts.id, feedAccountId));
+    if (feed?.type === 'investment') {
+      throw new ConnectionError("An investment account's holdings are not transactions a sync can bring in yet");
+    }
     const [taken] = await db
       .select({ id: bankFeedAccounts.id, name: bankFeedAccounts.name })
       .from(bankFeedAccounts)
@@ -230,6 +234,7 @@ export type ConnectionSummary = {
     id: string;
     name: string;
     mask: string | null;
+    type: string | null;
     subtype: string | null;
     accountId: string | null;
     accountName: string | null;
@@ -252,6 +257,7 @@ export async function listConnections(db: Database): Promise<ConnectionSummary[]
       connectionId: bankFeedAccounts.connectionId,
       name: bankFeedAccounts.name,
       mask: bankFeedAccounts.mask,
+      type: bankFeedAccounts.type,
       subtype: bankFeedAccounts.subtype,
       accountId: bankFeedAccounts.accountId,
       accountName: accounts.name,
@@ -276,17 +282,53 @@ export async function listConnections(db: Database): Promise<ConnectionSummary[]
   }));
 }
 
-export type HeldRow = typeof syncHeldRows.$inferSelect & { accountName: string };
+/**
+ * What the notices need: banks waiting for their login, and how many held
+ * rows wait for a decision. Two small queries, since this runs on every main
+ * screen.
+ */
+export async function bankAttention(
+  db: Database,
+): Promise<{ loginNeeded: (string | null)[]; held: number }> {
+  const [waiting, [held]] = await Promise.all([
+    db
+      .select({ institutionName: bankConnections.institutionName })
+      .from(bankConnections)
+      .where(and(isNull(bankConnections.revokedAt), eq(bankConnections.errorCode, 'ITEM_LOGIN_REQUIRED'))),
+    db.select({ count: sql<number>`count(*)::int` }).from(syncHeldRows).where(isNull(syncHeldRows.resolvedAt)),
+  ]);
+  return { loginNeeded: waiting.map((row) => row.institutionName), held: Number(held?.count ?? 0) };
+}
+
+export type HeldRow = typeof syncHeldRows.$inferSelect & {
+  accountName: string;
+  /** The transaction here it matched or changes, as it stands now. */
+  here?: { payeeRaw: string; date: string; amountCents: number };
+};
 
 /** What syncs held back and nobody has settled, newest first. */
 export async function listHeld(db: Database): Promise<HeldRow[]> {
   const rows = await db
-    .select({ held: syncHeldRows, accountName: accounts.name })
+    .select({
+      held: syncHeldRows,
+      accountName: accounts.name,
+      herePayee: transactions.payeeRaw,
+      hereDate: transactions.date,
+      hereAmount: transactions.amountCents,
+    })
     .from(syncHeldRows)
     .innerJoin(accounts, eq(accounts.id, syncHeldRows.accountId))
+    .leftJoin(transactions, eq(transactions.id, syncHeldRows.transactionId))
     .where(isNull(syncHeldRows.resolvedAt))
     .orderBy(desc(syncHeldRows.createdAt), desc(syncHeldRows.date));
-  return rows.map((row) => ({ ...row.held, amountCents: Number(row.held.amountCents), accountName: row.accountName }));
+  return rows.map((row) => ({
+    ...row.held,
+    amountCents: Number(row.held.amountCents),
+    accountName: row.accountName,
+    ...(row.herePayee !== null && row.hereDate !== null && row.hereAmount !== null
+      ? { here: { payeeRaw: row.herePayee, date: row.hereDate, amountCents: Number(row.hereAmount) } }
+      : {}),
+  }));
 }
 
 /**

@@ -20,6 +20,7 @@ import { pendingCount } from '../queue/queue.ts';
 import { ruleSuggestionCount } from '../rules/rules.ts';
 import { statementMismatches } from '../import/ofxImport.ts';
 import { unusualCharges, type Insight } from '../insights/insights.ts';
+import { bankAttention } from '../sync/connections.ts';
 
 export type AttentionKind =
   /** The two sides of the ledger disagree, which should be impossible (FR-37). */
@@ -45,7 +46,11 @@ export type AttentionKind =
    */
   | 'rules_to_suggest'
   /** AI-1: a steady payee charging well above its usual, or a large first charge. */
-  | 'unusual_charge';
+  | 'unusual_charge'
+  /** A bank feed stopped because the bank wants its login again (FR-16). */
+  | 'bank_login_needed'
+  /** A sync held back transactions that need a person's decision. */
+  | 'sync_held';
 
 export type Attention = {
   kind: AttentionKind;
@@ -60,6 +65,8 @@ export type Attention = {
   account?: { id: string; name: string };
   /** What an `unusual_charge` found, with the figures behind it (AI-2). */
   insight?: Insight;
+  /** The bank a `bank_login_needed` is about, when there is one and it has a name. */
+  institution?: string;
 };
 
 export type AttentionReport = {
@@ -120,7 +127,7 @@ export async function attention(
   db: Database,
   month: MonthKey = currentMonth(),
 ): Promise<AttentionReport> {
-  const [balances, invariant, waiting, received, expected, average, suggestions, mismatched, unusual] =
+  const [balances, invariant, waiting, received, expected, average, suggestions, mismatched, unusual, bank] =
     await Promise.all([
       balancesForNotices(db, month),
       checkInvariant(db),
@@ -131,6 +138,7 @@ export async function attention(
       ruleSuggestionCount(db),
       statementMismatches(db),
       unusualCharges(db),
+      bankAttention(db),
     ]);
 
   const notices: Attention[] = [];
@@ -183,6 +191,21 @@ export async function attention(
       cents: exceeds.plannedCents,
       againstCents: exceeds.incomeCents,
     });
+  }
+
+  // A feed that has stopped goes quiet, which looks just like a quiet week.
+  if (bank.loginNeeded.length > 0) {
+    const [only] = bank.loginNeeded;
+    notices.push({
+      kind: 'bank_login_needed',
+      severity: 'warn',
+      count: bank.loginNeeded.length,
+      ...(bank.loginNeeded.length === 1 && only ? { institution: only } : {}),
+    });
+  }
+
+  if (bank.held > 0) {
+    notices.push({ kind: 'sync_held', severity: 'warn', count: bank.held });
   }
 
   // One line each, since each is about one charge and is put away on its own.

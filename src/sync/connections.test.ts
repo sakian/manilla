@@ -159,6 +159,12 @@ describe(
       assert.equal((await db.select().from(transactions)).length, 3);
     });
 
+    test('an investment account cannot be fed, since its holdings are not transactions', async () => {
+      await link();
+      await db.update(bankFeedAccounts).set({ type: 'investment' }).where(eq(bankFeedAccounts.name, 'Visa'));
+      await assert.rejects(setFeedAccount(db, (await feedNamed('Visa')).id, chequing), /investment/);
+    });
+
     test('an account with no statement rows takes the whole history', async () => {
       await link();
       assert.deepEqual(await setFeedAccount(db, (await feedNamed('Chequing')).id, chequing), { startDate: null });
@@ -274,6 +280,7 @@ describe(
         const [row] = await listHeld(db);
         assert.equal(row!.accountName, 'Chequing');
         assert.equal(row!.amountCents, -4520);
+        assert.deepEqual(row!.here, { payeeRaw: 'SHELL', date: '2026-09-08', amountCents: -4520 });
       });
     });
   },

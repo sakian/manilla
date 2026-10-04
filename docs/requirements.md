@@ -55,23 +55,21 @@ all account balances.
 
 ## Automatic bank feeds
 
-Not built yet. Until Canada's consumer-driven banking framework gives read access,
-the only route is an aggregator that signs in with your online banking password;
-that trade is accepted for now, and Plaid is the aggregator. The password goes into
-Plaid's own sign-in window and never reaches the app. See
-[measurements.md](measurements.md) for the reasoning and what is still unknown.
+Through Plaid, until Canada's consumer-driven banking framework gives read access:
+until then every route signs in with your online banking password, and that trade
+is accepted for now. The password goes into Plaid's own sign-in window and never
+reaches the app. See [measurements.md](measurements.md) for the reasoning and what is
+still unknown. Built and exercised against Plaid's sandbox, end to end in a browser;
+not yet against a real bank ([#10](https://github.com/sakian/manilla/issues/10)).
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
-| FR-15 | Connect accounts through a bank-data aggregator, chosen per account. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-16 | Sync at least daily and on demand. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-17 | Synced transactions follow the same pending-review path as imports. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-18 | A synced transaction and a file-imported one for the same bank entry must merge into one, never duplicate. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-19 | Handle the pending-to-posted change (new ID, changed amount) without creating duplicates. | S | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
-| FR-20 | Bank login credentials never touch the app. Only the aggregator's access token is stored, encrypted, and can be revoked in one click. | M | Not built ([#10](https://github.com/sakian/manilla/issues/10)) |
-
-The schema is shaped for this already: `bank_sync` is a transaction source and
-`aggregator` an external-id kind, so a feed is additive rather than a rewrite.
+| FR-15 | Connect accounts through a bank-data aggregator, chosen per account. | S | Built. Settings → Bank feeds; each account a login can see is linked to a Manilla account or left out, one feed per account. Investment accounts are listed but not brought in. |
+| FR-16 | Sync at least daily and on demand. | S | Built. An hourly check in production syncs each connection about a day after its last attempt; Sync now does it at once. A lapsed login stops the feed, raises a notice, and is fixed with Sign in again, which keeps the connection. |
+| FR-17 | Synced transactions follow the same pending-review path as imports. | S | Built. A sync is an import batch with its own source: matched, categorized, queued, and undoable whole. What would need a person's decision - a look-alike, a rounded amount, a change to or withdrawal of one already imported - is held on the import screen rather than decided. |
+| FR-18 | A synced transaction and a file-imported one for the same bank entry must merge into one, never duplicate. | S | Built. Matched on account, exact amount and posting date, and given the other source's id. A linked account starts the day of its latest statement row, so history a file or a migration already brought in is not counted twice. |
+| FR-19 | Handle the pending-to-posted change (new ID, changed amount) without creating duplicates. | S | Built, by not importing pending transactions: a charge comes in once it posts, as its posted amount. |
+| FR-20 | Bank login credentials never touch the app. Only the aggregator's access token is stored, encrypted, and can be revoked in one click. | M | Built. AES-256-GCM under `MANILLA_SECRET_KEY` from `.env`; Disconnect revokes it at Plaid and erases it here. |
 
 ## Envelopes and groups
 
