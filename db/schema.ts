@@ -167,6 +167,27 @@ export const sessions = pgTable(
   (table) => [index('sessions_user_idx').on(table.userId)],
 );
 
+/**
+ * An invitation for another member of the household (NF-3).
+ *
+ * The link carries a random token and only its hash is kept, so the table cannot
+ * be read back into a working link. It is spent by the passkey it registers, and
+ * kept afterwards to say who brought whom in.
+ */
+export const invites = pgTable('invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tokenHash: text('token_hash').notNull().unique(),
+  /** Who it is for: offered as their name, which they can change. */
+  name: text('name').notNull(),
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  usedBy: uuid('used_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
 // ---------------------------------------------------------------------------
 // Accounts and envelopes
 // ---------------------------------------------------------------------------
