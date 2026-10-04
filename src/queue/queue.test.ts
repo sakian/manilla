@@ -24,6 +24,7 @@ import {
   type Fixture,
 } from '../ledger/testdb.ts';
 import { rules, suggestions, transactions } from '../../db/schema.ts';
+import { runAs } from '../audit/actor.ts';
 
 const available = await databaseAvailable();
 
@@ -307,6 +308,65 @@ describe(
       assert.match(result.failed[0]!.error, /archived/);
       assert.equal(await balanceOf(env.gasId), 0);
       assert.equal(await pendingCount(db), 1, 'and it is still waiting, not half-saved');
+    });
+
+    // -- two people, one queue (#18) ------------------------------------------
+
+    test("a row someone else reviewed first keeps their answer, and says whose it was", async () => {
+      const id = await pending({ payee: 'SHELL', amountCents: -4520 });
+      const other = await pending({ payee: 'SAFEWAY', amountCents: -9000 });
+
+      // Both had the queue open; Alex saved first.
+      await runAs({ id: null, name: 'Alex' }, () =>
+        saveReview(db, [{ transactionId: id, envelopeId: env.gasId }]),
+      );
+      const result = await runAs({ id: null, name: 'Sam' }, () =>
+        saveReview(db, [
+          { transactionId: id, envelopeId: env.groceriesId, createRule: true },
+          { transactionId: other, envelopeId: env.groceriesId },
+        ]),
+      );
+
+      assert.equal(result.confirmed, 1, "Sam's other decision still saves");
+      assert.deepEqual(result.failed, [
+        {
+          transactionId: id,
+          error: 'Shell was already reviewed by Alex, so their choice stands',
+          alreadyReviewed: true,
+        },
+      ]);
+      assert.equal(await balanceOf(env.gasId), -4520, "Alex's envelope, not Sam's");
+      assert.equal(await balanceOf(env.groceriesId), -9000);
+      assert.equal((await db.select().from(rules)).length, 0, 'and no rule from the refused decision');
+    });
+
+    test('a save that arrives mid-way through another waits for it, then is told', async () => {
+      const id = await pending({ payee: 'SHELL', amountCents: -4520 });
+
+      // The first save is part-done: confirmed but not yet committed. A check
+      // that merely read the status would still see "waiting" and go ahead.
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let holding!: () => void;
+      const isHolding = new Promise<void>((resolve) => (holding = resolve));
+      const first = runAs({ id: null, name: 'Alex' }, () =>
+        db.transaction(async (tx) => {
+          await tx.update(transactions).set({ status: 'confirmed' }).where(eq(transactions.id, id));
+          holding();
+          await held;
+        }),
+      );
+      await isHolding;
+
+      const second = saveReview(db, [{ transactionId: id, envelopeId: env.groceriesId }]);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      release();
+      await first;
+      const result = await second;
+
+      assert.equal(result.confirmed, 0);
+      assert.equal(result.failed[0]?.alreadyReviewed, true);
+      assert.equal(await balanceOf(env.groceriesId), 0, 'the later save did not land on top');
     });
 
     test('saving nothing is allowed and writes nothing', async () => {

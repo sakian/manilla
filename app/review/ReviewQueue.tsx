@@ -234,10 +234,15 @@ export default function ReviewQueue({
             (result.failed.length > 1 ? ' (and others)' : ''),
         );
       }
+      // Rows someone else reviewed meanwhile have left the queue, so they are
+      // neither saved nor still waiting.
+      const elsewhere = result.failed.filter((row) => row.alreadyReviewed).length;
       setNote(
-        result.confirmed === 0
-          ? 'Nothing was ready to save.'
-          : `Saved ${result.confirmed}. ${rows.length - result.confirmed} still waiting.`,
+        result.confirmed > 0
+          ? `Saved ${result.confirmed}. ${rows.length - result.confirmed - elsewhere} still waiting.`
+          : result.failed.length === 0
+            ? 'Nothing was ready to save.'
+            : null,
       );
       router.refresh();
     });

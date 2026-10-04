@@ -8,12 +8,13 @@
  * already applied, and confirming or changing it is meant to be one keystroke.
  */
 
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Database } from '../../db/client.ts';
 import {
   accountGroups,
   accounts,
+  auditLog,
   envelopeGroups,
   envelopes,
   rules,
@@ -23,7 +24,7 @@ import {
 } from '../../db/schema.ts';
 import { bandOf, type Band } from '../categorize/pipeline.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
-import { setTransactionEnvelopes } from '../ledger/ledger.ts';
+import { AlreadyReviewedError, setTransactionEnvelopes } from '../ledger/ledger.ts';
 
 export type QueueRow = {
   id: string;
@@ -327,7 +328,12 @@ export type ReviewDecision = {
 export type ReviewResult = {
   confirmed: number;
   /** Rows that could not be saved, so a partial save is reported rather than hidden. */
-  failed: { transactionId: string; error: string }[];
+  failed: {
+    transactionId: string;
+    error: string;
+    /** Someone else got there first: off the queue, not still waiting. */
+    alreadyReviewed?: true;
+  }[];
 };
 
 /**
@@ -342,6 +348,12 @@ export type ReviewResult = {
  * whatever fails is named. One row failing - an envelope archived in another tab,
  * say - should not throw away twelve good decisions, and silently succeeding at
  * eleven of twelve would be worse than either.
+ *
+ * A row someone else reviewed after this queue was loaded is one of those
+ * failures, not a second answer laid over the first (#18). Staging is what makes
+ * one person's sitting safe, and with two people it is exactly what would let the
+ * later save replace the earlier one unseen. The first answer stands, and the
+ * refusal says whose it was.
  */
 export async function saveReview(
   db: Database,
@@ -356,24 +368,60 @@ export async function saveReview(
         transactionId: decision.transactionId,
         envelopeId: decision.envelopeId,
         confirm: true,
+        onlyIfPending: true,
         ...(decision.createRule ? { createRule: true } : {}),
       });
       confirmed += 1;
     } catch (error) {
-      failed.push({
-        transactionId: decision.transactionId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      failed.push(
+        error instanceof AlreadyReviewedError
+          ? {
+              transactionId: decision.transactionId,
+              error: await alreadyReviewed(db, decision.transactionId),
+              alreadyReviewed: true,
+            }
+          : {
+              transactionId: decision.transactionId,
+              error: error instanceof Error ? error.message : String(error),
+            },
+      );
     }
   }
 
   return { confirmed, failed };
 }
 
+/** "Shell was already reviewed by Alex", from the confirmation's trail entry. */
+async function alreadyReviewed(db: Database, transactionId: string): Promise<string> {
+  const [row] = await db
+    .select({ payee: transactions.payeeRaw })
+    .from(transactions)
+    .where(eq(transactions.id, transactionId));
+  const [entry] = await db
+    .select({ who: auditLog.actorName })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.tableName, 'transactions'),
+        eq(auditLog.rowId, transactionId),
+        sql`${auditLog.after} ->> 'status' = 'confirmed'`,
+      ),
+    )
+    .orderBy(desc(auditLog.id))
+    .limit(1);
+  // As the queue shows it, so the refusal names the row the person is looking at.
+  const what = row ? normalizePayee(row.payee).display : 'That transaction';
+  return entry?.who
+    ? `${what} was already reviewed by ${entry.who}, so their choice stands`
+    : `${what} was already reviewed, so that choice stands`;
+}
+
 export type Recategorization = {
   transactionId: string;
   envelopeId: string;
   confirm?: boolean;
+  /** Refuse a row that is no longer waiting for review (see `saveReview`). */
+  onlyIfPending?: boolean;
   /** CA-2: turn this correction into a standing rule in one click. */
   createRule?: boolean;
 };
@@ -392,7 +440,7 @@ export async function recategorize(db: Database, input: Recategorization): Promi
     db,
     input.transactionId,
     [{ envelopeId: input.envelopeId, amountCents: Number(transaction.amountCents) }],
-    { confirm: input.confirm ?? true },
+    { confirm: input.confirm ?? true, onlyIfPending: input.onlyIfPending ?? false },
   );
 
   if (input.createRule && transaction.payeeKey) {
