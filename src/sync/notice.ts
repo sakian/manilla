@@ -3,20 +3,21 @@
  *
  * One notification for a whole run, and none for a run that needs nothing:
  * a daily "nothing new" is how a feed teaches you to swipe it away unread.
- * Two things are worth a phone buzzing - transactions waiting for you to
- * review, and a bank that has stopped until you sign in again, which is
- * otherwise silent: the feed simply goes quiet, and nothing says why until
- * someone opens the app.
+ * Three things are worth a phone buzzing - transactions waiting for you to
+ * review, an envelope the sync took below zero, and a bank that has stopped
+ * until you sign in again, which is otherwise silent: the feed simply goes
+ * quiet, and nothing says why until someone opens the app.
  *
- * Bank names and counts only. The topic is on someone else's server, so what
- * it carries should be harmless to anyone who reads it: no amounts, no
- * payees, no account names.
+ * Bank names, envelope names and counts only. The topic is on someone else's
+ * server, so what it carries should be harmless to anyone who reads it: no
+ * amounts, no payees, no account names.
  *
  * A separate topic from the sign-in alerts (src/auth/activity.ts), on purpose:
  * those must never be the thing you have learned to ignore.
  */
 
 import { push } from '../notify.ts';
+import type { ManagedGroup } from '../envelopes/manage.ts';
 
 export type SyncOutcome = {
   /** The ledger's name, said only when there is more than one. */
@@ -28,17 +29,56 @@ export type SyncOutcome = {
   error?: string;
 };
 
+/** What a ledger looks like once its sync has run. */
+export type LedgerAfterSync = {
+  /** Transactions waiting for review - the number a person acts on, whatever this run added to it. */
+  waiting: number;
+  /** Envelopes this run took below zero, by name (see `newlyOverdrawn`). */
+  overdrawn: string[];
+};
+
 export type SyncNotice = { text: string; priority: 'high' | 'default' };
+
+/** Past this many, the rest of the overdrawn envelopes are a count. */
+const NAMED = 3;
+
+/**
+ * The envelopes that went below zero between two looks at a ledger: before its
+ * sync, and after.
+ *
+ * Only the ones that crossed. An envelope already overdrawn stays on the home
+ * screen, and saying so every night it is synced would be the daily message
+ * that teaches you to swipe them all away. The income pool is left out: it is
+ * not an envelope anyone overdraws by spending, and the app already shows
+ * Available overdrawn as something broken.
+ */
+export function newlyOverdrawn(before: ManagedGroup[], after: ManagedGroup[]): string[] {
+  const overdrawn = (groups: ManagedGroup[]) =>
+    groups
+      .flatMap((group) => group.envelopes)
+      .filter((envelope) => !envelope.isUnallocated && envelope.archivedAt === null && envelope.balanceCents < 0);
+  const already = new Set(overdrawn(before).map((envelope) => envelope.id));
+  return overdrawn(after)
+    .filter((envelope) => !already.has(envelope.id))
+    .map((envelope) => envelope.name)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+/** "Groceries is", "Groceries and Dining are", "Dining, Fuel, Groceries and 2 more are". */
+function overdrawnLine(names: string[]): string {
+  const named = names.slice(0, NAMED);
+  const rest = names.length - named.length;
+  const parts = rest > 0 ? [...named, `${rest} more`] : named;
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+  return `${list} ${names.length === 1 ? 'is' : 'are'} now overdrawn.`;
+}
 
 const LOGIN_REQUIRED = 'ITEM_LOGIN_REQUIRED';
 
-/**
- * @param waiting each ledger's count of transactions waiting for review, after
- *   the sync - the number a person acts on, whatever this run added to it.
- */
+/** @param ledgers each synced ledger after its sync, by name. */
 export function syncNotice(
   outcomes: SyncOutcome[],
-  waiting: Map<string, number>,
+  ledgers: Map<string, LedgerAfterSync>,
   options: { manyLedgers: boolean },
 ): SyncNotice | null {
   const lines: string[] = [];
@@ -67,10 +107,12 @@ export function syncNotice(
           .filter(Boolean)
           .join(', '),
       );
+    const after = ledgers.get(ledger);
     if (news.length > 0) {
-      const count = waiting.get(ledger) ?? 0;
+      const count = after?.waiting ?? 0;
       lines.push(`${prefix}${news.join('; ')}.${count > 0 ? ` ${count} to review.` : ''}`);
     }
+    if (after && after.overdrawn.length > 0) lines.push(`${prefix}${overdrawnLine(after.overdrawn)}`);
   }
 
   return lines.length > 0 ? { text: lines.join('\n'), priority: urgent ? 'high' : 'default' } : null;
