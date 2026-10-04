@@ -27,7 +27,7 @@ import type { OfxStatement, OfxTransaction } from '../ofx/parse.ts';
 import { bandOf } from '../categorize/pipeline.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 import { buildCategorizer } from '../categorize/fromDb.ts';
-import { unallocatedEnvelope } from '../ledger/ledger.ts';
+import { unallocatedEnvelope, type Executor } from '../ledger/ledger.ts';
 import { unmatchedTransferHalves } from '../transactions/manage.ts';
 import { listTransferRules, matchTransferRule } from '../rules/rules.ts';
 import { rememberAnswers } from '../ai/ai.ts';
@@ -638,9 +638,11 @@ export type CommitResult = {
 /**
  * Write the accepted rows in one database transaction (NF-2). Re-running the
  * same file afterwards produces a preview with zero new rows, which is FR-11.
+ * Given a transaction, it writes inside it, so a sync can store its cursor
+ * with the batch.
  */
 export async function commitImport(
-  db: Database,
+  db: Executor,
   preview: ImportPreview,
   decisions: Map<number, RowDecision>,
   meta: { filename?: string } = {},

@@ -106,7 +106,8 @@ export async function truncateAll(db: Database): Promise<void> {
       envelope_moves, budget_lines, rules, import_batches,
       envelopes, envelope_groups, accounts, account_groups,
       sessions, credentials, recovery_codes, webauthn_challenges, users,
-      app_settings, ai_calls, ai_suggestion_cache, ledgers, audit_log
+      app_settings, ai_calls, ai_suggestion_cache, ledgers, audit_log,
+      sync_held_rows, bank_feed_accounts, bank_connections
     restart identity cascade
   `);
 }

@@ -273,6 +273,115 @@ export const importBatches = pgTable('import_batches', {
 });
 
 // ---------------------------------------------------------------------------
+// Bank feeds (FR-15 to FR-20)
+// ---------------------------------------------------------------------------
+
+/**
+ * One bank login linked through an aggregator. A login can hold several
+ * accounts; each is a row in `bank_feed_accounts`.
+ */
+export const bankConnections = pgTable('bank_connections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  provider: text('provider').notNull(),
+  /** The aggregator's id for the login (Plaid's item_id). Not a secret. */
+  itemId: text('item_id').notNull().unique(),
+  institutionName: text('institution_name'),
+  /**
+   * The aggregator's access token, encrypted with MANILLA_SECRET_KEY (FR-20),
+   * so a database backup alone holds nothing that reaches the bank. Cleared
+   * when the connection is revoked.
+   */
+  accessToken: text('access_token'),
+  /**
+   * Why the last sync failed, as the aggregator's own code - ITEM_LOGIN_REQUIRED
+   * when the bank wants its login again. Cleared by the next sync that works.
+   */
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+  /** The last sync that worked, which is how old the data on screen is. */
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+});
+
+/**
+ * An account a connection can see, and the Manilla account it feeds.
+ *
+ * Nothing is fetched for one until a person says which account it is, and each
+ * keeps its own cursor, so an account linked later starts from its whole
+ * history rather than from wherever the others had got to.
+ */
+export const bankFeedAccounts = pgTable(
+  'bank_feed_accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => bankConnections.id, { onDelete: 'cascade' }),
+    /** The aggregator's id for the account (Plaid's account_id), not its number. */
+    providerAccountId: text('provider_account_id').notNull(),
+    name: text('name').notNull(),
+    /** The last digits of the account number, as the bank shows them. */
+    mask: text('mask'),
+    type: text('type'),
+    subtype: text('subtype'),
+    accountId: uuid('account_id').references(() => accounts.id),
+    /**
+     * Where the next sync starts. Written in the same database transaction as
+     * the batch it produced, so a sync that fails part way fetches the same
+     * changes again, and a repeat finds them already imported (FR-11).
+     */
+    cursor: text('cursor'),
+  },
+  (table) => [
+    uniqueIndex('bank_feed_accounts_provider_idx').on(table.connectionId, table.providerAccountId),
+    // One feed per Manilla account: two would import every transaction twice.
+    uniqueIndex('bank_feed_accounts_account_idx').on(table.accountId),
+  ],
+);
+
+/**
+ * What a sync could not settle without a person, kept until one does.
+ *
+ * A file's preview shows every row before anything is written; a sync has no
+ * one watching, and its cursor moves on whatever it decides. So a row it would
+ * otherwise have left out, or a change to a transaction already here, waits
+ * here instead of being dropped or applied unseen.
+ */
+export const syncHeldRows = pgTable(
+  'sync_held_rows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    feedAccountId: uuid('feed_account_id')
+      .notNull()
+      .references(() => bankFeedAccounts.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id),
+    /**
+     * `possible_duplicate`: looks like a transaction already here, with no
+     * shared id. `rounded`: the amount had to be rounded to cents. `changed`:
+     * the bank changed the amount or date of one already imported. `withdrawn`:
+     * the bank no longer reports one already imported.
+     */
+    reason: text('reason').notNull(),
+    /** The aggregator's transaction id. */
+    externalId: text('external_id').notNull(),
+    /** What the bank says now; for `withdrawn`, what it said last. */
+    date: date('date').notNull(),
+    amountCents: cents('amount_cents').notNull(),
+    payeeRaw: text('payee_raw').notNull(),
+    /** The transaction already here that it matched or changes, if any. */
+    transactionId: uuid('transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
+    detail: text('detail').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  },
+  (table) => [index('sync_held_rows_open_idx').on(table.resolvedAt)],
+);
+
+// ---------------------------------------------------------------------------
 // Transactions
 // ---------------------------------------------------------------------------
 
