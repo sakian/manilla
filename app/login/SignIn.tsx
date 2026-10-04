@@ -81,11 +81,14 @@ function SignInMark() {
 
 export default function SignIn({
   needsSetup,
+  setupBlocked,
   secureOrigin,
   origin,
   next,
 }: {
   needsSetup: boolean;
+  /** Why this request may not register the first passkey, or null if it may. */
+  setupBlocked: string | null;
   secureOrigin: boolean;
   origin: string;
   next: string;
@@ -273,6 +276,18 @@ export default function SignIn({
           <code>MANILLA_ORIGIN</code> to it - <code>deploy/nginx.conf.example</code> has both
           halves.
         </p>
+      </div>
+    );
+  }
+
+  // Said before any form is drawn: a name box that could only ever fail would
+  // invite someone to keep trying.
+  if (needsSetup && setupBlocked) {
+    return (
+      <div className="signin">
+        <SignInMark />
+        <h2>Not set up yet</h2>
+        <p className="muted">{setupBlocked}</p>
       </div>
     );
   }

@@ -6,8 +6,9 @@
  * These are the only actions in the app that run without a session, so each one
  * states plainly what makes it safe to be public:
  *
- *  - `beginSetup` / `finishSetup` work only while no passkey exists at all. Once
- *    one does, registration needs a session and happens in Settings.
+ *  - `beginSetup` / `finishSetup` work only while no passkey exists at all, and
+ *    in production only from a tailnet user (src/auth/reach.ts). Once a passkey
+ *    exists, registration needs a session and happens in Settings.
  *  - `beginSignIn` / `finishSignIn` prove possession of a registered passkey.
  *  - `signInWithRecoveryCode` spends a single-use code that only the user has,
  *    and after a few wrong ones makes each further try wait longer (#14).
@@ -34,6 +35,7 @@ import {
   redeemRecoveryCode,
   setupState,
 } from '../../src/auth/passkeys.ts';
+import { firstSetupGate, requestReach } from '../../src/auth/reach.ts';
 import { describeWait, recoveryThrottle } from '../../src/auth/throttle.ts';
 import { currentSession, endSession, startSession } from '../auth.ts';
 
@@ -53,6 +55,8 @@ export async function beginSetupAction(
     if (!state.needsSetup) {
       return { ok: false, error: 'This Manilla is already set up. Sign in with your passkey.' };
     }
+    const gate = firstSetupGate(requestReach(await headers()));
+    if (!gate.allowed) return { ok: false, error: gate.reason };
 
     const begun = await beginRegistration(homeDb(), { userName: name });
     return { ok: true, ...begun };
@@ -73,6 +77,8 @@ export async function finishSetupAction(input: {
     if (!state.needsSetup) {
       return { ok: false, error: 'This Manilla is already set up. Sign in with your passkey.' };
     }
+    const gate = firstSetupGate(requestReach(await headers()));
+    if (!gate.allowed) return { ok: false, error: gate.reason };
 
     const { userId, recoveryCodes } = await finishRegistration(homeDb(), {
       challengeId: input.challengeId,
@@ -154,14 +160,16 @@ const RECOVERY = 'recovery-code';
 
 /**
  * Who tried, for the log: the tailnet login `tailscale serve` puts on every
- * request it proxies, else the forwarded address. For a person to read only -
- * the throttle never trusts either, since a header is what the sender wrote.
+ * request it proxies, else the forwarded address - marked as public when it came
+ * through Funnel. For a person to read only - the throttle never trusts either,
+ * since behind anything but `tailscale serve` a header is what the sender wrote.
  */
 async function who(): Promise<string> {
   const request = await headers();
   const named =
     request.get('tailscale-user-login') ?? request.get('x-forwarded-for')?.split(',')[0] ?? null;
-  return named ? JSON.stringify(named.trim().slice(0, 100)) : 'an unnamed client';
+  const client = named ? JSON.stringify(named.trim().slice(0, 100)) : 'an unnamed client';
+  return requestReach(request) === 'funnel' ? `${client} over Funnel` : client;
 }
 
 export async function signOutAction(): Promise<void> {

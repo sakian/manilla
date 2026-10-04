@@ -13,7 +13,7 @@ by hand.
 | --- | --- |
 | Stack | TypeScript, Next.js 16, Postgres, Docker |
 | Sign-in | Passkeys (WebAuthn) with single-use recovery codes |
-| Access | Its own node on your tailnet — no port open to anything |
+| Access | Its own node on your tailnet — no port open to anything; optionally public through Tailscale Funnel |
 | Classifier | Your rules → payee history → optionally the Claude API, with an off switch |
 | Banking | File import. Canada; automatic feeds deliberately deferred |
 | Users | One |
@@ -146,14 +146,15 @@ src/
   transactions/urlQuery.ts the filters as they live in the URL, so a search is a link
   envelopes/            envelope and group management, transfers, cover
   accounts/             account management
-  auth/                 passkeys, sessions, recovery codes, RP configuration
+  auth/                 passkeys, sessions, recovery codes, RP config, who may set up
+  security-headers.ts   what the browser is told about framing, HTTPS and referrers
   categorize/
     normalize.ts        payee normalization (CA-1)
     history.ts          recency-weighted history matching (CA-3, CA-4)
     ai.ts               Claude layer for unknown merchants (CA-5, CA-8)
     pipeline.ts         rules -> history -> AI, with confidence bands (CA-7)
 spikes/                 runnable investigations; see docs/measurements.md
-deploy/                 the Tailscale serve config, and an Nginx example as a fallback
+deploy/                 Tailscale serve configs (tailnet; tailnet plus Funnel), an Nginx fallback
 docs/                   requirements, design decisions, measurements
 data/samples/           synthetic fixtures, safe to commit
 data/private/           your real exports - gitignored
@@ -252,7 +253,11 @@ Then open `https://manilla.your-tailnet.ts.net` from any device on the tailnet,
 **and register your passkey straight away.** Until the first passkey exists, the
 install belongs to whoever registers one, and anyone on your tailnet can reach it.
 Bring it up when nobody else could beat you to it, or with the node shared with
-nobody yet.
+nobody yet. In production only a signed-in tailnet user can register that first
+passkey — never a visitor over Funnel, and never a tagged device — so an empty
+database is not up for grabs from the internet. Behind Nginx there is no tailnet
+identity to check: set `MANILLA_ALLOW_SETUP=1` until the passkey exists, then
+remove it.
 
 **Your existing passkey will not work there.** A passkey is bound to an exact
 host, so moving off `manilla.lan` invalidates it — which is the intended
@@ -269,6 +274,45 @@ ends up half-written, so both are fatal rather than warnings.
 for the whole machine, a reverse proxy in front of several services, and a
 systemd timer to re-run `tailscale cert` every 90 days. The sidecar exists so none
 of that is needed for this one service.
+
+### Reaching it without Tailscale
+
+Tailscale Funnel puts the same node on the public internet, at the same
+`manilla.<your-tailnet>.ts.net` address, so someone in the household can use
+Manilla from a phone browser without installing anything. Because the hostname
+does not change, every registered passkey keeps working. TLS still ends on your
+node; Tailscale's relay carries traffic it cannot read.
+
+```bash
+# 1. In the tailnet policy (admin console, Access controls), allow Funnel for
+#    this node - by its tag, or by your user if it is not tagged:
+#      "nodeAttrs": [{ "target": ["tag:manilla"], "attr": ["funnel"] }]
+
+# 2. In .env:
+#    MANILLA_SERVE_CONFIG=tailscale-serve-funnel.json
+
+# 3. Restart the sidecar with the new serve config.
+docker compose up -d
+```
+
+Turning it off again is removing that line and running `docker compose up -d`.
+
+What changes once it is public:
+
+- **Anyone can load the sign-in page**, and the name is in public certificate
+  logs already. Everything past it needs a session; passkeys cannot be guessed,
+  and recovery codes are 60 bits each and slow down after five wrong ones.
+- **Someone hammering recovery codes delays yours too**, since the throttle counts
+  per install. A passkey is unaffected.
+- **The first passkey cannot be registered over Funnel**, so an install with an
+  empty database is not claimable from outside.
+- **Sign-in logs name a Funnel visitor by address**, marked "over Funnel", where
+  a tailnet user is named by their login.
+
+To add someone's phone, sign in on it once with one of your unused recovery codes
+and choose **Settings → Add a passkey**; then use the browser's *Add to Home
+screen* and it opens like an app. Manilla has one user, so they share your login
+and its books.
 
 ### Where your own configuration lives
 
