@@ -110,8 +110,8 @@ test('delivery says when a browser has gone, and never throws', async () => {
   assert.equal(seen[0]!.headers.get('urgency'), 'high');
   assert.equal(decrypt(seen[0]!.body, receiver, auth), 'hello');
 
-  assert.deepEqual(await deliver(subscription, 'x', keys, { ...options, fetch: answering(410) }), { ok: false, gone: true, status: 410 });
-  assert.deepEqual(await deliver(subscription, 'x', keys, { ...options, fetch: answering(404) }), { ok: false, gone: true, status: 404 });
+  assert.deepEqual(await deliver(subscription, 'x', keys, { ...options, fetch: answering(410) }), { ok: false, gone: true, status: 410, reason: 'nope' });
+  assert.deepEqual(await deliver(subscription, 'x', keys, { ...options, fetch: answering(404) }), { ok: false, gone: true, status: 404, reason: 'nope' });
   const busy = await deliver(subscription, 'x', keys, { ...options, fetch: answering(429) });
   assert.equal(busy.ok || busy.gone, false);
 

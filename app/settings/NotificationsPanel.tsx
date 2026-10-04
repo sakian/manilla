@@ -146,10 +146,15 @@ export default function NotificationsPanel({
     setNote(null);
     startTransition(async () => {
       const result = await sendTestNotificationAction(endpoint);
-      if (!result.ok) setError(result.error);
-      else setNote('Sent. It should appear in a few seconds.');
+      if (result.ok) {
+        setNote('Sent. It should appear in a few seconds.');
+        return;
+      }
+      setError(result.error);
+      // Dropped on the server: show it as off, so Turn on is the next step.
+      if ('forgotten' in result && result.forgotten) router.refresh();
     });
-  }, [endpoint]);
+  }, [endpoint, router]);
 
   const remove = useCallback(
     (device: Device) => {
