@@ -119,6 +119,8 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Up to when this person has looked at sign-in activity (src/auth/activity.ts). */
+  securitySeenAt: timestamp('security_seen_at', { withTimezone: true }),
 });
 
 /** WebAuthn passkeys (NF-3). A user may register several devices. */
@@ -187,6 +189,44 @@ export const invites = pgTable('invites', {
   usedAt: timestamp('used_at', { withTimezone: true }),
   usedBy: uuid('used_by').references(() => users.id, { onDelete: 'set null' }),
 });
+
+/**
+ * Things that change who can get in, and failed attempts to (NF-3).
+ *
+ * Names are copied in rather than only referenced, because the most important
+ * entries outlive the person they are about: "removed Sam" has to still say Sam.
+ */
+export const securityEvents = pgTable(
+  'security_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    kind: text('kind', {
+      enum: [
+        'passkey_added',
+        'passkey_removed',
+        'recovery_code_used',
+        'recovery_code_failed',
+        'recovery_codes_replaced',
+        'invite_created',
+        'invite_withdrawn',
+        'member_joined',
+        'member_removed',
+      ],
+    }).notNull(),
+    /** Whose way in it concerns. */
+    subjectId: uuid('subject_id').references(() => users.id, { onDelete: 'set null' }),
+    subjectName: text('subject_name'),
+    /** Who did it; null when nobody signed in did (a failed recovery code). */
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    actorName: text('actor_name'),
+    /** A device's label, or who an invitation is for. */
+    detail: text('detail'),
+    /** Where it came from, as the sign-in log describes it. */
+    source: text('source'),
+  },
+  (table) => [index('security_events_at_idx').on(table.at)],
+);
 
 // ---------------------------------------------------------------------------
 // Accounts and envelopes
