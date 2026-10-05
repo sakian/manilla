@@ -104,7 +104,7 @@ test('delivery says when a browser has gone, and never throws', async () => {
     }) as typeof fetch;
   const options = { ttl: 3600, subject: 'https://manilla.example' };
 
-  assert.deepEqual(await deliver(subscription, 'hello', keys, { ...options, urgent: true, fetch: answering(201) }), { ok: true });
+  assert.deepEqual(await deliver(subscription, 'hello', keys, { ...options, urgent: true, fetch: answering(201) }), { ok: true, status: 201 });
   assert.equal(seen[0]!.headers.get('content-encoding'), 'aes128gcm');
   assert.equal(seen[0]!.headers.get('ttl'), '3600');
   assert.equal(seen[0]!.headers.get('urgency'), 'high');
