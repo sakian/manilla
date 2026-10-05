@@ -12,16 +12,21 @@
  */
 
 import { after } from 'next/server';
+import { connectionFor, homeDb } from '../../../../db/client.ts';
+import { databaseOf } from '../../../../src/ledgers/config.ts';
+import { listLedgers } from '../../../../src/ledgers/registry.ts';
 import { runAs } from '../../../../src/audit/actor.ts';
 import { plaidCall, plaidConfigFromEnv } from '../../../../src/sync/plaidClient.ts';
 import { syncAndTell } from '../../../../src/sync/schedule.ts';
 import { secretKeyFromEnv } from '../../../../src/sync/secret.ts';
 import {
+  bankOfItem,
   liveCopiesOf,
   parseWebhook,
   plaidKeys,
   verifyWebhook,
   wantsSync,
+  webhookLine,
   webhookUrlFromEnv,
   type KeySource,
 } from '../../../../src/sync/webhook.ts';
@@ -67,12 +72,22 @@ export async function POST(request: Request) {
   }
 
   const hook = parseWebhook(body);
-  if (hook && wantsSync(hook)) {
-    // Plaid wants its answer within seconds and a sync can take longer, so it
-    // is answered first and synced after.
-    after(() =>
-      runAs({ id: null, name: 'Plaid webhook' }, () => syncAndTell(liveCopiesOf(hook.itemId), deps, log)),
-    );
+  if (!hook) {
+    log('Plaid sent a webhook that names no bank login; nothing to do');
+    return new Response(null, { status: 204 });
   }
+  // Plaid wants its answer within seconds and a sync can take longer, so it is
+  // answered first, and the rest - even finding which bank - happens after.
+  after(() =>
+    runAs({ id: null, name: 'Plaid webhook' }, async () => {
+      try {
+        const ledgers = await listLedgers(homeDb(), databaseOf(process.env.DATABASE_URL ?? ''));
+        log(webhookLine(hook, await bankOfItem(ledgers.map((ledger) => connectionFor(ledger.database)), hook.itemId)));
+      } catch (error) {
+        log(`Plaid webhook: ${hook.type} ${hook.code}, bank not looked up: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      if (wantsSync(hook)) await syncAndTell(liveCopiesOf(hook.itemId), deps, log);
+    }),
+  );
   return new Response(null, { status: 204 });
 }

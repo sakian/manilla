@@ -75,6 +75,33 @@ export function wantsSync(hook: PlaidWebhook): boolean {
   return hook.type === 'ITEM' && hook.code === 'ERROR';
 }
 
+/**
+ * What the log says of a webhook that checked out: what Plaid said, about which
+ * bank, and what came of it. Every one is said, not only those that sync -
+ * otherwise a webhook working looks the same as none arriving.
+ */
+export function webhookLine(hook: PlaidWebhook, bank: string | null): string {
+  const what = `${hook.type} ${hook.code}${hook.errorCode ? ` (${hook.errorCode})` : ''}`;
+  if (bank === null) return `Plaid webhook: ${what} for a bank login not connected here; nothing to do`;
+  return `Plaid webhook: ${what} for ${bank}; ${wantsSync(hook) ? 'syncing' : 'nothing to do'}`;
+}
+
+/**
+ * The bank a login is at, by Plaid's name for it, from whichever ledger holds a
+ * live copy - or null when none does, as for one disconnected here that Plaid
+ * has not caught up with.
+ */
+export async function bankOfItem(ledgers: Database[], itemId: string): Promise<string | null> {
+  for (const db of ledgers) {
+    const [row] = await db
+      .select({ name: bankConnections.institutionName })
+      .from(bankConnections)
+      .where(and(eq(bankConnections.itemId, itemId), isNull(bankConnections.revokedAt)));
+    if (row) return row.name ?? 'a bank Plaid did not name';
+  }
+  return null;
+}
+
 /** Plaid's public key for a key id, as /webhook_verification_key/get gives it, or null for none. */
 export type KeySource = (keyId: string) => Promise<PlaidKey | null>;
 
