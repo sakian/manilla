@@ -155,6 +155,21 @@ describe(
       assert.equal((await listDevices(db, alex)).find((device) => device.label === 'l')!.signin, true, "not Sam's to change");
     });
 
+    test('each message a push service takes is logged, naming the kind and the device', async () => {
+      const alex = await makeUser('Alex');
+      await saveSubscription(db, alex, browserAt('https://fcm.googleapis.com/fcm/send/alex-phone'), 'Android · Chrome');
+      const lines: string[] = [];
+      const log = console.log;
+      console.log = (line: string) => lines.push(line);
+      try {
+        const { sent } = await notifyMembers(db, { kind: 'overspent' }, { title: 't', body: 'b' }, { fetch: pushService().fetch });
+        await sent;
+      } finally {
+        console.log = log;
+      }
+      assert.deepEqual(lines, ['[manilla] fcm.googleapis.com took the overspent notification for Android · Chrome (201)']);
+    });
+
     test('a browser starts with only the two about spending turned on', async () => {
       const alex = await makeUser('Alex');
       await saveSubscription(db, alex, browserAt('https://fcm.googleapis.com/fcm/send/new'), 'new');

@@ -294,11 +294,16 @@ export async function notifyMembers(
       })),
     );
     const gone = results.filter(({ result }) => !result.ok && result.gone).map(({ row }) => row.id);
-    // Every refusal is logged with what the push service said, a forgotten
-    // browser included: "gone" is also how some services answer a request
-    // they could not make sense of, and without its words that is a guess.
+    // Every answer is logged. A refusal with what the push service said, a
+    // forgotten browser included: "gone" is also how some services answer a
+    // request they could not make sense of, and without its words that is a
+    // guess. A message taken, too: one that never shows on the phone was
+    // otherwise indistinguishable from one never sent.
     for (const { row, result } of results) {
-      if (result.ok) continue;
+      if (result.ok) {
+        console.log(`[manilla] ${new URL(row.endpoint).hostname} took the ${recipients.kind} notification for ${row.label} (${result.status})`);
+        continue;
+      }
       const answer = `${result.status ?? 'no answer'}${result.reason ? ` ${result.reason}` : ''}`;
       console.warn(
         result.gone
