@@ -44,7 +44,7 @@ function json(text: string): Record<string, unknown> {
 export async function createLinkToken(
   db: Database,
   call: PlaidCall,
-  options: { userId: string; connectionId?: string; decrypt?: (stored: string) => string },
+  options: { userId: string; connectionId?: string; decrypt?: (stored: string) => string; webhook?: string | null },
 ): Promise<string> {
   let accessToken: string | undefined;
   if (options.connectionId) {
@@ -65,6 +65,8 @@ export async function createLinkToken(
       country_codes: ['CA'],
       // Plaid's own id for whoever is linking. Never anything identifying.
       user: { client_user_id: options.userId },
+      // Where Plaid says it has news (webhook.ts), when this install takes it.
+      ...(options.webhook ? { webhook: options.webhook } : {}),
       ...(accessToken
         ? { access_token: accessToken }
         : { products: ['transactions'], transactions: { days_requested: DAYS_REQUESTED } }),

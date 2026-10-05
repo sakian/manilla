@@ -33,6 +33,7 @@ import { PlaidDataError, type PlaidTransaction } from './plaid.ts';
 import { PlaidApiError, syncTransactions, type PlaidCall } from './plaidClient.ts';
 import { decryptSecret } from './secret.ts';
 import { unsyncable } from './connections.ts';
+import { oneAtATime } from './serial.ts';
 
 export type HeldReason = 'possible_duplicate' | 'rounded' | 'changed' | 'withdrawn';
 
@@ -91,11 +92,14 @@ function heldFrom(transaction: PlaidTransaction, reason: HeldReason, detail: str
   };
 }
 
-export async function syncConnection(
-  db: Database,
-  connectionId: string,
-  deps: { call: PlaidCall; key: Buffer; account?: Database; now?: () => Date },
-): Promise<SyncReport> {
+type SyncDeps = { call: PlaidCall; key: Buffer; account?: Database; now?: () => Date };
+
+/** One connection's sync, never two of the same connection at once (see serial.ts). */
+export function syncConnection(db: Database, connectionId: string, deps: SyncDeps): Promise<SyncReport> {
+  return oneAtATime(`connection:${connectionId}`, () => syncOnce(db, connectionId, deps));
+}
+
+async function syncOnce(db: Database, connectionId: string, deps: SyncDeps): Promise<SyncReport> {
   const now = deps.now ?? (() => new Date());
   const [connection] = await db.select().from(bankConnections).where(eq(bankConnections.id, connectionId));
   if (!connection) throw new Error(`No such bank connection: ${connectionId}`);

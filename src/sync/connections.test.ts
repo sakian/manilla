@@ -118,6 +118,19 @@ describe(
       assert.equal(plaid.calls[1]!.body.products, undefined);
     });
 
+    test('a link token names the webhook address only when there is one', async () => {
+      const { id } = await link();
+      const plaid = fakePlaid({ '/link/token/create': () => JSON.stringify({ link_token: 'link-1' }) });
+      const webhook = 'https://manilla.example.ts.net/api/plaid/webhook';
+      await createLinkToken(db, plaid.call, { userId: 'u1', webhook });
+      await createLinkToken(db, plaid.call, { userId: 'u1', connectionId: id, decrypt, webhook });
+      await createLinkToken(db, plaid.call, { userId: 'u1', webhook: null });
+      assert.deepEqual(
+        plaid.calls.map((c) => c.body.webhook),
+        [webhook, webhook, undefined],
+      );
+    });
+
     test("a linked account starts the day of its latest statement row, and its history before that is left out", async () => {
       await recordTransaction(db, {
         accountId: chequing,
