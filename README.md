@@ -29,14 +29,15 @@ transaction ID, look-alikes are flagged rather than dropped, something you typed
 in before the bank had it is linked rather than counted twice, a stated closing
 balance is checked against the result, and a whole import can be undone.
 
-**A bank feed is an import nobody watches.** Through Plaid, once a day: posted
+**A bank feed is an import nobody watches.** Through Plaid, once a day, or as
+soon as Plaid has something new if Funnel is on (see below): posted
 transactions take the same path as a statement's rows and wait in the same queue,
 a transaction a file already brought in is linked rather than doubled, and anything
 a person would have had to decide is held for one rather than guessed. You sign in
 to your bank in Plaid's window; Manilla keeps only an encrypted token that
 Disconnect revokes. Each install brings its own Plaid keys, and Plaid's free plan
 covers a household. Press **Turn on** under **Settings → Notifications** on your
-phone and the nightly sync says so there when something or some income came in,
+phone and each sync says so there when something or some income came in,
 or when a bank wants you to sign in again, with envelopes it took below zero and
 unusual charges it brought in as notifications of their own — names and counts,
 never amounts or payees, and nothing on a quiet night. Each kind has its own
@@ -351,6 +352,11 @@ What changes once it is public:
   empty database is not claimable from outside.
 - **Sign-in logs name a Funnel visitor by address**, marked "over Funnel", where
   a tailnet user is named by their login.
+- **Plaid can say when a bank has something new.** Set `PLAID_WEBHOOK_URL` (see
+  `.env.example`) and the feed syncs when Plaid posts to `/api/plaid/webhook`
+  instead of once a day, with a notification after each sync that brings news.
+  The route takes no session; a request is acted on only if Plaid's signature
+  over it checks out, and the most it can start is a sync.
 - **The health check is not there.** `/api/health` answers Docker and the
   tailnet; over Funnel it is a 404, so whether the books balance is nobody
   else's business.

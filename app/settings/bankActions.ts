@@ -23,6 +23,7 @@ import {
   type LedgerHandle,
 } from '../../src/sync/shared.ts';
 import { decryptSecret, secretKeyFromEnv } from '../../src/sync/secret.ts';
+import { webhookUrlFromEnv } from '../../src/sync/webhook.ts';
 
 function failed(error: unknown): Failure {
   return { ok: false, error: error instanceof Error ? error.message : String(error) };
@@ -54,6 +55,7 @@ export async function createLinkTokenAction(
     const { call, decrypt } = plaid();
     const linkToken = await createLinkToken(await ledgerDb(), call, {
       userId: session.userId,
+      webhook: webhookUrlFromEnv(),
       ...(connectionId ? { connectionId, decrypt } : {}),
     });
     return { ok: true, linkToken };

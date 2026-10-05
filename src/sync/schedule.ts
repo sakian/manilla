@@ -5,6 +5,11 @@
  * hour still syncs when it comes back, and each connection goes about a day
  * after its last attempt. An attempt that failed counts, so a bank that is
  * down is tried again tomorrow, not every hour.
+ *
+ * With Plaid's webhooks on (webhook.ts), most syncs happen when Plaid says it
+ * has something, and each of those counts as an attempt too - so this only
+ * runs for a bank Plaid has been quiet about for most of a day, which is what
+ * catches a webhook that never arrived.
  */
 
 import { and, eq, isNotNull, isNull, lt, ne, or } from 'drizzle-orm';
@@ -14,6 +19,8 @@ import { databaseOf } from '../ledgers/config.ts';
 import { listLedgers } from '../ledgers/registry.ts';
 import { plaidCall, plaidConfigFromEnv, type PlaidCall } from './plaidClient.ts';
 import { syncConnection, type SyncReport } from './run.ts';
+import { oneAtATime } from './serial.ts';
+import { registerWebhooks, webhookUrlFromEnv } from './webhook.ts';
 import { secretKeyFromEnv } from './secret.ts';
 import { runAs } from '../audit/actor.ts';
 import { pendingCount } from '../queue/queue.ts';
@@ -58,29 +65,20 @@ export async function connectionsDue(db: Database, now: Date): Promise<string[]>
   return rows.map((row) => row.id);
 }
 
-export async function syncDue(
-  db: Database,
-  deps: { call: PlaidCall; key: Buffer; account?: Database },
-  now: Date = new Date(),
-): Promise<SyncReport[]> {
-  const reports: SyncReport[] = [];
-  for (const id of await connectionsDue(db, now)) {
-    reports.push(await syncConnection(db, id, { ...deps, now: () => now }));
-  }
-  return reports;
-}
-
 const STARTED = Symbol.for('manilla.dailySync');
 
+type Deps = { call: PlaidCall; key: Buffer };
+
 /**
- * Start the hourly check, across every ledger. Does nothing without Plaid keys
+ * Start the hourly check, across every ledger, and point Plaid's webhooks here
+ * when PLAID_WEBHOOK_URL says where that is. Does nothing without Plaid keys
  * and a secret key: a Manilla that imports files only never needs either.
  */
 export function startDailySync(log: (line: string) => void): void {
   const holder = globalThis as { [STARTED]?: boolean };
   if (holder[STARTED]) return;
 
-  let deps: { call: PlaidCall; key: Buffer };
+  let deps: Deps;
   try {
     deps = { call: plaidCall(plaidConfigFromEnv()), key: secretKeyFromEnv() };
   } catch {
@@ -90,8 +88,50 @@ export function startDailySync(log: (line: string) => void): void {
   holder[STARTED] = true;
 
   // Nobody is signed in at 3am; the audit trail says what did it instead.
-  const check = () => runAs({ id: null, name: 'Daily bank sync' }, checkAll);
-  const checkAll = async () => {
+  const check = () =>
+    runAs({ id: null, name: 'Daily bank sync' }, () => syncAndTell((db) => connectionsDue(db, new Date()), deps, log));
+
+  setTimeout(check, 60_000).unref();
+  setInterval(check, CHECK_EVERY_MS).unref();
+
+  const webhook = webhookUrlFromEnv();
+  if (webhook) {
+    log(`bank feeds sync when Plaid says, at ${webhook}, and daily regardless`);
+    void pointWebhooks(webhook, deps, log);
+  } else {
+    if (process.env.PLAID_WEBHOOK_URL) log('PLAID_WEBHOOK_URL is not an https:// address, so Plaid is not told it');
+    log('bank feeds sync daily');
+  }
+}
+
+/** Tell Plaid where each login's webhooks go, once the server is up. */
+async function pointWebhooks(url: string, deps: Deps, log: (line: string) => void): Promise<void> {
+  try {
+    const ledgers = await listLedgers(homeDb(), databaseOf(process.env.DATABASE_URL ?? ''));
+    const dbs = ledgers.map((ledger) => connectionFor(ledger.database));
+    const { updated } = await registerWebhooks(dbs, url, deps, log);
+    if (updated > 0) log(`Plaid's webhooks now come here for ${updated} bank ${updated === 1 ? 'login' : 'logins'}`);
+  } catch (error) {
+    // Not fatal: the daily sync still runs, and the next start tries again.
+    log(`could not set Plaid's webhooks: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Sync the connections `pick` chooses in each ledger, and tell the phones what
+ * came of it: the hourly check's due ones, or one bank's copies when Plaid says
+ * it has something (webhook.ts).
+ *
+ * One run at a time. Each looks at a ledger before and after its sync to say
+ * what the sync did, and two interleaved would each see the other's work and
+ * announce it twice.
+ */
+export function syncAndTell(
+  pick: (db: Database) => Promise<string[]>,
+  deps: Deps,
+  log: (line: string) => void,
+): Promise<void> {
+  return oneAtATime('sync-and-tell', async () => {
     const notifyUrl = process.env.MANILLA_SYNC_NOTIFY_URL;
     // What to say is worked out only when someone will hear it: the ntfy
     // topic, or a browser that turned on any of what a sync says.
@@ -106,15 +146,17 @@ export function startDailySync(log: (line: string) => void): void {
       ledgerCount = ledgers.length;
       for (const ledger of ledgers) {
         const db = connectionFor(ledger.database);
+        const ids = await pick(db);
         // Most hours nothing is due, and then there is nothing to look at.
-        if ((await connectionsDue(db, new Date())).length === 0) continue;
+        if (ids.length === 0) continue;
         // A look before the sync, so afterwards it can say what the sync itself
         // did - the envelopes it took below zero, the income and the unusual
         // charges it brought in - rather than everything that is.
         const before = telling
           ? { envelopes: await listEnvelopes(db), unusual: await unusualCharges(db) }
           : { envelopes: [], unusual: [] };
-        const reports = await syncDue(db, { ...deps, account: home });
+        const reports: SyncReport[] = [];
+        for (const id of ids) reports.push(await syncConnection(db, id, { ...deps, account: home }));
         for (const report of reports) {
           const added = report.accounts.reduce((sum, account) => sum + account.added, 0);
           const held = report.accounts.reduce((sum, account) => sum + account.held, 0);
@@ -135,7 +177,7 @@ export function startDailySync(log: (line: string) => void): void {
                   (notReady > 0 ? `, ${notReady} accounts not ready at Plaid yet` : ''),
           );
         }
-        if (telling && reports.length > 0) {
+        if (telling) {
           const envelopes = await listEnvelopes(db);
           after.set(ledger.name, {
             waiting: await pendingCount(db),
@@ -146,7 +188,7 @@ export function startDailySync(log: (line: string) => void): void {
         }
       }
     } catch (error) {
-      // One bad hour is logged and the next one tries again; it must not take
+      // One bad run is logged and the next one tries again; it must not take
       // the server down with it.
       log(`bank sync failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -162,11 +204,7 @@ export function startDailySync(log: (line: string) => void): void {
       );
       await sent;
     }
-  };
-
-  setTimeout(check, 60_000).unref();
-  setInterval(check, CHECK_EVERY_MS).unref();
-  log('bank feeds sync daily');
+  });
 }
 
 /** What a person calls the bank: Plaid's institution name, when it gave one. */

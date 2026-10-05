@@ -14,11 +14,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from './src/auth/cookie.ts';
 
 /**
- * Reachable without a session: signing in, the container health check, and - in
- * development only, guarded inside the route itself - the CA certificate a phone
+ * Reachable without a session: signing in, the container health check, Plaid's
+ * webhooks - checked by Plaid's signature inside the route instead - and, in
+ * development only, guarded inside the route itself, the CA certificate a phone
  * needs before it will do passkeys over a LAN certificate at all.
  */
-const PUBLIC_PATHS = ['/login', '/api/health', '/api/dev-ca'];
+const PUBLIC_PATHS = ['/login', '/api/health', '/api/dev-ca', '/api/plaid/webhook'];
 
 /**
  * The app's own face: the logo, the icons, the manifest.

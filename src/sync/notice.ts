@@ -1,6 +1,8 @@
 /**
- * What the nightly sync tells a phone (FR-16): the browsers that turned each
- * kind on in Settings (src/push/push.ts), and MANILLA_SYNC_NOTIFY_URL if set.
+ * What a sync tells a phone (FR-16): the browsers that turned each kind on in
+ * Settings (src/push/push.ts), and MANILLA_SYNC_NOTIFY_URL if set. A sync here
+ * is the daily one, or one Plaid's webhook started (webhook.ts) - not the Sync
+ * button, whose own answer is on the screen of whoever pressed it.
  *
  * Up to three notifications for a whole run, each its own so each can be
  * turned off on its own, and none for a run that needs nothing: a daily

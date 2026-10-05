@@ -132,6 +132,9 @@ services:
       PLAID_CLIENT_ID: ${PLAID_CLIENT_ID:-}
       PLAID_SECRET: ${PLAID_SECRET:-}
       PLAID_ENV: ${PLAID_ENV:-sandbox}
+      # Where Plaid posts when a bank has something new, so it syncs then
+      # rather than once a day. Needs Funnel; see .env.example.
+      PLAID_WEBHOOK_URL: ${PLAID_WEBHOOK_URL:-}
       MANILLA_SECRET_KEY: ${MANILLA_SECRET_KEY:-}
     healthcheck:
       test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
