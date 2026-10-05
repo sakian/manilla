@@ -8,12 +8,14 @@ import { closeDb, databaseAvailable, setupTestDb, truncateAll } from '../ledger/
 import { PlaidApiError, type PlaidCall } from './plaidClient.ts';
 import { encryptSecret } from './secret.ts';
 import {
+  bankOfItem,
   liveCopiesOf,
   parseWebhook,
   plaidKeys,
   registerWebhooks,
   verifyWebhook,
   wantsSync,
+  webhookLine,
   webhookUrlFromEnv,
   type KeySource,
   type PlaidKey,
@@ -228,6 +230,31 @@ describe('what a webhook asks for', () => {
     assert.equal(wantsSync(hook('ITEM', 'WEBHOOK_UPDATE_ACKNOWLEDGED')), false);
   });
 
+  test('every webhook that checks out is logged, saying what came of it', () => {
+    const hook = (type: string, code: string, errorCode?: string) => ({
+      type,
+      code,
+      itemId: 'item-1',
+      ...(errorCode ? { errorCode } : {}),
+    });
+    assert.equal(
+      webhookLine(hook('TRANSACTIONS', 'SYNC_UPDATES_AVAILABLE'), 'TD Canada Trust'),
+      'Plaid webhook: TRANSACTIONS SYNC_UPDATES_AVAILABLE for TD Canada Trust; syncing',
+    );
+    assert.equal(
+      webhookLine(hook('ITEM', 'ERROR', 'ITEM_LOGIN_REQUIRED'), 'TD Canada Trust'),
+      'Plaid webhook: ITEM ERROR (ITEM_LOGIN_REQUIRED) for TD Canada Trust; syncing',
+    );
+    assert.equal(
+      webhookLine(hook('ITEM', 'PENDING_EXPIRATION'), 'TD Canada Trust'),
+      'Plaid webhook: ITEM PENDING_EXPIRATION for TD Canada Trust; nothing to do',
+    );
+    assert.equal(
+      webhookLine(hook('TRANSACTIONS', 'SYNC_UPDATES_AVAILABLE'), null),
+      'Plaid webhook: TRANSACTIONS SYNC_UPDATES_AVAILABLE for a bank login not connected here; nothing to do',
+    );
+  });
+
   test('the address is used only when it is https', () => {
     const url = 'https://manilla.example.ts.net/api/plaid/webhook';
     assert.equal(webhookUrlFromEnv({ PLAID_WEBHOOK_URL: url }), url);
@@ -286,6 +313,15 @@ describe(
       assert.deepEqual(await liveCopiesOf('item-1')(personal), [mine]);
       assert.deepEqual(await liveCopiesOf('item-1')(business), [theirs]);
       assert.deepEqual(await liveCopiesOf('item-9')(personal), []);
+    });
+
+    test("a webhook's bank is named from whichever ledger holds the login", async () => {
+      await connect(personal, 'item-1', { revokedAt: new Date(), accessToken: null, institutionName: 'Old Bank' });
+      await connect(business, 'item-1', { institutionName: 'TD Canada Trust' });
+      await connect(personal, 'item-2');
+      assert.equal(await bankOfItem([personal, business], 'item-1'), 'TD Canada Trust');
+      assert.equal(await bankOfItem([personal, business], 'item-2'), 'a bank Plaid did not name');
+      assert.equal(await bankOfItem([personal, business], 'item-9'), null);
     });
 
     test('a login waiting for someone to sign in again is left to them', async () => {
