@@ -68,7 +68,7 @@ export async function linkBankAction(publicToken: string): Promise<{ ok: true } 
     actAs(await requireUser());
     const { call, key } = plaid();
     await linkConnection(await ledgerDb(), call, publicToken, key);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -89,7 +89,7 @@ export async function setFeedAccountAction(
     const split = choice.indexOf(':');
     const target = choice ? { ledgerKey: choice.slice(0, split), accountId: choice.slice(split + 1) } : null;
     const { startDate } = await chooseFeedAccount(all, current, feedAccountId, target);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true, startDate };
   } catch (error) {
     return failed(error);

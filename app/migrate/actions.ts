@@ -61,7 +61,7 @@ function refreshed(): void {
 async function countedAgain(connection: Database): Promise<void> {
   await refreshRuleSuggestionCount(connection);
   revalidatePath('/review');
-  revalidatePath('/settings');
+  revalidatePath('/settings', 'layout');
 }
 
 export type PlanSummary = {

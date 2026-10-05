@@ -86,7 +86,7 @@ export async function finishAddDeviceAction(input: {
       actor: me(session),
       detail: input.label.trim() || null,
     });
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -100,7 +100,7 @@ export async function renameDeviceAction(
   try {
     const session = actAs(await requireUser());
     await renameDevice(homeDb(), session.userId, credentialId, label);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -119,7 +119,7 @@ export async function removeDeviceAction(
       actor: me(session),
       detail: label,
     });
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -137,7 +137,7 @@ export async function createInviteAction(
     const session = actAs(await requireUser());
     const { token, expiresAt } = await createInvite(homeDb(), { createdBy: session.userId, name });
     await recordActivity(homeDb(), { kind: 'invite_created', actor: me(session), detail: name.trim() });
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true, link: `${authConfig().origin}/login/join#${token}`, expiresAt };
   } catch (error) {
     return failed(error);
@@ -151,7 +151,7 @@ export async function withdrawInviteAction(inviteId: string): Promise<{ ok: true
     if (forName) {
       await recordActivity(homeDb(), { kind: 'invite_withdrawn', actor: me(session), detail: forName });
     }
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -163,7 +163,7 @@ export async function removeMemberAction(userId: string): Promise<{ ok: true } |
     const session = actAs(await requireUser());
     const removed = await removeMember(homeDb(), { actingUserId: session.userId, userId });
     await recordActivity(homeDb(), { kind: 'member_removed', subject: removed, actor: me(session) });
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);
@@ -190,7 +190,7 @@ export async function updateRuleAction(
     const connection = await ledgerDb();
     await updateRule(connection, ruleId, edit);
     await refreshRuleSuggestionCount(connection);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     revalidatePath('/review');
     revalidatePath('/');
     return { ok: true };
@@ -206,7 +206,7 @@ export async function undismissRuleAction(contains: string): Promise<{ ok: true 
     const connection = await ledgerDb();
     await undismissRuleSuggestion(connection, contains);
     await refreshRuleSuggestionCount(connection);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     revalidatePath('/');
     return { ok: true };
   } catch (error) {
@@ -220,7 +220,7 @@ export async function deleteRuleAction(ruleId: string): Promise<{ ok: true } | F
     const connection = await ledgerDb();
     await deleteRule(connection, ruleId);
     await refreshRuleSuggestionCount(connection);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     revalidatePath('/review');
     return { ok: true };
   } catch (error) {
@@ -243,7 +243,7 @@ export async function eraseEverythingAction(
     }
 
     const removed = await eraseAllData(await ledgerDb());
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     revalidatePath('/');
     revalidatePath('/accounts');
     revalidatePath('/envelopes');
@@ -261,7 +261,7 @@ export async function setAiSettingsAction(update: {
     actAs(await requireUser());
     // The account's, not the ledger's: one budget covers every ledger (LG-5).
     await setAiSettings(homeDb(), update);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     revalidatePath('/import');
     return { ok: true };
   } catch (error) {
@@ -273,7 +273,7 @@ export async function clearAiCacheAction(): Promise<{ ok: true; removed: number 
   try {
     actAs(await requireUser());
     const removed = await clearAnswerCache(await ledgerDb());
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true, removed };
   } catch (error) {
     return failed(error);
@@ -291,7 +291,7 @@ export async function regenerateRecoveryCodesAction(): Promise<
       subject: me(session),
       actor: me(session),
     });
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     return { ok: true, codes };
   } catch (error) {
     return failed(error);
@@ -316,7 +316,7 @@ export async function acceptRuleAction(contains: string, envelopeId: string) {
     const connection = await ledgerDb();
     await createEnvelopeRule(connection, { contains, envelopeId });
     await refreshRuleSuggestionCount(connection);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     revalidatePath('/');
     return { ok: true as const };
   } catch (error) {
@@ -331,7 +331,7 @@ export async function dismissRuleAction(contains: string) {
     const connection = await ledgerDb();
     await dismissRuleSuggestion(connection, contains);
     await refreshRuleSuggestionCount(connection);
-    revalidatePath('/settings');
+    revalidatePath('/settings', 'layout');
     revalidatePath('/');
     return { ok: true as const };
   } catch (error) {

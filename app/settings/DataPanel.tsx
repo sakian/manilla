@@ -47,7 +47,7 @@ export default function DataPanel({ counts }: { counts: { transactions: number; 
 
   return (
     <section className="panel">
-      <h3>Your data</h3>
+      <h3>Export and erase</h3>
       <p className="muted">
         {counts.transactions.toLocaleString()} transaction{counts.transactions === 1 ? '' : 's'}{' '}
         across {counts.envelopes} envelope{counts.envelopes === 1 ? '' : 's'}. Everything here is

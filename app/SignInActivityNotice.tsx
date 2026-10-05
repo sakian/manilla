@@ -20,7 +20,7 @@ export async function SignInActivityNotice() {
 
   return (
     <li className={`notice ${summary.urgent ? 'bad' : 'warn'} with-action`}>
-      <Link href="/settings#sign-in-activity">{summary.text}</Link>
+      <Link href="/settings/household#sign-in-activity">{summary.text}</Link>
       <form action={markActivitySeenAction}>
         <button type="submit" className="notice-action">
           Seen
