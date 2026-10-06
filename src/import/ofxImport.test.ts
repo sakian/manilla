@@ -20,6 +20,7 @@ import {
   revertImport,
   type RowDecision,
 } from './ofxImport.ts';
+import { BAND_THRESHOLDS } from '../categorize/pipeline.ts';
 import {
   closeDb,
   databaseAvailable,
@@ -702,8 +703,11 @@ describe(
       // ...and the unsure one is offered without moving anything, because a
       // guess should not quietly change a balance nobody has agreed to.
       const row = (fitId: string) => preview.rows.find((r) => r.transaction.fitId === fitId)!;
-      assert.ok(row('sure-1').suggestion!.confidence >= 0.5);
-      assert.ok(row('unsure-1').suggestion!.confidence < 0.5, 'a coin flip is not a pattern');
+      assert.ok(row('sure-1').suggestion!.confidence >= BAND_THRESHOLDS.medium);
+      assert.ok(
+        row('unsure-1').suggestion!.confidence < BAND_THRESHOLDS.medium,
+        'a coin flip is not a pattern',
+      );
       assert.equal(
         balanceOf(after, env.gasId),
         balanceOf(before, env.gasId),

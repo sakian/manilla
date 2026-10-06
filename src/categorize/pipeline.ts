@@ -33,8 +33,14 @@ export type Band = 'high' | 'medium' | 'low';
  * taste. On a real month of history, 0.95 auto-confirms 14% of transactions at
  * 98.4% precision, while the 0.85 originally proposed auto-confirms 26% at only
  * 79.5% - roughly one wrong entry in five, which is worse than not automating.
+ *
+ * The medium cutoff decides what moves an envelope balance before review
+ * (RQ-4), and was 0.5 by taste until it was measured too. Over three months of
+ * history, everything from 0.5 up was 84.4% right, from 0.6 83.5% and from 0.7
+ * 83.6% - no better - and from 0.8 it is 92.1%, about 29% of transactions. So
+ * 0.8: below it a guess is offered on the review card and moves nothing.
  */
-export const BAND_THRESHOLDS = { high: 0.95, medium: 0.5 } as const;
+export const BAND_THRESHOLDS = { high: 0.95, medium: 0.8 } as const;
 
 export function bandOf(confidence: number): Band {
   if (confidence >= BAND_THRESHOLDS.high) return 'high';

@@ -34,8 +34,11 @@ test('confidence bands', () => {
   // 0.85 is deliberately NOT auto-confirmable: measured precision there was
   // 79.5%, so bulk-confirming would introduce an error in roughly one in five.
   assert.equal(bandOf(0.85), 'medium');
-  assert.equal(bandOf(0.7), 'medium');
-  assert.equal(bandOf(0.49), 'low');
+  assert.equal(bandOf(0.8), 'medium');
+  // Below 0.8 a suggestion is offered without moving money: from 0.5 to 0.8,
+  // measured precision stayed at about 84%, and at 0.8 it is 92%.
+  assert.equal(bandOf(0.79), 'low');
+  assert.equal(bandOf(0.7), 'low');
   assert.equal(bandOf(0), 'low');
 });
 
