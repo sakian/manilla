@@ -61,9 +61,10 @@ export default async function ReviewPage(props: {
           Review{' '}
           <Hint label="How reviewing works">
             Imported transactions wait here until you choose an envelope for each one. When Manilla
-            is very sure of the envelope, it fills it in for you. Otherwise the row starts empty,
-            and Manilla&rsquo;s best guess is offered at the top of the list of envelopes. Your
-            choices are not saved until you press Save, so if you stop halfway, nothing has changed.
+            has a suggestion, it fills it in and shows how sure it is, and you confirm it or choose
+            another. Only suggestions it is at least 80% sure of count in envelope balances before
+            you review them. A transaction with no suggestion starts empty. Your choices are not
+            saved until you press Save, so if you stop halfway, nothing has changed.
             The exception is marking a transaction as not spending. That is saved straight away, and
             both sides of the transfer are recorded. To leave some for someone else, press Hand
             over, tick the ones you want them to look at and choose who. They are told, and the

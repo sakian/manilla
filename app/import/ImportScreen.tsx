@@ -336,8 +336,8 @@ export default function ImportScreen({
             file when it can. If you pick one yourself, it remembers your choice for next time. Each
             row is checked against what is already here, so importing the same statement twice adds
             nothing new. Nothing is saved until you press Import. Imported transactions go to the
-            review queue. Where Manilla is fairly sure which envelope a transaction belongs to, it
-            puts it there straight away. Otherwise the transaction waits with no envelope until you
+            review queue. Where Manilla is at least 80% sure which envelope a transaction belongs
+            to, it counts it in that envelope straight away. The rest move no envelope until you
             choose one. You can undo a whole import in one step later.
           </Hint>
         </h2>

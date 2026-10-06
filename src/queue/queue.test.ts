@@ -523,7 +523,7 @@ describe(
 
     test('confidence is exposed as a band for the UI', async () => {
       await pending({ payee: 'A', amountCents: -100, envelopeId: env.gasId, confidence: 0.97 });
-      await pending({ payee: 'B', amountCents: -100, envelopeId: env.gasId, confidence: 0.7 });
+      await pending({ payee: 'B', amountCents: -100, envelopeId: env.gasId, confidence: 0.85 });
       await pending({ payee: 'C', amountCents: -100, envelopeId: env.gasId, confidence: 0.2 });
 
       const bands = (await pendingTransactions(db)).map((row) => row.band).sort();

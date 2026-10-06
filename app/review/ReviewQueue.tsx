@@ -14,11 +14,10 @@
  * which meant changing your mind about the fourth after seeing the ninth was an
  * edit rather than a decision.
  *
- * A suggestion is only *pre-filled* when the pipeline is confident enough to bet
- * on it (0.95, where measurement put the line). Below that the row starts empty,
- * because a pre-filled guess reads as an answer and an unsure guess should not -
- * the guess is still there, at the top of the picker, where it is offered rather
- * than assumed.
+ * Every suggestion is filled in, whatever its confidence, with how sure it is
+ * beside it, and waits for Confirm. What confidence decides is elsewhere:
+ * whether the guess already counts in the envelope's balance (0.8 and up,
+ * RQ-4), and whether the card says sure, likely or guess.
  *
  * One control per card decides everything: pressing the envelope opens a picker
  * that also holds "not spending", because "which envelope" and "no envelope at

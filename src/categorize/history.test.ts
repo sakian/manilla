@@ -34,9 +34,9 @@ test('a single sighting is a hint, not a conclusion', () => {
   const index = new HistoryIndex([txn('2025-08-01', 'BLUE DOOR COFFEE', -540, 'Dining')]);
   const suggestion = index.suggest({ date: '2025-09-01', payeeRaw: 'BLUE DOOR COFFEE', amountCents: -560 });
 
-  // Worth showing as a suggestion, but it must not clear the auto-confirm bar.
+  // Worth offering, but not enough to move money before anyone has looked.
   assert.equal(suggestion.envelope, 'Dining');
-  assert.equal(bandOf(suggestion.confidence), 'medium', `got ${suggestion.confidence}`);
+  assert.equal(bandOf(suggestion.confidence), 'low', `got ${suggestion.confidence}`);
 });
 
 test('confidence grows with consistent repetition', () => {
@@ -52,7 +52,7 @@ test('confidence grows with consistent repetition', () => {
   };
 
   assert.ok(seen(1) < seen(2) && seen(2) < seen(4), 'more evidence, more confidence');
-  assert.equal(bandOf(seen(1)), 'medium', 'one sighting is only a suggestion');
+  assert.equal(bandOf(seen(1)), 'low', 'one sighting is only a suggestion');
   assert.equal(bandOf(seen(6)), 'high', 'six consistent recent sightings are auto-confirmable');
 });
 
