@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { fillBlankLine, linesToSave } from './formLines.ts';
+import { fillBlankLine, linesToSave, restFor } from './formLines.ts';
 
 describe('the envelope lines a transaction form means (#37)', () => {
   test('an envelope chosen with no amount typed takes the whole amount', () => {
@@ -70,5 +70,36 @@ describe('the envelope lines a transaction form means (#37)', () => {
         { envelopeId: 'gas', amount: '12.50' },
       ],
     );
+  });
+});
+
+describe('setting one part to the rest', () => {
+  test('a part takes the total less every other part', () => {
+    const lines = [
+      { envelopeId: 'groceries', amount: '100.00' },
+      { envelopeId: 'household', amount: '20.00' },
+      { envelopeId: 'pharmacy', amount: '15.50' },
+    ];
+    assert.equal(restFor(lines, 0, 10000), '64.50', 'the auto-selected line, still holding the whole amount');
+    assert.equal(restFor(lines, 2, 10000), null, 'the others already use more than the total');
+  });
+
+  test('blank and half-typed parts count as nothing, and a part without an envelope still counts', () => {
+    assert.equal(
+      restFor(
+        [
+          { envelopeId: 'groceries', amount: '' },
+          { envelopeId: '', amount: '20' },
+          { envelopeId: 'pharmacy', amount: 'abc' },
+        ],
+        0,
+        5000,
+      ),
+      '30.00',
+    );
+  });
+
+  test('nothing is left when the others use it all', () => {
+    assert.equal(restFor([{ envelopeId: 'a', amount: '' }, { envelopeId: 'b', amount: '50.00' }], 0, 5000), null);
   });
 });

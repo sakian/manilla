@@ -1616,6 +1616,23 @@ details[open] > summary > .group-summary::before {
   margin-bottom: 6px;
 }
 
+/* With more than one part, each has a Rest button before its remove. */
+.split-row.with-rest {
+  grid-template-columns: minmax(0, 1fr) 100px auto auto;
+}
+
+/* On a phone that leaves the envelope a sliver showing only its group, so it
+   takes its own line and the amount and buttons go under it. */
+@media (max-width: 720px) {
+  .split-row.with-rest {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    margin-bottom: 12px;
+  }
+  .split-row.with-rest select {
+    grid-column: 1 / -1;
+  }
+}
+
 .split-foot {
   display: flex;
   justify-content: space-between;

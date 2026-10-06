@@ -10,7 +10,8 @@
  * The split rows carry the same direction as the transaction, and the dialog
  * keeps a running "left to assign" figure - the FR-4 rule is that the parts sum
  * to the whole, so the arithmetic belongs on screen rather than in an error
- * message after the fact.
+ * message after the fact. For the same reason any part can be set to the rest
+ * in one press, or by typing "=".
  */
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
@@ -36,6 +37,7 @@ import { displayDate, localToday } from '../../src/budget/month.ts';
 import {
   fillBlankLine,
   linesToSave,
+  restFor,
   type LineDraft,
 } from '../../src/transactions/formLines.ts';
 
@@ -155,6 +157,16 @@ export default function TransactionForm({
 
   const usable = linesToSave(lines, totalCents);
   const leftToAssign = totalCents - assignedCents;
+
+  /** One part takes whatever the others leave: the usual last step of a split. */
+  const setRest = useCallback(
+    (index: number) =>
+      setLines((current) => {
+        const rest = restFor(current, index, totalCents);
+        return rest === null ? current : current.map((row, at) => (at === index ? { ...row, amount: rest } : row));
+      }),
+    [totalCents],
+  );
 
   const run = useCallback(
     (work: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>) => {
@@ -429,7 +441,7 @@ export default function TransactionForm({
               <div className="field">
                 <span>Envelopes</span>
                 {lines.map((line, index) => (
-                  <div key={index} className="split-row">
+                  <div key={index} className={`split-row${lines.length > 1 ? ' with-rest' : ''}`}>
                     <select
                       value={line.envelopeId}
                       onChange={(event) =>
@@ -463,7 +475,23 @@ export default function TransactionForm({
                           ),
                         )
                       }
+                      onKeyDown={(event) => {
+                        // "=" for "the rest", the same as the button beside it.
+                        if (event.key !== '=' || lines.length < 2) return;
+                        event.preventDefault();
+                        setRest(index);
+                      }}
                     />
+                    {lines.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setRest(index)}
+                        disabled={restFor(lines, index, totalCents) === null}
+                        title="Set this part to what the others leave (or type = in the amount)"
+                      >
+                        Rest
+                      </button>
+                    )}
                     {lines.length > 1 && (
                       <button
                         onClick={() =>
