@@ -3363,6 +3363,15 @@ details[open] > summary > .group-summary::before {
   .checkpoint-row > :first-child {
     grid-column: 1 / -1;
   }
+  /* The heading and how far off it is each get the width they need, rather
+     than splitting it, so an open hint is not a column a few words wide. */
+  .checkpoints summary {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .checkpoints summary > :last-child {
+    margin-left: auto;
+  }
 }
 
 /* A fill or transfer in an envelope's history: the same row as a transaction,

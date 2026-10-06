@@ -40,12 +40,12 @@ export default async function ReviewPage(props: {
         <h2>
           Review{' '}
           <Hint label="How reviewing works">
-            Imported transactions wait here until you say where they came out of. A suggestion is
-            filled in only where the pipeline is confident enough to bet on it; below that the row
-            starts empty and offers its guess for you to accept or ignore. Choosing an envelope
-            marks the row, and nothing is written until you press Save — so a sitting you abandon
-            halfway leaves the ledger exactly as it was. Marking something as not spending is the
-            exception: that writes both halves of a transfer straight away.
+            Imported transactions wait here until you choose an envelope for each one. When Manilla
+            is very sure of the envelope, it fills it in for you. Otherwise the row starts empty,
+            and Manilla&rsquo;s best guess is offered at the top of the list of envelopes. Your
+            choices are not saved until you press Save, so if you stop halfway, nothing has changed.
+            The exception is marking a transaction as not spending. That is saved straight away, and
+            both sides of the transfer are recorded.
           </Hint>
         </h2>
         {batch && (

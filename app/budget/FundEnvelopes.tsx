@@ -185,13 +185,14 @@ export default function FundEnvelopes({
         <div className="picker-head">
           <strong>Fund envelopes · {label}</strong>
           <Hint label="How funding works">
-            Money out of Available and into the envelopes. Every figure here is worked out in your
-            browser — nothing moves until you press Apply. Every row starts at nothing; <em>Fill from
-            plan</em> puts each envelope&rsquo;s planned monthly amount in, and the plan sits beside
-            each row either way. Choose <em>add</em> to put
-            an amount in, or <em>set to</em> to name the balance you want and let Manilla work out
-            the difference. Either can be negative, which takes money back out and returns it to
-            Available.
+            Funding moves money from Available into your envelopes. Nothing moves until you press
+            Apply. Every row starts at zero. Press <em>Fill from plan</em> to fill in each
+            envelope&rsquo;s planned monthly amount. The plan is shown beside each row either way.
+            Each row has a button that switches between <em>add</em> and <em>set</em>. With add, the
+            amount you type is added to the envelope. With set, you type the balance you want the
+            envelope to have, and Manilla works out how much to move. To take money out of an
+            envelope and put it back in Available, type a negative amount with add, or a lower
+            balance with set.
           </Hint>
         </div>
 

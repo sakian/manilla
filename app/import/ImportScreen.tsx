@@ -332,11 +332,13 @@ export default function ImportScreen({
         <h2>
           Import statements{' '}
           <Hint label="How importing works">
-            OFX or QFX, as your bank exports it. The account is recognised from the file where it
-            can be, and remembered when you pick one. Every row is matched against what is already
-            here, so importing a statement twice adds nothing. Nothing is written until you press
-            Import, everything imported lands in the review queue with a suggested envelope already
-            applied, and a whole import can be undone in one step afterwards.
+            Upload an OFX or QFX file exported from your bank. Manilla picks the account from the
+            file when it can. If you pick one yourself, it remembers your choice for next time. Each
+            row is checked against what is already here, so importing the same statement twice adds
+            nothing new. Nothing is saved until you press Import. Imported transactions go to the
+            review queue. Where Manilla is fairly sure which envelope a transaction belongs to, it
+            puts it there straight away. Otherwise the transaction waits with no envelope until you
+            choose one. You can undo a whole import in one step later.
           </Hint>
         </h2>
       </div>
@@ -471,8 +473,8 @@ export default function ImportScreen({
           <h3>
             Previous imports{' '}
             <Hint label="What undoing an import does">
-              Undoing removes the transactions that import created (FR-13). Anything you have since
-              edited by hand goes with them.
+              Undoing an import deletes every transaction it added. Any changes you have made to
+              those transactions since, such as choosing envelopes, are deleted with them.
             </Hint>
           </h3>
           {history.map((batch) => (
@@ -601,10 +603,11 @@ function StatementCard({
               Balance off by {formatMoney(balanceOff)}: the statement says{' '}
               {formatMoney(balance.statedCents)}, this leaves {formatMoney(balance.projectedCents)}.{' '}
               <Hint label="What a balance difference means">
-                Usually history from before this file is missing (FR-14). On a first import,
-                setting the account&rsquo;s opening balance {formatMoney(balanceOff)} higher, as of
-                the day before the earliest row here, makes the two agree. The import works either
-                way; the check is only telling you what it sees.
+                This usually means transactions from before this file are missing. If this is the
+                first import for this account, you can fix it by making the account&rsquo;s opening
+                balance {formatMoney(Math.abs(balanceOff))} {balanceOff > 0 ? 'higher' : 'lower'},
+                dated the day before the earliest transaction in this file. The import works either
+                way. This check only tells you what it found.
               </Hint>
             </p>
           )}

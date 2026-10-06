@@ -239,11 +239,15 @@ export default function HomeScreen({
           <h2>
             Envelopes{' '}
             <Hint label="What these figures mean">
-              Balances carry over month to month. Planned and spent are for {monthLabel}; the
-              balance is everything that has ever happened to the envelope. Edit lets you rename,
-              regroup, archive and set planned amounts; groups can be reordered there too, while
-              envelopes stay alphabetical. Editing also shows what each envelope has actually cost -
-              averaged over a year, and last month - which is the context a planned figure needs.
+              An envelope&rsquo;s balance is everything that has ever gone into it or come out of
+              it, so it carries over from one month to the next. Planned and spent are
+              for {monthLabel} only. Press Edit to rename envelopes, move them to another group,
+              archive them or set their planned amounts. You can reorder groups there too.
+              Envelopes are always listed alphabetically within their group. In edit mode, each
+              envelope also shows what it has actually cost, as a monthly average over the past year
+              and as last month&rsquo;s total. Tick &ldquo;may go below zero&rdquo; for an envelope
+              with no steady monthly amount. It then has no progress bar and is not counted as
+              overspent.
             </Hint>
           </h2>
           <div className="head-actions">

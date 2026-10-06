@@ -117,10 +117,10 @@ export default async function TransactionsView({
           <h2>
             {onlyEnvelope?.name ?? onlyAccount?.name ?? 'Transactions'}{' '}
             <Hint label="What this screen shows">
-              Every transaction in the ledger, filtered however you like. Arriving from an envelope
-              or an account just sets a filter, so you can widen it, narrow it or clear it from here.
-              Tap a transaction for its detail, where you can change which envelope it came out of.
-              The CSV downloads exactly what the list is showing.
+              Every transaction in this ledger. Use the search and filters to narrow the list.
+              Arriving from an envelope or an account only sets a filter, so you can change or clear
+              it here. Tap a transaction to see its details and change its envelope. CSV downloads
+              every transaction that matches the current filters, not only the page on screen.
             </Hint>
           </h2>
           {/* Every screen's actions live in this row, in the same style. The CSV

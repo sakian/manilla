@@ -245,8 +245,9 @@ export default function MigrateScreen({
         <h2>
           Bring in your budgeting history{' '}
           <Hint label="How the migration works">
-          Years of transactions, their envelopes and their splits. Nothing is written until you have
-            seen what it will do, and the whole thing can be undone in one step.
+            This brings in your full history from another app, including each transaction&rsquo;s
+            envelopes and splits. Nothing is saved until you have seen a preview of what it will do.
+            If you change your mind afterwards, you can undo the whole migration in one step.
           </Hint>
         </h2>
       </div>

@@ -155,10 +155,11 @@ export default function AccountManager({
           <h2>
             Accounts{' '}
             <Hint label="What this screen shows">
-              Real money, as the bank sees it, under categories you choose. Tap an account for its
-              transactions. Edit lets you rename categories, reorder them, move accounts between them
-              and archive what you no longer use — an account has to be emptied before it can be
-              archived, because a hidden balance is a difference nobody can find.
+              Your accounts and their balances, grouped into categories you choose. Tap an account
+              to see its transactions. Press Edit to rename accounts and categories, reorder
+              categories, move accounts between categories, and archive what you no longer use. An
+              account must have a zero balance before you can archive it, so that no money goes
+              missing from view.
             </Hint>
           </h2>
           <div className="head-actions">
