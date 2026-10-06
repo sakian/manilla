@@ -17,6 +17,7 @@ import type { Database } from '../../db/client.ts';
 import { users } from '../../db/schema.ts';
 import { notifyMembers, type PushOptions } from '../push/push.ts';
 import { handOver, pendingCount } from './queue.ts';
+import { openInLedger } from '../safePath.ts';
 
 export type ReviewView = 'all' | 'mine';
 
@@ -53,6 +54,16 @@ export function handoverMessage(input: {
 }
 
 /**
+ * Where tapping the notification goes: the person's For me list, in the
+ * ledger the rows are in when there is more than one, since their phone may
+ * have another open.
+ */
+export function handoverPath(ledgerKey?: string): string {
+  const list = '/review?view=mine';
+  return ledgerKey ? openInLedger(ledgerKey, list) : list;
+}
+
+/**
  * Hand rows to a member and tell them.
  *
  * The member is checked here, against the home database's list, because the
@@ -66,8 +77,8 @@ export async function handOverTo(
     ids: string[];
     to: string;
     from: { id: string; name: string };
-    /** The open ledger's name when there is more than one, for the notification. */
-    ledgerName?: string;
+    /** The open ledger when there is more than one, so the notification names it and opens it. */
+    ledger?: { key: string; name: string };
   },
   options: PushOptions = {},
 ): Promise<{ handed: number; to: string; sent: Promise<number> }> {
@@ -83,12 +94,12 @@ export async function handOverTo(
     from: input.from.name,
     handed,
     waiting,
-    ...(input.ledgerName ? { ledger: input.ledgerName } : {}),
+    ...(input.ledger ? { ledger: input.ledger.name } : {}),
   });
   const { sent } = await notifyMembers(
     home,
     { kind: 'handed', only: member.id },
-    { ...message, path: '/review?view=mine' },
+    { ...message, path: handoverPath(input.ledger?.key) },
     options,
   );
   return { handed, to: member.name, sent };
