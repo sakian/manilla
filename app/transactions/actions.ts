@@ -28,6 +28,8 @@ import { requireUser } from '../auth.ts';
 import { actAs } from '../../src/audit/actor.ts';
 import { transactionHistory } from '../../src/audit/history.ts';
 import { listMembers } from '../../src/auth/invites.ts';
+import { reviewStates } from '../../src/push/edits.ts';
+import { tellOthers } from '../editNotices.ts';
 import { homeDb } from '../../db/client.ts';
 import { displayInstant } from '../../src/budget/month.ts';
 import { centsFromInput } from '../../src/amount.ts';
@@ -171,10 +173,12 @@ export async function updateTransactionAction(
   fields: TransactionFields,
 ): Promise<ActionResult> {
   try {
-    actAs(await requireUser());
+    const session = actAs(await requireUser());
     const lines = linesFrom(fields);
+    const connection = await ledgerDb();
+    const before = await reviewStates(connection, [transactionId]);
 
-    await updateTransaction(await ledgerDb(), transactionId, {
+    await updateTransaction(connection, transactionId, {
       accountId: fields.accountId,
       date: fields.date,
       amountCents: signed(fields.amount, fields.direction),
@@ -184,6 +188,12 @@ export async function updateTransactionAction(
       // Giving it an envelope by hand is the same statement confirming makes.
       ...(lines.length > 0 ? { status: 'confirmed' as const } : {}),
     });
+    // An envelope given to one still waiting reviews it; anything else changes it.
+    await tellOthers(
+      session,
+      { kind: 'review', action: lines.length > 0 ? 'reviewed' : 'changed', count: before.waiting },
+      { kind: 'changes', action: 'changed', count: before.reviewed },
+    );
 
     refreshed();
     return { ok: true, message: 'Saved.' };
@@ -201,8 +211,16 @@ export async function setTransactionNoteAction(
   note: string,
 ): Promise<ActionResult> {
   try {
-    actAs(await requireUser());
-    await setTransactionNote(await ledgerDb(), transactionId, note);
+    const session = actAs(await requireUser());
+    const connection = await ledgerDb();
+    const before = await reviewStates(connection, [transactionId]);
+    await setTransactionNote(connection, transactionId, note);
+    // A note on its own is a change worth hearing about.
+    await tellOthers(
+      session,
+      { kind: 'review', action: 'changed', count: before.waiting },
+      { kind: 'changes', action: 'changed', count: before.reviewed },
+    );
     revalidatePath('/transactions');
     return { ok: true, message: note.trim() ? 'Note saved.' : 'Note removed.' };
   } catch (error) {
@@ -212,8 +230,16 @@ export async function setTransactionNoteAction(
 
 export async function deleteTransactionAction(transactionId: string): Promise<ActionResult> {
   try {
-    actAs(await requireUser());
-    const result = await deleteTransaction(await ledgerDb(), transactionId);
+    const session = actAs(await requireUser());
+    const connection = await ledgerDb();
+    // The one asked about: a transfer's other half goes with it, but it is one deletion.
+    const before = await reviewStates(connection, [transactionId]);
+    const result = await deleteTransaction(connection, transactionId);
+    await tellOthers(
+      session,
+      { kind: 'review', action: 'deleted', count: before.waiting },
+      { kind: 'changes', action: 'deleted', count: before.reviewed },
+    );
     refreshed();
 
     return {
@@ -242,9 +268,10 @@ export async function deleteTransactionAction(transactionId: string): Promise<Ac
  */
 export async function sendBackToReviewAction(transactionId: string): Promise<ActionResult> {
   try {
-    actAs(await requireUser());
+    const session = actAs(await requireUser());
     const result = await sendBackToReview(await ledgerDb(), transactionId);
     refreshed();
+    await tellOthers(session, { kind: 'changes', action: 'sent back', count: result.queued > 0 ? 1 : 0 });
 
     if (result.queued === 0) {
       return { ok: true, message: 'That was already waiting in the review queue.' };
@@ -298,7 +325,7 @@ export async function updateTransferAction(
   fields: TransferFields,
 ): Promise<ActionResult> {
   try {
-    actAs(await requireUser());
+    const session = actAs(await requireUser());
     await updateTransfer(await ledgerDb(), pairId, {
       fromAccountId: fields.fromAccountId,
       toAccountId: fields.toAccountId,
@@ -308,6 +335,8 @@ export async function updateTransferAction(
     });
 
     refreshed();
+    // A transfer is settled when it is made, so changing it is changing something reviewed.
+    await tellOthers(session, { kind: 'changes', action: 'changed', count: 1 });
     return { ok: true, message: 'Saved.' };
   } catch (error) {
     return failed(error);
@@ -316,9 +345,10 @@ export async function updateTransferAction(
 
 export async function deleteTransferAction(pairId: string): Promise<ActionResult> {
   try {
-    actAs(await requireUser());
+    const session = actAs(await requireUser());
     await deleteTransfer(await ledgerDb(), pairId);
     refreshed();
+    await tellOthers(session, { kind: 'changes', action: 'deleted', count: 1 });
     return { ok: true, message: 'Both halves of the transfer are gone.' };
   } catch (error) {
     return failed(error);

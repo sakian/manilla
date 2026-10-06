@@ -205,6 +205,10 @@ export const pushSubscriptions = pgTable(
     signin: boolean('signin').notNull().default(false),
     /** Transactions someone handed to this browser's person to review (RQ-7). */
     handed: boolean('handed').notNull().default(true),
+    /** Someone else reviewing, or changing a transaction still waiting for review. */
+    review: boolean('review').notNull().default(false),
+    /** Someone else changing a transaction already reviewed. */
+    changes: boolean('changes').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('push_subscriptions_user_idx').on(table.userId)],

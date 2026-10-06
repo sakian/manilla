@@ -42,7 +42,10 @@ or when a bank wants you to sign in again, with envelopes it took below zero and
 unusual charges it brought in as notifications of their own — names and counts,
 never amounts or payees, and nothing on a quiet night. Each kind has its own
 switch, and **Problems** adds an hourly look for a ledger that no longer adds up
-or a server disk filling. No second app: the notification comes from Manilla
+or a server disk filling. Between members, **Handed to me for review** says when
+someone leaves transactions for you, **Review activity** when someone else works
+through the review list, and **Changes to reviewed transactions** when someone
+else corrects what was already settled. No second app: the notification comes from Manilla
 itself (on an iPhone, once it is on the Home Screen). An ntfy topic in
 `MANILLA_SYNC_NOTIFY_URL` still gets the sync's.
 
