@@ -23,10 +23,10 @@ test('nothing bad is ever folded (FR-37)', () => {
     notice('ledger_mismatch', 'bad'),
     notice('pool_overdrawn', 'bad'),
     notice('envelopes_overspent', 'warn'),
-    notice('unallocated', 'info'),
+    notice('rules_to_suggest', 'info'),
   ]);
   assert.deepEqual(kinds(shown), ['ledger_mismatch', 'pool_overdrawn', 'awaiting_review']);
-  assert.deepEqual(kinds(folded), ['envelopes_overspent', 'unallocated']);
+  assert.deepEqual(kinds(folded), ['envelopes_overspent', 'rules_to_suggest']);
 });
 
 test('a single alert is shown rather than folded under a count', () => {

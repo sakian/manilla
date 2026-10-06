@@ -55,9 +55,9 @@ describe(
       assert.deepEqual(await kinds(), ['nothing_recorded']);
     });
 
-    test('income arriving becomes something to allocate', async () => {
+    test('income waiting in Available is not a notice: it is on the home screen already', async () => {
       await receiveIncome(400000);
-      assert.deepEqual(await kinds(), ['unallocated']);
+      assert.deepEqual(await kinds(), []);
     });
 
     test('a nearly full disk is said, and a full one is a fault', async () => {
