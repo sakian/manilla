@@ -28,13 +28,19 @@
  * The bulk "confirm the confident ones" button is gone. It settled about a sixth
  * of a queue without anybody looking, which is a strange thing to offer on a
  * screen whose whole purpose is looking.
+ *
+ * What one person leaves for another is handed over from here (RQ-7): Hand
+ * over turns each row into something to tick, starting with every row not
+ * decided this sitting ticked, since "the rest are yours" is the usual end of a
+ * first pass. That is written at once, unlike the envelopes, and tells the
+ * person it went to.
  */
 
 import { Fragment, useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
-import { markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
+import { handOverAction, markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
 import { setTransactionNoteAction } from '../transactions/actions.ts';
 import { Money } from '../Money.tsx';
 import { useOverlay } from '../useOverlay.ts';
@@ -83,12 +89,21 @@ export default function ReviewQueue({
   envelopes,
   transfers,
   accounts,
+  me,
+  members,
+  view,
 }: {
   rows: QueueRow[];
   envelopes: EnvelopeOption[];
   /** Rows that look like half of a transfer, found rather than declared. */
   transfers: TransferCandidate[];
   accounts: { id: string; name: string }[];
+  /** Who is reviewing, so a row handed to them says "for you". */
+  me: string;
+  /** Everyone in the household, to hand rows to and to name who rows are for (RQ-7). */
+  members: { id: string; name: string }[];
+  /** Everything waiting, or only what was handed to this person. */
+  view: 'all' | 'mine';
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -157,6 +172,14 @@ export default function ReviewQueue({
       setNoteDraft(null);
     });
   }, [noteDraft]);
+
+  /** Who else rows can be handed to. Nobody, in a household of one. */
+  const others = useMemo(() => members.filter((member) => member.id !== me), [members, me]);
+  const nameOf = useMemo(() => new Map(members.map((member) => [member.id, member.name])), [members]);
+  /** Ticking rows to hand over, when Hand over has been pressed. */
+  const [handing, setHanding] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [handTo, setHandTo] = useState<string>(others[0]?.id ?? '');
 
   /** How many are waiting in each account, for its heading. */
   const perAccount = useMemo(() => {
@@ -248,6 +271,43 @@ export default function ReviewQueue({
     });
   }, [decisionFor, ready, router, rows.length]);
 
+  /** Start ticking, with everything not decided this sitting already ticked. */
+  const startHanding = useCallback(() => {
+    setError(null);
+    setNote(null);
+    setSelected(new Set(rows.filter((row) => !decisionFor(row.id).confirmed).map((row) => row.id)));
+    setHanding(true);
+  }, [decisionFor, rows]);
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handOver = useCallback(() => {
+    if (!handTo || selected.size === 0) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await handOverAction([...selected], handTo);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setHanding(false);
+      setSelected(new Set());
+      setNote(
+        result.handed === 0
+          ? 'Those were reviewed meanwhile, so there was nothing to hand over.'
+          : `Handed ${result.handed} to ${result.to}.`,
+      );
+      router.refresh();
+    });
+  }, [handTo, router, selected]);
+
   /** Join two rows that already exist, rather than writing a third (FR-5). */
   const pairTransfer = useCallback(
     (candidate: TransferCandidate) => {
@@ -295,9 +355,13 @@ export default function ReviewQueue({
   if (rows.length === 0) {
     return (
       <div className="empty">
-        <p style={{ margin: 0, fontSize: 17 }}>Nothing to review.</p>
+        <p style={{ margin: 0, fontSize: 17 }}>
+          {view === 'mine' ? 'Nothing handed to you.' : 'Nothing to review.'}
+        </p>
         <p className="muted" style={{ margin: '8px 0 0' }}>
-          Everything imported has an envelope.
+          {view === 'mine'
+            ? 'Anything else waiting is under All.'
+            : 'Everything imported has an envelope.'}
         </p>
       </div>
     );
@@ -329,6 +393,15 @@ export default function ReviewQueue({
             )}
             <div className={`queue-row${decision.confirmed ? ' decided' : ''}`}>
               <span className="queue-payee">
+                {handing && (
+                  <input
+                    type="checkbox"
+                    className="queue-select"
+                    checked={selected.has(row.id)}
+                    onChange={() => toggleSelected(row.id)}
+                    aria-label={`Hand over ${row.payeeDisplay}`}
+                  />
+                )}
                 {row.payeeDisplay}
                 {row.memo && <span className="muted"> · {row.memo}</span>}
                 {/* Beside what the transaction says it is, because that is what the
@@ -351,6 +424,12 @@ export default function ReviewQueue({
               <span className="muted queue-meta">
                 <span>{displayDate(row.date)}</span>
                 {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
+                {/* In the full list, whose it is; in "for me" every row is. */}
+                {view === 'all' && row.handedToId && (
+                  <span className="tag">
+                    for {row.handedToId === me ? 'you' : (nameOf.get(row.handedToId) ?? 'someone no longer a member')}
+                  </span>
+                )}
               </span>
 
               <span className="queue-choice">
@@ -432,14 +511,50 @@ export default function ReviewQueue({
 
       {/* Sticky, because the list is long and the decision to stop is made at the
           bottom of it as often as the top. */}
-      <div className="queue-save">
-        <span className="muted">
-          {ready.length} of {rows.length} ready
-        </span>
-        <button className="primary" onClick={save} disabled={pending || ready.length === 0}>
-          {pending ? 'Saving…' : `Save ${ready.length}`}
-        </button>
-      </div>
+      {handing ? (
+        <div className="queue-save">
+          <span className="muted">{selected.size} selected</span>
+          {/* Every undecided row starts ticked, which on a long list is many
+              to untick one at a time when only a few are meant. */}
+          <button
+            className="link-button"
+            onClick={() => setSelected(selected.size > 0 ? new Set() : new Set(rows.map((row) => row.id)))}
+            disabled={pending}
+          >
+            {selected.size > 0 ? 'Clear' : 'Select all'}
+          </button>
+          <label className="hand-to">
+            <span className="muted">to</span>
+            <select value={handTo} onChange={(event) => setHandTo(event.target.value)} disabled={pending}>
+              {others.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button onClick={() => setHanding(false)} disabled={pending}>
+            Cancel
+          </button>
+          <button className="primary" onClick={handOver} disabled={pending || selected.size === 0}>
+            {pending ? 'Handing over…' : `Hand over ${selected.size}`}
+          </button>
+        </div>
+      ) : (
+        <div className="queue-save">
+          <span className="muted">
+            {ready.length} of {rows.length} ready
+          </span>
+          {others.length > 0 && (
+            <button onClick={startHanding} disabled={pending}>
+              Hand over…
+            </button>
+          )}
+          <button className="primary" onClick={save} disabled={pending || ready.length === 0}>
+            {pending ? 'Saving…' : `Save ${ready.length}`}
+          </button>
+        </div>
+      )}
 
       {picking && (
         <div className="picker-backdrop" onClick={closePicker}>

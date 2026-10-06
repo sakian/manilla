@@ -140,6 +140,7 @@ flowchart LR
 | RQ-4 | Pending transactions already affect the envelope balance (marked as unconfirmed), so the dashboard is accurate mid-month before review is done. | M | Built, narrowed. Only suggestions in the medium band and above are applied; below that the money stays unassigned rather than a guess moving a balance. Each envelope card shows its unreviewed share. |
 | RQ-5 | Confirmed transactions can still be edited later. A change updates rules and history. | M | Built |
 | RQ-6 | Show a count of items awaiting review, and an age indicator for items pending more than a set number of days. | S | Built |
+| RQ-7 | Hand waiting transactions to another member for a second look, and tell only them. | S | Built ([#97](https://github.com/sakian/manilla/issues/97)). Hand over in the review list ticks every row not decided in this sitting, and any member can hand any waiting row to any other member. It is written at once, and the person it went to gets a "Handed to me for review" notification on each device that has it on. The list shows For me (handed to you) or All, and each person chooses which it opens on under Settings and then You. A handover can be passed on but not taken back, and once anyone reviews the row it leaves every list. The home screen notice counts everything waiting, adding how many are yours, unless your list opens on For me, in which case it counts only yours and is absent when there are none. Who handed what to whom is in the transaction's history. |
 
 ## Views and dashboard
 

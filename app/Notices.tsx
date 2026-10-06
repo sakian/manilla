@@ -58,7 +58,12 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
           }
         : { text: `${count} accounts disagree with their last statement`, href: '/accounts' };
     case 'awaiting_review':
-      return { text: `${count} to review`, href: '/review' };
+      // RQ-7: what was handed to the person looking, said as theirs.
+      if (notice.view === 'mine') return { text: `${count} for you to review`, href: '/review?view=mine' };
+      return {
+        text: `${count} to review${notice.mine ? `, ${notice.mine} for you` : ''}`,
+        href: '/review',
+      };
     case 'unallocated':
       return {
         text: (

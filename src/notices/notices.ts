@@ -17,6 +17,7 @@ import { currentMonth, monthEnd, monthStart, type MonthKey } from '../budget/mon
 import { budgetLines, envelopes } from '../../db/schema.ts';
 import { checkInvariant } from '../ledger/ledger.ts';
 import { pendingCount } from '../queue/queue.ts';
+import type { ReviewView } from '../queue/handover.ts';
 import { ruleSuggestionCount } from '../rules/rules.ts';
 import { statementMismatches } from '../import/ofxImport.ts';
 import { unusualCharges, type Insight } from '../insights/insights.ts';
@@ -69,6 +70,10 @@ export type Attention = {
   insight?: Insight;
   /** The bank a `bank_login_needed` is about, when there is one and it has a name. */
   institution?: string;
+  /** For `awaiting_review`: how many of them were handed to the person looking (RQ-7). */
+  mine?: number;
+  /** For `awaiting_review`: the view that person's review list opens on, which decides what it counts. */
+  view?: ReviewView;
 };
 
 export type AttentionReport = {
@@ -141,6 +146,11 @@ export async function attention(
      * machine running it.
      */
     diskUsage?: () => Promise<number | null>;
+    /**
+     * Who is looking, and which view their review list opens on (RQ-7). Without
+     * it the review notice counts everything waiting, as it always did.
+     */
+    viewer?: { userId: string; opensOn: ReviewView };
   } = {},
 ): Promise<AttentionReport> {
   const [balances, invariant, waiting, received, expected, average, suggestions, mismatched, unusual, bank] =
@@ -157,6 +167,7 @@ export async function attention(
       bankAttention(db),
     ]);
   const disk = options.diskUsage ? await options.diskUsage() : null;
+  const mine = options.viewer ? await pendingCount(db, { handedTo: options.viewer.userId }) : 0;
 
   const notices: Attention[] = [];
   const overspent = balances.overspent;
@@ -236,8 +247,13 @@ export async function attention(
     notices.push({ kind: 'unusual_charge', severity: 'warn', cents: insight.cents, insight });
   }
 
-  if (waiting > 0) {
-    notices.push({ kind: 'awaiting_review', severity: 'info', count: waiting });
+  // Someone whose list opens on what was handed to them hears only about that,
+  // the same as their notifications: if they see it, it is theirs. Everyone
+  // else sees everything waiting, and how much of it is theirs when any is.
+  if (options.viewer?.opensOn === 'mine') {
+    if (mine > 0) notices.push({ kind: 'awaiting_review', severity: 'info', count: mine, mine, view: 'mine' });
+  } else if (waiting > 0) {
+    notices.push({ kind: 'awaiting_review', severity: 'info', count: waiting, mine, view: 'all' });
   }
 
   // Read from a cached count rather than found here: the search is a scan of

@@ -38,6 +38,7 @@ import {
   type RuleEdit,
 } from '../../src/rules/rules.ts';
 import { eraseAllData } from '../../src/export/export.ts';
+import { setReviewOpensOn, type ReviewView } from '../../src/queue/handover.ts';
 import { clearAnswerCache, setAiSettings } from '../../src/ai/ai.ts';
 import { endSession, requireUser } from '../auth.ts';
 import { actAs } from '../../src/audit/actor.ts';
@@ -139,6 +140,18 @@ export async function createInviteAction(
     await recordActivity(homeDb(), { kind: 'invite_created', actor: me(session), detail: name.trim() });
     revalidatePath('/settings', 'layout');
     return { ok: true, link: `${authConfig().origin}/login/join#${token}`, expiresAt };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** Which view this person's review list opens on (RQ-7). Theirs, in every ledger. */
+export async function setReviewOpensOnAction(view: ReviewView): Promise<{ ok: true } | Failure> {
+  try {
+    const session = actAs(await requireUser());
+    await setReviewOpensOn(homeDb(), session.userId, view);
+    revalidatePath('/', 'layout');
+    return { ok: true };
   } catch (error) {
     return failed(error);
   }

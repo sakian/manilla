@@ -27,6 +27,8 @@ import {
 import { requireUser } from '../auth.ts';
 import { actAs } from '../../src/audit/actor.ts';
 import { transactionHistory } from '../../src/audit/history.ts';
+import { listMembers } from '../../src/auth/invites.ts';
+import { homeDb } from '../../db/client.ts';
 import { displayInstant } from '../../src/budget/month.ts';
 import { centsFromInput } from '../../src/amount.ts';
 
@@ -358,7 +360,8 @@ export async function transactionHistoryAction(
 ): Promise<{ ok: true; history: HistoryView[] } | { ok: false; error: string }> {
   try {
     actAs(await requireUser());
-    const history = await transactionHistory(await ledgerDb(), transactionId);
+    const members = new Map((await listMembers(homeDb())).map((member) => [member.id, member.name]));
+    const history = await transactionHistory(await ledgerDb(), transactionId, members);
     return {
       ok: true,
       history: history.map((entry, index) => ({

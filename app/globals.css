@@ -502,6 +502,48 @@ kbd {
   box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.06);
 }
 
+/* The count on the left, the buttons together on the right, and on a narrow
+   screen the buttons wrap under it rather than off the edge (RQ-7). */
+.queue-save {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.queue-save > :first-child {
+  margin-right: auto;
+}
+
+.hand-to {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hand-to select {
+  font: inherit;
+  font-size: 14px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  max-width: 160px;
+}
+
+/* Ticking a row to hand over: before its name, where the eye starts. */
+.queue-select {
+  margin: 0 8px 0 0;
+  vertical-align: -2px;
+  width: 18px;
+  height: 18px;
+}
+
+/* For me and All, under the heading. */
+.segmented.review-view {
+  max-width: 320px;
+  margin: 10px 0 0;
+}
+
 /* --- Pages -------------------------------------------------------------- */
 
 .page-head {

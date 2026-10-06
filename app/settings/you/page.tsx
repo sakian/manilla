@@ -13,18 +13,23 @@ import SettingsHead from '../SettingsHead.tsx';
 import NotificationsPanel from '../NotificationsPanel.tsx';
 import AppearancePanel from '../AppearancePanel.tsx';
 import Devices from '../Devices.tsx';
+import ReviewPanel from '../ReviewPanel.tsx';
+import { listMembers } from '../../../src/auth/invites.ts';
+import { reviewOpensOn } from '../../../src/queue/handover.ts';
 
 export const dynamic = 'force-dynamic';
 
 /** What is yours, and mostly this device's: sign-in is the same whichever ledger is open. */
 export default async function YouSettings() {
   const session = await requireUser();
-  const [devices, unusedRecoveryCodes, pushDevices, serverKey, ledgers] = await Promise.all([
+  const [devices, unusedRecoveryCodes, pushDevices, serverKey, ledgers, members, opensOn] = await Promise.all([
     listDevices(homeDb(), session.userId),
     countUnusedRecoveryCodes(homeDb(), session.userId),
     listPushDevices(homeDb(), session.userId),
     applicationServerKey(homeDb()),
     allLedgers(),
+    listMembers(homeDb()),
+    reviewOpensOn(homeDb(), session.userId),
   ]);
   const theme = themeFrom((await cookies()).get(THEME_COOKIE)?.value);
 
@@ -40,6 +45,9 @@ export default async function YouSettings() {
       <SettingsHead slug="you" status={`Signed in as ${session.userName}.`} />
 
       <NotificationsPanel devices={pushDevices} serverKey={serverKey} manyLedgers={ledgers.length > 1} />
+
+      {/* Only where there is someone to hand review to (RQ-7). */}
+      {members.length > 1 && <ReviewPanel current={opensOn} />}
 
       <AppearancePanel current={theme} />
 
