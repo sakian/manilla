@@ -4,6 +4,7 @@ import type { Database } from '../../db/client.ts';
 import { openAccount, recordTransaction } from '../ledger/ledger.ts';
 import { fundEnvelopes, setPlanned } from '../budget/budget.ts';
 import { attention, type AttentionKind } from './notices.ts';
+import { editEnvelope } from '../envelopes/manage.ts';
 import {
   closeDb,
   databaseAvailable,
@@ -111,6 +112,25 @@ describe(
       assert.ok(overspent);
       assert.equal(overspent.severity, 'warn');
       assert.equal(overspent.count, 1);
+    });
+
+    test('an envelope where below zero is expected is not counted as overspent (FR-24)', async () => {
+      await recordTransaction(db, {
+        accountId,
+        date: '2026-09-10',
+        amountCents: -25000,
+        payeeRaw: 'SHELL',
+        status: 'confirmed',
+        lines: [{ envelopeId: env.gasId, amountCents: -25000 }],
+      });
+      await editEnvelope(db, env.gasId, { mayGoNegative: true });
+
+      const report = await attention(db, '2026-09');
+      assert.equal(report.notices.find((notice) => notice.kind === 'envelopes_overspent'), undefined);
+
+      await editEnvelope(db, env.gasId, { mayGoNegative: false });
+      const again = await attention(db, '2026-09');
+      assert.equal(again.notices.find((notice) => notice.kind === 'envelopes_overspent')?.count, 1);
     });
 
     test('allocating past what has arrived is a bad state, and says by how much', async () => {

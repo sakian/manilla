@@ -75,11 +75,14 @@ const envelopesOf = (groups: ManagedGroup[]) =>
  * screen, and saying so every night it is synced would be the daily message
  * that teaches you to swipe them all away. The income pool is left out: it is
  * not an envelope anyone overdraws by spending, and the app already shows
- * Available overdrawn as something broken.
+ * Available overdrawn as something broken. So is an envelope marked as going
+ * below zero by design (FR-24): that is what it is for.
  */
 export function newlyOverdrawn(before: ManagedGroup[], after: ManagedGroup[]): string[] {
   const overdrawn = (groups: ManagedGroup[]) =>
-    envelopesOf(groups).filter((envelope) => !envelope.isUnallocated && envelope.balanceCents < 0);
+    envelopesOf(groups).filter(
+      (envelope) => !envelope.isUnallocated && !envelope.mayGoNegative && envelope.balanceCents < 0,
+    );
   const already = new Set(overdrawn(before).map((envelope) => envelope.id));
   return overdrawn(after)
     .filter((envelope) => !already.has(envelope.id))

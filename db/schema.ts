@@ -333,6 +333,13 @@ export const envelopes = pgTable(
      * envelope carries this flag.
      */
     isUnallocated: boolean('is_unallocated').notNull().default(false),
+    /**
+     * Below zero is expected here (FR-24): an envelope with no steady monthly
+     * amount, spent first and topped up after. Its negative balance still shows;
+     * it is just not called overspent - no tag, no notice, no notification - and
+     * it has no progress bar, which measures against a plan it does not have.
+     */
+    mayGoNegative: boolean('may_go_negative').notNull().default(false),
     archivedAt: timestamp('archived_at', { withTimezone: true }),
   },
   (table) => [

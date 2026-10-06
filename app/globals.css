@@ -2175,6 +2175,23 @@ details[open] > summary > .group-summary::before {
   max-width: 150px;
 }
 
+/* An envelope where below zero is expected (FR-24). */
+.below-zero {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.below-zero input {
+  margin: 0;
+}
+
+/* The box's only name, so shown at every width, unlike the column labels. */
+.below-zero .figure-label {
+  display: inline;
+}
+
 .envelope-figures .planned-edit {
   position: relative;
   z-index: 1;

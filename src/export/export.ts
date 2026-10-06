@@ -266,10 +266,11 @@ export async function exportCsv(db: Database, table: CsvTableName): Promise<stri
           name: envelope.name,
           group: envelope.group,
           carryOver: envelope.carryOver,
+          mayGoNegative: envelope.mayGoNegative,
           isIncomePool: envelope.isUnallocated,
           archived: envelope.archivedAt ? 'yes' : 'no',
         })),
-        ['name', 'group', 'carryOver', 'isIncomePool', 'archived'],
+        ['name', 'group', 'carryOver', 'mayGoNegative', 'isIncomePool', 'archived'],
       );
 
     case 'accounts':

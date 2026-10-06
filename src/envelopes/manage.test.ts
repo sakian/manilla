@@ -150,6 +150,23 @@ describe(
       assert.equal(groups.find((group) => group.id === utilities)!.envelopes.length, 0);
     });
 
+    test('an envelope can be marked as going below zero by design, and unmarked (FR-24)', async () => {
+      const find = async () =>
+        (await listEnvelopes(db)).flatMap((group) => group.envelopes).find((envelope) => envelope.id === env.gasId)!;
+      assert.equal((await find()).mayGoNegative, false, 'off unless asked for');
+      await editEnvelope(db, env.gasId, { mayGoNegative: true });
+      assert.equal((await find()).mayGoNegative, true);
+      await editEnvelope(db, env.gasId, { name: 'Fuel' });
+      assert.equal((await find()).mayGoNegative, true, 'another edit leaves it alone');
+      await editEnvelope(db, env.gasId, { mayGoNegative: false });
+      assert.equal((await find()).mayGoNegative, false);
+    });
+
+    test('Available is never marked as going below zero by design', async () => {
+      await assert.rejects(() => editEnvelope(db, env.unallocatedId, { mayGoNegative: true }), EnvelopeError);
+      await editEnvelope(db, env.unallocatedId, { mayGoNegative: false });
+    });
+
     test('the income pool cannot be renamed or refiled', async () => {
       const other = await createGroup(db, 'Somewhere else');
 

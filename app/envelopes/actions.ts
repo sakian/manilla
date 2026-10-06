@@ -104,7 +104,7 @@ export async function createEnvelopeAction(
 
 export async function editEnvelopeAction(
   envelopeId: string,
-  edit: { name?: string; groupId?: string; carryOver?: boolean },
+  edit: { name?: string; groupId?: string; carryOver?: boolean; mayGoNegative?: boolean },
 ): Promise<ActionResult> {
   try {
     actAs(await requireUser());

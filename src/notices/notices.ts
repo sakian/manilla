@@ -91,7 +91,8 @@ async function balancesForNotices(db: Database, month: MonthKey) {
   const [row] = await db
     .select({
       poolCents: sql<string>`coalesce(sum(balance) filter (where is_unallocated), 0)::bigint`,
-      overspent: sql<string>`count(*) filter (where not is_unallocated and balance < 0)::int`,
+      // Not an envelope where below zero is expected (FR-24).
+      overspent: sql<string>`count(*) filter (where not is_unallocated and not may_go_negative and balance < 0)::int`,
       envelopeCount: sql<string>`count(*)::int`,
       plannedCents: sql<string>`coalesce(sum(planned) filter (where not is_unallocated), 0)::bigint`,
     })
@@ -99,6 +100,7 @@ async function balancesForNotices(db: Database, month: MonthKey) {
       db
         .select({
           isUnallocated: envelopes.isUnallocated,
+          mayGoNegative: envelopes.mayGoNegative,
           balance: sql<string>`(
             coalesce((select sum(l.amount_cents) from txn_lines l where l.envelope_id = envelopes.id), 0)
             + coalesce((select sum(m.amount_cents) from envelope_moves m where m.to_envelope_id = envelopes.id), 0)

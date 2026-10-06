@@ -362,7 +362,9 @@ export default function HomeScreen({
 
             {envelopes.map((envelope) => {
               const figure = figures[envelope.id];
-              const overspent = envelope.balanceCents < 0;
+              const negative = envelope.balanceCents < 0;
+              // Below zero where that is expected is not overspending (FR-24).
+              const overspent = negative && !envelope.mayGoNegative;
               /** The one the pane beside the list is showing. */
               const shown =
                 !editing && shownEnvelopes.length === 1 && shownEnvelopes[0] === envelope.id;
@@ -388,6 +390,7 @@ export default function HomeScreen({
                     </Link>
                     {envelope.isUnallocated && <span className="tag">income pool</span>}
                     {overspent && <span className="tag warn">overspent</span>}
+                    {negative && envelope.mayGoNegative && <span className="tag">allowed below zero</span>}
                     {!envelope.carryOver && <span className="tag">resets monthly</span>}
                     {editing && !envelope.isUnallocated && (
                       <button
@@ -446,7 +449,9 @@ export default function HomeScreen({
                     )}
                   </span>
 
-                  {!editing && !envelope.isUnallocated && figure && (
+                  {/* No bar where below zero is expected: it measures spending
+                      against a plan, which such an envelope does not have. */}
+                  {!editing && !envelope.isUnallocated && !envelope.mayGoNegative && figure && (
                     <ProgressBar
                       progress={envelopeProgress(
                         { spentCents: figure.spentCents, balanceCents: envelope.balanceCents },
@@ -457,7 +462,9 @@ export default function HomeScreen({
                   )}
 
                   <span className="envelope-actions">
-                    {overspent && !editing && (
+                    {/* Still offered where below zero is expected: topping one
+                        up is not wrong, only not urgent. */}
+                    {negative && !editing && (
                       <button
                         onClick={() => overlay.open('cover', { envelope: envelope.id })}
                         disabled={pending}
@@ -467,6 +474,22 @@ export default function HomeScreen({
                     )}
                     {editing && !envelope.isUnallocated && (
                       <>
+                        <label
+                          className="below-zero"
+                          title="For an envelope with no steady monthly amount: below zero is not called overspent, nobody is notified, and there is no progress bar"
+                        >
+                          <input
+                            type="checkbox"
+                            // Keyed so a refresh from the server resets it.
+                            key={String(envelope.mayGoNegative)}
+                            defaultChecked={envelope.mayGoNegative}
+                            disabled={pending}
+                            onChange={(event) =>
+                              run(() => editEnvelopeAction(envelope.id, { mayGoNegative: event.target.checked }))
+                            }
+                          />
+                          <span className="figure-label">may go below zero</span>
+                        </label>
                         {liveGroups.length > 1 && (
                           <label className="group-move">
                             <span className="figure-label">group</span>
