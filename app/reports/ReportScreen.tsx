@@ -97,9 +97,9 @@ export default function ReportScreen({
         <h2>
           Reports{' '}
           <Hint label="What counts as spending here">
-          Spending only: transfers between your accounts and moves between envelopes are not
-          spending and never appear here, and a split counts at each envelope&rsquo;s own share
-            (RP-5).
+            Only spending is counted. Transfers between your own accounts and moves between
+            envelopes are not spending, so they never appear here. A split transaction counts toward
+            each of its envelopes by that envelope&rsquo;s share.
           </Hint>
         </h2>
       </div>

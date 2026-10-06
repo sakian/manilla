@@ -43,10 +43,11 @@ export function BalanceCheckpoints({
         <span>
           Against the bank&rsquo;s statements{' '}
           <Hint label="What these figures mean">
-            &ldquo;Here&rdquo; is this account&rsquo;s balance at the end of that day, reviewed or
-            not, and the difference is here less the bank. A difference that stays the same from
-            one statement to the next is one old mistake carried forward; one that moves happened
-            between them.
+            Bank is the balance your statement gave for that day. Here is this account&rsquo;s
+            balance in Manilla at the end of the same day, counting every transaction whether it has
+            been reviewed or not. Difference is Here minus Bank. If the difference stays the same
+            from one statement to the next, one old mistake is being carried forward. If it changes,
+            something went wrong between those two statements.
           </Hint>
         </span>
         <span className={latest.differenceCents === 0 ? 'muted' : 'checkpoint-off'}>
