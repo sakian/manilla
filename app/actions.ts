@@ -2,7 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { allLedgers, ledgerDb, rememberLedger } from './ledger.ts';
+import { after } from 'next/server';
+import { homeDb } from '../db/client.ts';
+import { allLedgers, ledgerDb, ledgerForFilename, rememberLedger } from './ledger.ts';
+import { handOverTo } from '../src/queue/handover.ts';
 import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
 import { pairTransferHalves, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
@@ -31,6 +34,36 @@ export async function saveReviewAction(decisions: ReviewDecision[]) {
   revalidatePath('/transactions');
   revalidatePath('/');
   return result;
+}
+
+/**
+ * Hand rows to another member for a second look, and tell them (RQ-7).
+ *
+ * Written straight away rather than staged with the envelope decisions: it is
+ * a different question - who should decide - and the person handed to is told
+ * as soon as it is done. The notification goes after the answer, so a slow
+ * push service does not hold the screen up.
+ */
+export async function handOverAction(transactionIds: string[], toUserId: string) {
+  try {
+    const session = actAs(await requireUser());
+    const ledgerName = await ledgerForFilename();
+    const result = await handOverTo(await ledgerDb(), homeDb(), {
+      ids: transactionIds,
+      to: toUserId,
+      from: { id: session.userId, name: session.userName },
+      ...(ledgerName ? { ledgerName } : {}),
+    });
+    after(() => result.sent);
+    revalidatePath('/review');
+    revalidatePath('/');
+    return { ok: true as const, handed: result.handed, to: result.to };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**

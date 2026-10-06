@@ -23,7 +23,7 @@ import { deliver, generateVapidKeys, vapidPublicKey, type Subscription, type Vap
 export const VAPID_KEY = 'push_vapid_key';
 
 /** What a browser can be told about, each a switch of its own in Settings. */
-export const PUSH_KINDS = ['sync', 'overspent', 'unusual', 'problems', 'signin'] as const;
+export const PUSH_KINDS = ['sync', 'handed', 'overspent', 'unusual', 'problems', 'signin'] as const;
 
 export type PushKind = (typeof PUSH_KINDS)[number];
 
@@ -31,6 +31,7 @@ export type PushKinds = Record<PushKind, boolean>;
 
 const COLUMNS = {
   sync: pushSubscriptions.sync,
+  handed: pushSubscriptions.handed,
   overspent: pushSubscriptions.overspent,
   unusual: pushSubscriptions.unusual,
   problems: pushSubscriptions.problems,
@@ -222,6 +223,8 @@ export type Recipients = {
   kind: PushKind;
   /** Someone who should not be told, because they did it. */
   except?: string | null;
+  /** The one member who should be, because it is about them alone (RQ-7). */
+  only?: string;
 };
 
 /** What goes to the push service: the message for the browser, and who is sending it. */
@@ -268,9 +271,9 @@ export async function notifyMembers(
   let targets: (typeof pushSubscriptions.$inferSelect)[];
   let keys: VapidKeys;
   try {
-    const except = recipients.except;
+    const { except, only } = recipients;
     targets = (await db.select().from(pushSubscriptions).where(eq(COLUMNS[recipients.kind], true))).filter(
-      (row) => row.userId !== except,
+      (row) => row.userId !== except && (only === undefined || row.userId === only),
     );
     if (targets.length === 0) return none;
     keys = await vapidKeys(db);

@@ -5,20 +5,20 @@ import { attention } from '../../src/notices/notices.ts';
 import { diskUsedShare } from '../../src/system/disk.ts';
 import { listHeld } from '../../src/sync/connections.ts';
 import HeldRows from './HeldRows.tsx';
-import { requireUser } from '../auth.ts';
+import { requireUser, reviewViewer } from '../auth.ts';
 import ImportScreen from './ImportScreen.tsx';
 import { Notices } from '../Notices.tsx';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ImportPage() {
-  await requireUser();
+  const session = await requireUser();
   const connection = await ledgerDb();
 
   const [accounts, history, report, held] = await Promise.all([
     listAccounts(connection),
     importHistory(connection),
-    attention(connection, undefined, { diskUsage: diskUsedShare }),
+    attention(connection, undefined, { diskUsage: diskUsedShare, viewer: await reviewViewer(session) }),
     listHeld(connection),
   ]);
 

@@ -3,7 +3,7 @@ import { ledgerDb } from '../ledger.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
 import { attention } from '../../src/notices/notices.ts';
 import { diskUsedShare } from '../../src/system/disk.ts';
-import { requireUser } from '../auth.ts';
+import { requireUser, reviewViewer } from '../auth.ts';
 import { Notices } from '../Notices.tsx';
 import AccountManager from './AccountManager.tsx';
 import TransactionsView from '../transactions/TransactionsView.tsx';
@@ -19,13 +19,13 @@ export const dynamic = 'force-dynamic';
 export default async function AccountsPage(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const session = await requireUser();
   const params = await props.searchParams;
   const connection = await ledgerDb();
 
   const [categories, report] = await Promise.all([
     listAccountCategories(connection, { includeArchived: true }),
-    attention(connection, undefined, { diskUsage: diskUsedShare }),
+    attention(connection, undefined, { diskUsage: diskUsedShare, viewer: await reviewViewer(session) }),
   ]);
 
   return (

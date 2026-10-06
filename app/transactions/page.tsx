@@ -1,7 +1,7 @@
 import { ledgerDb } from '../ledger.ts';
 import { attention } from '../../src/notices/notices.ts';
 import { diskUsedShare } from '../../src/system/disk.ts';
-import { requireUser } from '../auth.ts';
+import { requireUser, reviewViewer } from '../auth.ts';
 import { Notices } from '../Notices.tsx';
 import TransactionsView from './TransactionsView.tsx';
 
@@ -29,9 +29,9 @@ export const dynamic = 'force-dynamic';
 export default async function TransactionsPage(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const session = await requireUser();
   const params = await props.searchParams;
-  const report = await attention(await ledgerDb(), undefined, { diskUsage: diskUsedShare });
+  const report = await attention(await ledgerDb(), undefined, { diskUsage: diskUsedShare, viewer: await reviewViewer(session) });
 
   return (
     <>

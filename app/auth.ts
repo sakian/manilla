@@ -27,6 +27,7 @@ import {
   type ActiveSession,
 } from '../src/auth/session.ts';
 import { setupState } from '../src/auth/passkeys.ts';
+import { reviewOpensOn, type ReviewView } from '../src/queue/handover.ts';
 
 export const currentSession = cache(async (): Promise<ActiveSession | null> => {
   const store = await cookies();
@@ -70,4 +71,9 @@ export async function endSession(): Promise<void> {
 /** Whether this Manilla has anybody registered yet, for the sign-in page. */
 export async function needsSetup(): Promise<boolean> {
   return (await setupState(homeDb())).needsSetup;
+}
+
+/** Who is looking at the notices, and which view their review list opens on (RQ-7). */
+export async function reviewViewer(session: ActiveSession): Promise<{ userId: string; opensOn: ReviewView }> {
+  return { userId: session.userId, opensOn: await reviewOpensOn(homeDb(), session.userId) };
 }

@@ -121,6 +121,11 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   /** Up to when this person has looked at sign-in activity (src/auth/activity.ts). */
   securitySeenAt: timestamp('security_seen_at', { withTimezone: true }),
+  /**
+   * Which view the review list opens on (RQ-7): everything waiting, or only
+   * what has been handed to this person. Theirs in every ledger.
+   */
+  reviewOpensOn: text('review_opens_on', { enum: ['all', 'mine'] }).notNull().default('all'),
 });
 
 /** WebAuthn passkeys (NF-3). A user may register several devices. */
@@ -198,6 +203,8 @@ export const pushSubscriptions = pgTable(
     unusual: boolean('unusual').notNull().default(true),
     problems: boolean('problems').notNull().default(false),
     signin: boolean('signin').notNull().default(false),
+    /** Transactions someone handed to this browser's person to review (RQ-7). */
+    handed: boolean('handed').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('push_subscriptions_user_idx').on(table.userId)],
@@ -533,6 +540,15 @@ export const transactions = pgTable(
      */
     createdById: uuid('created_by_id').default(sql`manilla_actor_id()`),
     createdByName: text('created_by_name').default(sql`manilla_actor_name()`),
+    /**
+     * The member a pending row was handed to for a second look (RQ-7), and
+     * when. Never cleared: a handover can be passed on but not taken back, and
+     * once anyone reviews the row it is off every list regardless. No foreign
+     * key, because members live in the home database and this table is in
+     * every ledger's; who handed it over is in the audit trail.
+     */
+    handedToId: uuid('handed_to_id'),
+    handedAt: timestamp('handed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

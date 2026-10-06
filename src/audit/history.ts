@@ -33,6 +33,8 @@ const quoted = (value: unknown) => (value == null || value === '' ? 'nothing' : 
 export async function transactionHistory(
   db: Database,
   transactionId: string,
+  /** Members by id, from the home database, so a handover can name who it went to (RQ-7). */
+  members: Map<string, string> = new Map(),
 ): Promise<HistoryEntry[]> {
   const [rows, [arrival]] = await Promise.all([
     db.select().from(auditLog).where(eq(auditLog.transactionId, transactionId)).orderBy(asc(auditLog.id)),
@@ -46,7 +48,7 @@ export async function transactionHistory(
     : [];
   if (rows.length === 0) return arrived;
 
-  const names = await namesFor(db, rows);
+  const names = { ...(await namesFor(db, rows)), member: members };
   const entries: HistoryEntry[] = [];
 
   for (const row of rows) {
@@ -73,7 +75,7 @@ const ARRIVED: Record<(typeof transactions.$inferSelect)['source'], string> = {
   opening_balance: 'added as the opening balance',
 };
 
-type Names = { account: Map<string, string>; envelope: Map<string, string> };
+type Names = { account: Map<string, string>; envelope: Map<string, string>; member?: Map<string, string> };
 
 /** Account and envelope names, current ones, for every id the rows mention. */
 async function namesFor(db: Database, rows: Row[]): Promise<Names> {
@@ -141,6 +143,9 @@ function describe(row: Row, names: Names): string[] {
           break;
         case 'kind':
           changes.push(now === 'account_transfer' ? 'made a transfer' : 'no longer a transfer');
+          break;
+        case 'handed_to_id':
+          changes.push(`handed to ${names.member?.get(String(now)) ?? 'someone no longer a member'} for review`);
           break;
         // payee_key follows payee_raw; the rest are bookkeeping nobody acts on.
       }

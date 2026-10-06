@@ -6,7 +6,7 @@ import { monthPace } from '../src/budget/progress.ts';
 import { listEnvelopes } from '../src/envelopes/manage.ts';
 import { attention } from '../src/notices/notices.ts';
 import { diskUsedShare } from '../src/system/disk.ts';
-import { requireUser } from './auth.ts';
+import { requireUser, reviewViewer } from './auth.ts';
 import HomeScreen, { type MonthFigures } from './HomeScreen.tsx';
 import { Notices } from './Notices.tsx';
 import TransactionsView from './transactions/TransactionsView.tsx';
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 export default async function Home(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const session = await requireUser();
   const params = await props.searchParams;
   const connection = await ledgerDb();
   const month = currentMonth();
@@ -25,7 +25,7 @@ export default async function Home(props: {
   const [groups, budget, report] = await Promise.all([
     listEnvelopes(connection, { includeArchived: true }),
     budgetMonth(connection, month),
-    attention(connection, month, { diskUsage: diskUsedShare }),
+    attention(connection, month, { diskUsage: diskUsedShare, viewer: await reviewViewer(session) }),
   ]);
 
   const figures: MonthFigures = {};

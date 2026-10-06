@@ -46,6 +46,8 @@ export type QueueRow = {
   band: Band | null;
   /** Days the row has been waiting, for the age indicator (RQ-6). */
   ageDays: number;
+  /** The member it was handed to for a second look, if anyone (RQ-7). */
+  handedToId: string | null;
 };
 
 /**
@@ -143,11 +145,12 @@ export type EnvelopeOption = {
  * Everything awaiting review, newest first (RQ-1).
  *
  * `importBatchId` narrows it to one import, which is what the screen after an
- * import shows: the same queue, looking only at what just arrived.
+ * import shows: the same queue, looking only at what just arrived. `handedTo`
+ * narrows it to what was handed to one member (RQ-7).
  */
 export async function pendingTransactions(
   db: Database,
-  options: { limit?: number; importBatchId?: string } = {},
+  options: { limit?: number; importBatchId?: string; handedTo?: string } = {},
 ): Promise<QueueRow[]> {
   const rows = await db
     .select({
@@ -162,6 +165,7 @@ export async function pendingTransactions(
       accountGroupPosition: accountGroups.position,
       accountGroupName: accountGroups.name,
       createdAt: transactions.createdAt,
+      handedToId: transactions.handedToId,
       // Whatever the row is currently proposing: the ledger's own line if it has
       // one, and otherwise the suggestion. Below the medium band a suggestion is
       // offered without being applied, so reading this from txn_lines alone would
@@ -190,6 +194,7 @@ export async function pendingTransactions(
         ...(options.importBatchId
           ? [eq(transactions.importBatchId, options.importBatchId)]
           : []),
+        ...(options.handedTo ? [eq(transactions.handedToId, options.handedTo)] : []),
       ),
     )
     // Oldest first, the order a statement reads in and the order the waiting
@@ -235,15 +240,54 @@ export async function pendingTransactions(
     layer: row.layer,
     band: row.confidence === null ? null : bandOf(row.confidence),
     ageDays: Math.floor((today - row.createdAt.getTime()) / 86_400_000),
+    handedToId: row.handedToId,
   }));
 }
 
-export async function pendingCount(db: Database): Promise<number> {
+/** How many are waiting, or how many were handed to one member (RQ-7). */
+export async function pendingCount(db: Database, options: { handedTo?: string } = {}): Promise<number> {
   const [row] = await db
     .select({ count: sql<string>`count(*)::bigint` })
     .from(transactions)
-    .where(and(eq(transactions.status, 'pending_review'), eq(transactions.kind, 'spending')));
+    .where(
+      and(
+        eq(transactions.status, 'pending_review'),
+        eq(transactions.kind, 'spending'),
+        ...(options.handedTo ? [eq(transactions.handedToId, options.handedTo)] : []),
+      ),
+    );
   return Number(row?.count ?? 0);
+}
+
+/**
+ * Hand rows to another member for a second look (RQ-7).
+ *
+ * Only rows still waiting: one reviewed in the meantime is off every list
+ * already, and handing it over would only send someone a notification about
+ * nothing. A row already handed to someone is handed on, which is how a third
+ * person gets it; there is no handing back to nobody, because the handover is
+ * not a claim on the row - anyone can still review it from the full list.
+ *
+ * Who the member is, and that they are one, is the caller's to check: members
+ * live in the home database, and this is one ledger's.
+ */
+export async function handOver(db: Database, ids: string[], toUserId: string): Promise<number> {
+  if (ids.length === 0) return 0;
+  // In a transaction so the audit trail says who handed it over (src/audit/actor.ts).
+  const handed = await db.transaction((tx) =>
+    tx
+      .update(transactions)
+      .set({ handedToId: toUserId, handedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          inArray(transactions.id, ids),
+          eq(transactions.status, 'pending_review'),
+          eq(transactions.kind, 'spending'),
+        ),
+      )
+      .returning({ id: transactions.id }),
+  );
+  return handed.length;
 }
 
 /** Envelope picker options, grouped and ordered as the user arranged them. */
