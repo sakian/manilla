@@ -47,3 +47,25 @@ export function linesToSave(drafts: LineDraft[], totalCents: number): LineDraft[
     (line) => line.envelopeId && line.amount.trim() !== '',
   );
 }
+
+/**
+ * What line `index` needs for the parts to add up: the total less every other
+ * part typed so far, envelope chosen or not. For the usual split, where the
+ * known parts are typed first and one line - often the envelope that came
+ * with the transaction, still holding the whole amount - should take the rest.
+ * Null when the other parts already use it all, since a negative part would
+ * turn spending into income.
+ */
+export function restFor(drafts: LineDraft[], index: number, totalCents: number): string | null {
+  let others = 0;
+  drafts.forEach((line, at) => {
+    if (at === index || line.amount.trim() === '') return;
+    try {
+      others += parseAmount(line.amount).cents;
+    } catch {
+      // Still being typed: counted once it reads as an amount.
+    }
+  });
+  const rest = totalCents - others;
+  return rest > 0 ? formatCents(rest) : null;
+}

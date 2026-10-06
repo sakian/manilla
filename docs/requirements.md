@@ -36,7 +36,7 @@ all account balances.
 | FR-1 | Create, edit and archive accounts (chequing, savings, credit card, cash), each with an opening balance. | M | Built |
 | FR-2 | Add, edit and delete transactions manually. | M | Built |
 | FR-3 | A transaction stores date, amount, account, the raw bank description, a cleaned payee name, notes, status and envelope(s). | M | Built |
-| FR-4 | Split one transaction across several envelopes, with the split amounts required to sum to the total. | M | Built |
+| FR-4 | Split one transaction across several envelopes, with the split amounts required to sum to the total. | M | Built. The form keeps a running figure of what is left to assign. Each part has a Rest button, and typing = in its amount does the same, which sets that part to the total less the others. That suits the usual split, where the known parts are typed and the envelope the transaction arrived with takes the rest. |
 | FR-5 | A transfer between two accounts is stored as a linked pair and never counted as spending or income. | M | Built |
 | FR-6 | Reconcile an account: mark transactions cleared and compare to a statement balance. | S | Not planned. Each OFX import's stated balance is kept as a checkpoint (FR-14) and the home screen says when an account drifts from it, which covers what this was for ([#1](https://github.com/sakian/manilla/issues/1)). |
 
