@@ -23,7 +23,7 @@ import { deliver, generateVapidKeys, vapidPublicKey, type Subscription, type Vap
 export const VAPID_KEY = 'push_vapid_key';
 
 /** What a browser can be told about, each a switch of its own in Settings. */
-export const PUSH_KINDS = ['sync', 'handed', 'overspent', 'unusual', 'problems', 'signin'] as const;
+export const PUSH_KINDS = ['sync', 'handed', 'review', 'changes', 'overspent', 'unusual', 'problems', 'signin'] as const;
 
 export type PushKind = (typeof PUSH_KINDS)[number];
 
@@ -32,6 +32,8 @@ export type PushKinds = Record<PushKind, boolean>;
 const COLUMNS = {
   sync: pushSubscriptions.sync,
   handed: pushSubscriptions.handed,
+  review: pushSubscriptions.review,
+  changes: pushSubscriptions.changes,
   overspent: pushSubscriptions.overspent,
   unusual: pushSubscriptions.unusual,
   problems: pushSubscriptions.problems,

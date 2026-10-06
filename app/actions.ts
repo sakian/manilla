@@ -6,6 +6,8 @@ import { after } from 'next/server';
 import { homeDb } from '../db/client.ts';
 import { allLedgers, currentLedger, ledgerDb, rememberLedger } from './ledger.ts';
 import { handOverTo } from '../src/queue/handover.ts';
+import { reviewStates } from '../src/push/edits.ts';
+import { tellOthers } from './editNotices.ts';
 import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
 import { pairTransferHalves, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
@@ -24,9 +26,10 @@ import { actAs } from '../src/audit/actor.ts';
  * half-finished sitting leaves the ledger exactly as it was.
  */
 export async function saveReviewAction(decisions: ReviewDecision[]) {
-  actAs(await requireUser());
+  const session = actAs(await requireUser());
   const connection = await ledgerDb();
   const result = await saveReview(connection, decisions);
+  await tellOthers(session, { kind: 'review', action: 'reviewed', count: result.confirmed });
   // Confirming rows is how a payee becomes worth a rule, so the count is stale
   // the moment this returns.
   await refreshRuleSuggestionCount(connection);
@@ -77,13 +80,19 @@ export async function markAsTransferAction(
   options: { createRule?: boolean } = {},
 ) {
   try {
-    actAs(await requireUser());
+    const session = actAs(await requireUser());
     const connection = await ledgerDb();
 
     // Read the normalized payee before converting, since the rule matches on it.
     const detail = options.createRule ? await transactionDetail(connection, transactionId) : null;
 
+    const before = await reviewStates(connection, [transactionId]);
     await convertToTransfer(connection, transactionId, { toAccountId });
+    await tellOthers(
+      session,
+      { kind: 'review', action: 'reviewed', count: before.waiting },
+      { kind: 'changes', action: 'changed', count: before.reviewed },
+    );
 
     let ruleMade = false;
     if (detail) {
@@ -121,8 +130,15 @@ export async function markAsTransferAction(
  */
 export async function pairTransferAction(firstId: string, secondId: string) {
   try {
-    actAs(await requireUser());
-    await pairTransferHalves(await ledgerDb(), firstId, secondId);
+    const session = actAs(await requireUser());
+    const connection = await ledgerDb();
+    const before = await reviewStates(connection, [firstId, secondId]);
+    await pairTransferHalves(connection, firstId, secondId);
+    await tellOthers(
+      session,
+      { kind: 'review', action: 'reviewed', count: before.waiting },
+      { kind: 'changes', action: 'changed', count: before.reviewed },
+    );
     revalidatePath('/review');
     revalidatePath('/transactions');
     revalidatePath('/');

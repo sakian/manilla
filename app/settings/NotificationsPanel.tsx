@@ -26,6 +26,8 @@ type Device = PushDevice;
 const SWITCHES: [PushKind, string, string][] = [
   ['sync', 'Bank sync', 'What came in from the bank, income to give to envelopes, and a bank that wants you to sign in again'],
   ['handed', 'Handed to me for review', 'Transactions someone else left for you to look at'],
+  ['review', 'Review activity', 'Someone else reviewing transactions, or changing one still waiting for review'],
+  ['changes', 'Changes to reviewed transactions', 'Someone else changing, deleting or sending back a transaction already reviewed'],
   ['overspent', 'Overspent envelopes', 'Envelopes the sync took below zero'],
   ['unusual', 'Unusual charges', 'A regular charge well above its usual, or a large first charge from a new payee'],
   ['problems', 'Problems', 'A ledger that no longer adds up, or the server’s disk filling'],

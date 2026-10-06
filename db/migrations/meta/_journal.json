@@ -155,6 +155,13 @@
       "when": 1791287319976,
       "tag": "0021_tiered_review",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791292531808,
+      "tag": "0022_edit_notifications",
+      "breakpoints": true
     }
   ]
 }
