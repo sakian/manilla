@@ -1,0 +1,1 @@
+ALTER TABLE "envelopes" ADD COLUMN "may_go_negative" boolean DEFAULT false NOT NULL;

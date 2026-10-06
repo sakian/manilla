@@ -138,7 +138,7 @@ test('income has arrived when the pool grew and has something in it', () => {
       position: 0,
       archivedAt: null,
       envelopes: [
-        { id: 'pool', name: 'Available', groupId: 'g', groupName: 'Income', position: 0, carryOver: true, isUnallocated: true, archivedAt: null, balanceCents },
+        { id: 'pool', name: 'Available', groupId: 'g', groupName: 'Income', position: 0, carryOver: true, isUnallocated: true, mayGoNegative: false, archivedAt: null, balanceCents },
       ],
     },
   ];
@@ -157,6 +157,7 @@ test('only envelopes that crossed zero count as newly overdrawn', () => {
     position: 0,
     carryOver: true,
     isUnallocated: false,
+    mayGoNegative: false,
     archivedAt: null,
     balanceCents,
     ...extra,
@@ -170,6 +171,7 @@ test('only envelopes that crossed zero count as newly overdrawn', () => {
     envelope('fuel', 'Fuel', 0),
     envelope('gifts', 'Gifts', 800),
     envelope('pool', 'Available', 100, { isUnallocated: true }),
+    envelope('business', 'Business costs', 0, { mayGoNegative: true }),
   );
   const after = ledger(
     envelope('groceries', 'Groceries', -340), // crossed: named
@@ -177,6 +179,7 @@ test('only envelopes that crossed zero count as newly overdrawn', () => {
     envelope('fuel', 'Fuel', -1), // from exactly zero: crossed
     envelope('gifts', 'Gifts', 0), // emptied, not overdrawn
     envelope('pool', 'Available', -900, { isUnallocated: true }), // the pool is not an envelope here
+    envelope('business', 'Business costs', -25000, { mayGoNegative: true }), // below zero is expected there
   );
   assert.deepEqual(newlyOverdrawn(before, after), ['Fuel', 'Groceries']);
 });

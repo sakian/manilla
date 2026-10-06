@@ -141,6 +141,13 @@
       "when": 1791156822515,
       "tag": "0019_push_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791279035642,
+      "tag": "0020_envelope_may_go_negative",
+      "breakpoints": true
     }
   ]
 }

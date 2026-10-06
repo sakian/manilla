@@ -41,6 +41,8 @@ export type ManagedEnvelope = {
   position: number;
   carryOver: boolean;
   isUnallocated: boolean;
+  /** Below zero is expected, so it is not called overspent (FR-24). */
+  mayGoNegative: boolean;
   archivedAt: Date | null;
   balanceCents: number;
 };
@@ -67,6 +69,7 @@ export async function listEnvelopes(
       position: envelopes.position,
       carryOver: envelopes.carryOver,
       isUnallocated: envelopes.isUnallocated,
+      mayGoNegative: envelopes.mayGoNegative,
       archivedAt: envelopes.archivedAt,
       balanceCents: sql<string>`(
         coalesce((select sum(l.amount_cents) from txn_lines l where l.envelope_id = ${envelopes.id}), 0)
@@ -111,6 +114,7 @@ export async function listEnvelopes(
       position: row.position,
       carryOver: row.carryOver,
       isUnallocated: row.isUnallocated,
+      mayGoNegative: row.mayGoNegative,
       archivedAt: row.archivedAt,
       balanceCents: Number(row.balanceCents),
     });
@@ -357,6 +361,7 @@ export type EnvelopeEdit = {
   name?: string;
   groupId?: string;
   carryOver?: boolean;
+  mayGoNegative?: boolean;
 };
 
 export async function editEnvelope(
@@ -385,9 +390,16 @@ export async function editEnvelope(
     );
   }
 
+  // The pool overdrawn is money given out that never came in, which no setting
+  // makes expected; it has a notice of its own for that reason.
+  if (envelope.isUnallocated && edit.mayGoNegative) {
+    throw new EnvelopeError('Available going below zero always needs looking at, so it cannot be marked as expected.');
+  }
+
   const changes: Record<string, unknown> = {};
   if (edit.name !== undefined) changes.name = cleanName(edit.name, 'An envelope');
   if (edit.carryOver !== undefined) changes.carryOver = edit.carryOver;
+  if (edit.mayGoNegative !== undefined) changes.mayGoNegative = edit.mayGoNegative;
 
   if (edit.groupId !== undefined && edit.groupId !== envelope.groupId) {
     const [group] = await db
