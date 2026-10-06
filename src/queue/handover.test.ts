@@ -14,6 +14,7 @@ import {
   HandoverError,
   handOverTo,
   handoverMessage,
+  handoverPath,
   reviewOpensOn,
   setReviewOpensOn,
 } from './handover.ts';
@@ -27,6 +28,11 @@ test('the notification says who, how many, and how many are waiting in all', () 
     handoverMessage({ from: 'Alex', handed: 2, waiting: 5, ledger: 'Business' }).body,
     'Alex handed you 2 transactions to review in Business. 5 are waiting for you now.',
   );
+});
+
+test('tapping it opens the list in the ledger the rows are in, when there is more than one', () => {
+  assert.equal(handoverPath(), '/review?view=mine');
+  assert.equal(handoverPath('manilla_ledger_business'), '/open?ledger=manilla_ledger_business&to=%2Freview%3Fview%3Dmine');
 });
 
 const available = await databaseAvailable();

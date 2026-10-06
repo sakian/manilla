@@ -10,6 +10,7 @@ import {
   requestReach,
 } from '../../src/auth/reach.ts';
 import { currentSession } from '../auth.ts';
+import { safePath } from '../../src/safePath.ts';
 import SignIn from './SignIn.tsx';
 
 export const dynamic = 'force-dynamic';
@@ -18,13 +19,12 @@ export const metadata = {
   title: 'Sign in · Manilla',
 };
 
-/** `next` is where the proxy was sending them before it asked who they are. */
-function safeNext(value: string | string[] | undefined): string {
-  const path = Array.isArray(value) ? value[0] : value;
-  // Only same-site paths: an open redirect on the sign-in page would be a gift.
-  if (!path || !path.startsWith('/') || path.startsWith('//')) return '/';
-  return path;
-}
+/**
+ * `next` is where the proxy was sending them before it asked who they are.
+ * Only a path on this site: an open redirect on the sign-in page would be a
+ * gift, and "/\evil.example" is one as surely as "//evil.example" (see `safePath`).
+ */
+const safeNext = safePath;
 
 export default async function LoginPage(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

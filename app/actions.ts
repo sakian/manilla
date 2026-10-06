@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 import { homeDb } from '../db/client.ts';
-import { allLedgers, ledgerDb, ledgerForFilename, rememberLedger } from './ledger.ts';
+import { allLedgers, currentLedger, ledgerDb, rememberLedger } from './ledger.ts';
 import { handOverTo } from '../src/queue/handover.ts';
 import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
 import { pairTransferHalves, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
@@ -47,12 +47,12 @@ export async function saveReviewAction(decisions: ReviewDecision[]) {
 export async function handOverAction(transactionIds: string[], toUserId: string) {
   try {
     const session = actAs(await requireUser());
-    const ledgerName = await ledgerForFilename();
+    const [ledgers, open] = await Promise.all([allLedgers(), currentLedger()]);
     const result = await handOverTo(await ledgerDb(), homeDb(), {
       ids: transactionIds,
       to: toUserId,
       from: { id: session.userId, name: session.userName },
-      ...(ledgerName ? { ledgerName } : {}),
+      ...(ledgers.length > 1 ? { ledger: { key: open.key, name: open.name } } : {}),
     });
     after(() => result.sent);
     revalidatePath('/review');
