@@ -34,8 +34,6 @@ export type AttentionKind =
   | 'statement_mismatch'
   /** Imported transactions are waiting to be categorized (RQ-1). */
   | 'awaiting_review'
-  /** Income has arrived and is not in an envelope yet. */
-  | 'unallocated'
   /** Nothing has been recorded yet, so the first thing to do is bring history in. */
   | 'nothing_recorded'
   /** FR-31: the monthly plan asks for more than the income there is to fund it. */
@@ -263,9 +261,9 @@ export async function attention(
     notices.push({ kind: 'rules_to_suggest', severity: 'info', count: suggestions });
   }
 
-  if (pool > 0) {
-    notices.push({ kind: 'unallocated', severity: 'info', cents: pool });
-  }
+  // Money in Available is not raised here: it is the first balance on the home
+  // screen already, and a notice repeating it every visit was asked away. Only
+  // Available below zero is, above, because that one is wrong.
 
   // An empty ledger is not a problem, it is a starting point, and saying where to
   // start is more use than an empty screen.

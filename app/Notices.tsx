@@ -64,14 +64,6 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
         text: `${count} to review${notice.mine ? `, ${notice.mine} for you` : ''}`,
         href: '/review',
       };
-    case 'unallocated':
-      return {
-        text: (
-          <>
-            <Money cents={cents} plain /> in Available
-          </>
-        ),
-      };
     case 'plan_exceeds_income':
       return {
         text: (
