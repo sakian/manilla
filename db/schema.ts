@@ -523,11 +523,6 @@ export const transactions = pgTable(
     payeeKey: text('payee_key').notNull(),
     /** What the bank or the old app wrote alongside the payee. Sent to the model. */
     memo: text('memo'),
-    /**
-     * The user's own words about the transaction. Apart from `memo` so writing
-     * one never overwrites what the bank said, and never sent to the model.
-     */
-    note: text('note'),
     checkNumber: text('check_number'),
     kind: transactionKind('kind').notNull().default('spending'),
     status: transactionStatus('status').notNull().default('pending_review'),
@@ -553,6 +548,12 @@ export const transactions = pgTable(
      */
     handedToId: uuid('handed_to_id'),
     handedAt: timestamp('handed_at', { withTimezone: true }),
+    /**
+     * Who handed it over last, so a reply about it knows whom to tell. Filled
+     * by the database from the handing transaction's actor, as
+     * `created_by_id` is.
+     */
+    handedById: uuid('handed_by_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -563,6 +564,37 @@ export const transactions = pgTable(
     index('transactions_payee_key_idx').on(table.payeeKey),
     index('transactions_batch_idx').on(table.importBatchId),
   ],
+);
+
+/**
+ * What people have written about a transaction, oldest first: a thread rather
+ * than one note, so a question and its answer sit together (RQ-7). Apart from
+ * `memo` so writing never overwrites what the bank said, and never sent to
+ * the model.
+ *
+ * The first message is what used to be the transaction's note. A handover's
+ * note is a message, and so is each reply. Anyone may write; each person may
+ * edit or remove only their own, and the audit trail keeps what an edit
+ * replaced.
+ *
+ * The author comes from the writing transaction's actor, as it does for
+ * transactions, with no foreign key for the reason those have none.
+ */
+export const transactionMessages = pgTable(
+  'transaction_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    transactionId: uuid('transaction_id')
+      .notNull()
+      .references(() => transactions.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id').default(sql`manilla_actor_id()`),
+    authorName: text('author_name').default(sql`manilla_actor_name()`),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Set when its author changed it, so the thread can say so. */
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+  },
+  (table) => [index('transaction_messages_transaction_idx').on(table.transactionId, table.createdAt)],
 );
 
 /**

@@ -33,7 +33,7 @@ import { normalizePayee } from '../categorize/normalize.ts';
 import { LedgerError, recordAccountTransfer, recordTransaction } from '../ledger/ledger.ts';
 import { localToday } from '../budget/month.ts';
 import { formatMoney } from '../money.ts';
-import { NOTE_LIMIT } from './limits.ts';
+import { cleanMessage, threadOf, type Message } from './thread.ts';
 
 export class TransactionError extends Error {}
 
@@ -79,12 +79,16 @@ export type TransactionDetail = {
   payeeRaw: string;
   /** The bank's, read-only here. */
   memo: string | null;
-  note: string | null;
+  /** What the household has written about it, oldest first (src/transactions/thread.ts). */
+  messages: Message[];
   checkNumber: string | null;
   kind: 'spending' | 'account_transfer';
   status: 'pending_review' | 'confirmed';
   source: string;
   transferPairId: string | null;
+  /** The handover, if there was one (RQ-7), so its thread knows who is at each end. */
+  handedToId: string | null;
+  handedById: string | null;
   lines: TransactionLine[];
   /** True when it arrived from a file or a sync rather than being typed. */
   imported: boolean;
@@ -103,12 +107,13 @@ export async function transactionDetail(
       amountCents: transactions.amountCents,
       payeeRaw: transactions.payeeRaw,
       memo: transactions.memo,
-      note: transactions.note,
       checkNumber: transactions.checkNumber,
       kind: transactions.kind,
       status: transactions.status,
       source: transactions.source,
       transferPairId: transactions.transferPairId,
+      handedToId: transactions.handedToId,
+      handedById: transactions.handedById,
     })
     .from(transactions)
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
@@ -126,9 +131,11 @@ export async function transactionDetail(
     .from(txnLines)
     .innerJoin(envelopes, eq(envelopes.id, txnLines.envelopeId))
     .where(eq(txnLines.transactionId, transactionId));
+  const messages = await threadOf(db, transactionId);
 
   return {
     ...row,
+    messages,
     amountCents: Number(row.amountCents),
     lines: lines.map((line) => ({ ...line, amountCents: Number(line.amountCents) })),
     imported: row.source === 'file_import' || row.source === 'bank_sync',
@@ -176,7 +183,7 @@ export async function createManualTransaction(
     date: assertDate(input.date ?? localToday()),
     amountCents: input.amountCents,
     payeeRaw: assertPayee(input.payeeRaw),
-    ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+    ...(input.note?.trim() ? { note: cleanMessage(input.note) } : {}),
     ...(input.checkNumber?.trim() ? { checkNumber: input.checkNumber.trim() } : {}),
     source: 'manual',
     status: lines.length > 0 ? 'confirmed' : 'pending_review',
@@ -227,40 +234,7 @@ async function assertLinesBalance(
 // Editing
 // ---------------------------------------------------------------------------
 
-/** Blank is no note; anything else is kept as typed, less the edges. */
-function cleanNote(note: string | null): string | null {
-  const trimmed = note?.trim() ?? '';
-  if (trimmed.length > NOTE_LIMIT) {
-    throw new TransactionError(`A note can be up to ${NOTE_LIMIT} characters.`);
-  }
-  return trimmed === '' ? null : trimmed;
-}
-
 export { NOTE_LIMIT } from './limits.ts';
-
-/**
- * Write or clear a transaction's note, touching nothing else.
- *
- * Apart from `updateTransaction` because a note is not an edit to the money: it
- * is allowed on either half of an account transfer, which that refuses, and in
- * the review queue it must not disturb a decision still being made.
- */
-export async function setTransactionNote(
-  db: Database,
-  transactionId: string,
-  note: string | null,
-): Promise<void> {
-  // In a transaction, like every other write here, so the audit trail can say
-  // who changed it (src/audit/actor.ts).
-  const updated = await db.transaction((tx) =>
-    tx
-      .update(transactions)
-      .set({ note: cleanNote(note), updatedAt: new Date() })
-      .where(eq(transactions.id, transactionId))
-      .returning({ id: transactions.id }),
-  );
-  if (updated.length === 0) throw new TransactionError(`No such transaction: ${transactionId}`);
-}
 
 /** The same envelopes for the same amounts, in any order. */
 function sameSplit(
@@ -280,7 +254,6 @@ export type TransactionEdit = {
   date?: string;
   amountCents?: number;
   payeeRaw?: string;
-  note?: string | null;
   checkNumber?: string | null;
   /** Replaces the envelope split outright. Pass [] to make it uncategorized. */
   lines?: { envelopeId: string; amountCents: number }[];
@@ -356,7 +329,6 @@ export async function updateTransaction(
       // recomputed rather than left describing the old description (CA-1).
       changes.payeeKey = normalizePayee(payeeRaw).key;
     }
-    if (edit.note !== undefined) changes.note = cleanNote(edit.note);
     if (edit.checkNumber !== undefined) {
       changes.checkNumber = edit.checkNumber?.trim() ? edit.checkNumber.trim() : null;
     }

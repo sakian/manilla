@@ -99,6 +99,7 @@ export type FoundTransaction = {
   status: string;
   kind: string;
   memo: string | null;
+  /** The latest thing written about it, which is what a note used to be (src/transactions/thread.ts). */
   note: string | null;
   checkNumber: string | null;
   accountId: string;
@@ -142,6 +143,22 @@ export const MAX_LIMIT = 500;
  * returns the wrong rows, and looks fine. Writing the correlation out by hand
  * is the version that cannot quietly change meaning.
  */
+/*
+ * The thread, read from beside the transaction. Named in full rather than
+ * through the column objects, so the subquery's own columns cannot capture
+ * an unqualified name (see transferCandidates in src/queue/queue.ts).
+ */
+const latestMessage = sql<string | null>`(
+  select m.body from transaction_messages m
+  where m.transaction_id = "transactions"."id"
+  order by m.created_at desc, m.id desc limit 1
+)`;
+
+const messageMatches = (like: string) => sql`exists (
+  select 1 from transaction_messages m
+  where m.transaction_id = "transactions"."id" and m.body ilike ${like}
+)`;
+
 function conditions(query: TransactionQuery): SQL[] {
   const where: SQL[] = [];
 
@@ -153,7 +170,7 @@ function conditions(query: TransactionQuery): SQL[] {
         sql`${transactions.payeeRaw} ilike ${like}`,
         sql`${transactions.payeeKey} ilike ${like}`,
         sql`${transactions.memo} ilike ${like}`,
-        sql`${transactions.note} ilike ${like}`,
+        messageMatches(like),
         sql`${transactions.checkNumber} ilike ${like}`,
       )!,
     );
@@ -178,7 +195,7 @@ function conditions(query: TransactionQuery): SQL[] {
     where.push(
       or(
         sql`${transactions.memo} ilike ${like(memo)}`,
-        sql`${transactions.note} ilike ${like(memo)}`,
+        messageMatches(like(memo)),
       )!,
     );
   }
@@ -290,7 +307,7 @@ export async function searchTransactions(
       status: transactions.status,
       kind: transactions.kind,
       memo: transactions.memo,
-      note: transactions.note,
+      note: latestMessage,
       checkNumber: transactions.checkNumber,
       transferPairId: transactions.transferPairId,
       accountId: transactions.accountId,
@@ -359,7 +376,7 @@ export async function transactionsById(
       status: transactions.status,
       kind: transactions.kind,
       memo: transactions.memo,
-      note: transactions.note,
+      note: latestMessage,
       checkNumber: transactions.checkNumber,
       transferPairId: transactions.transferPairId,
       accountId: transactions.accountId,

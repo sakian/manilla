@@ -23,6 +23,7 @@ import {
   envelopes,
   suggestions,
   transactionExternalIds,
+  transactionMessages,
   transactions,
   txnLines,
 } from '../../db/schema.ts';
@@ -249,7 +250,7 @@ export type NewTransaction = {
   payeeRaw: string;
   /** What the bank wrote beside the payee. */
   memo?: string;
-  /** The user's own words (see the column). */
+  /** The user's own words: the first message of its thread (src/transactions/thread.ts). */
   note?: string;
   checkNumber?: string;
   source?: 'manual' | 'file_import' | 'bank_sync' | 'goodbudget' | 'opening_balance';
@@ -297,7 +298,6 @@ export async function recordTransaction(db: Database, input: NewTransaction): Pr
         payeeRaw: input.payeeRaw,
         payeeKey: normalizePayee(input.payeeRaw).key,
         memo: input.memo ?? null,
-        note: input.note ?? null,
         checkNumber: input.checkNumber ?? null,
         kind: 'spending',
         status: input.status ?? 'pending_review',
@@ -307,6 +307,10 @@ export async function recordTransaction(db: Database, input: NewTransaction): Pr
       .returning({ id: transactions.id });
 
     const transactionId = row!.id;
+
+    if (input.note?.trim()) {
+      await tx.insert(transactionMessages).values({ transactionId, body: input.note.trim() });
+    }
 
     if (lines.length > 0) {
       await tx.insert(txnLines).values(

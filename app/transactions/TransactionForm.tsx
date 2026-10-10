@@ -29,6 +29,9 @@ import {
   type TransactionFields,
 } from './actions.ts';
 import { formatMoney } from '../../src/money.ts';
+import { NOTE_LIMIT } from '../../src/transactions/limits.ts';
+import { ThreadWithButton, type ThreadPeople } from '../Thread.tsx';
+import type { Message } from '../../src/transactions/thread.ts';
 import TransactionHistory from './TransactionHistory.tsx';
 import { displayDate, localToday } from '../../src/budget/month.ts';
 import { linesToSave, type LineDraft } from '../../src/transactions/formLines.ts';
@@ -46,7 +49,8 @@ export type EditingTransaction = {
   amountCents: number;
   payeeRaw: string;
   memo: string | null;
-  note: string | null;
+  /** What has been written about it (RQ-7), with whoever is reading. */
+  thread: { messages: Message[]; people: ThreadPeople };
   kind: 'spending' | 'account_transfer';
   status: 'pending_review' | 'confirmed';
   transferPairId: string | null;
@@ -106,7 +110,8 @@ export default function TransactionForm({
         : '',
   );
   const [payeeRaw, setPayeeRaw] = useState(editing?.payeeRaw ?? draft?.payee ?? '');
-  const [note, setNote] = useState(editing?.note ?? draft?.note ?? '');
+  /** Only for something new: once it exists, what is written about it is its thread. */
+  const [note, setNote] = useState(draft?.note ?? '');
   /** Just saved, with other ledgers its other side could go in. */
   const [saved, setSaved] = useState<SavedEntry | null>(null);
   const [lines, setLines] = useState<LineDraft[]>(
@@ -388,21 +393,34 @@ export default function TransactionForm({
 
           {mode === 'spending' && (
             <>
-              <label className="field">
-                <span>Note</span>
-                <textarea
-                  rows={2}
-                  maxLength={500}
-                  value={note}
-                  placeholder="Optional"
-                  onChange={(event) => setNote(event.target.value)}
-                />
-                {/* What the bank wrote is kept as it came, and shown so a note
-                    can be read against it; a note never replaces it. */}
-                {editing?.memo && (
-                  <small className="muted">The bank&rsquo;s memo: {editing.memo}</small>
-                )}
-              </label>
+              {editing ? (
+                <div className="field">
+                  <span>Notes</span>
+                  {/* Written at once, apart from Save: a message is said to the
+                      household, not part of the edit to the money. */}
+                  <ThreadWithButton
+                    transactionId={editing.id}
+                    messages={editing.thread.messages}
+                    people={editing.thread.people}
+                  />
+                  {/* What the bank wrote is kept as it came, and shown so a note
+                      can be read against it; a note never replaces it. */}
+                  {editing.memo && (
+                    <small className="muted">The bank&rsquo;s memo: {editing.memo}</small>
+                  )}
+                </div>
+              ) : (
+                <label className="field">
+                  <span>Note</span>
+                  <textarea
+                    rows={2}
+                    maxLength={NOTE_LIMIT}
+                    value={note}
+                    placeholder="Optional"
+                    onChange={(event) => setNote(event.target.value)}
+                  />
+                </label>
+              )}
 
               <div className="field">
                 <span>Envelopes</span>

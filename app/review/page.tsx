@@ -67,8 +67,11 @@ export default async function ReviewPage(props: {
             saved until you press Save, so if you stop halfway, nothing has changed.
             The exception is marking a transaction as not spending. That is saved straight away, and
             both sides of the transfer are recorded. To leave some for someone else, press Hand
-            over, tick the ones you want them to look at and choose who. They are told, and the
-            transactions appear under For me on their list. Anyone can still review them from All.
+            over, tick the ones you want them to look at and choose who, with a note if you like.
+            They are told, and the transactions appear under For me on their list, where they can
+            reply about each one, or go through them one at a time. Notes keeps what was said,
+            after the transactions are reviewed.
+            Anyone can still review them from All.
             Which view the list opens on is up to each person, under Settings and then You.
           </Hint>
         </h2>
@@ -83,6 +86,11 @@ export default async function ReviewPage(props: {
           </p>
         )}
         {shared && <ReviewViewSwitch view={view} mine={mine} all={everything} />}
+        {!batch && rows.length > 0 && (
+          <p className="muted review-one">
+            <Link href={`/review/one?view=${view}`}>Go through them one at a time</Link>
+          </p>
+        )}
       </div>
       <ReviewQueue
         key={view}

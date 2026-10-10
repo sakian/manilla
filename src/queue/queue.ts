@@ -19,10 +19,12 @@ import {
   envelopes,
   rules,
   suggestions,
+  transactionMessages,
   transactions,
   txnLines,
 } from '../../db/schema.ts';
 import { bandOf, type Band } from '../categorize/pipeline.ts';
+import { cleanMessage, threadsFor, type Message } from '../transactions/thread.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 import {
   AlreadyReviewedError,
@@ -39,8 +41,6 @@ export type QueueRow = {
   accountId: string;
   accountName: string;
   memo: string | null;
-  /** Yours, written here or on the transactions screen. */
-  note: string | null;
   envelopeId: string | null;
   envelopeName: string | null;
   confidence: number | null;
@@ -52,6 +52,10 @@ export type QueueRow = {
   ageDays: number;
   /** The member it was handed to for a second look, if anyone (RQ-7). */
   handedToId: string | null;
+  /** Who handed it to them, so a reply goes back to the right person. */
+  handedById: string | null;
+  /** What the household has written about it, oldest first: notes, a handover's, replies. */
+  messages: Message[];
 };
 
 /**
@@ -163,13 +167,13 @@ export async function pendingTransactions(
       payeeRaw: transactions.payeeRaw,
       amountCents: transactions.amountCents,
       memo: transactions.memo,
-      note: transactions.note,
       accountId: accounts.id,
       accountName: accounts.name,
       accountGroupPosition: accountGroups.position,
       accountGroupName: accountGroups.name,
       createdAt: transactions.createdAt,
       handedToId: transactions.handedToId,
+      handedById: transactions.handedById,
       // Whatever the row is currently proposing: the ledger's own line if it has
       // one, and otherwise the suggestion. Below the medium band a suggestion is
       // offered without being applied, so reading this from txn_lines alone would
@@ -208,6 +212,10 @@ export async function pendingTransactions(
     .limit(options.limit ?? 200);
 
   const today = Date.now();
+  const messages = await threadsFor(
+    db,
+    rows.map((row) => row.id),
+  );
 
   // Then by account, in the order the accounts screen lists them - ungrouped
   // last - so one statement's rows read together. After the limit rather than
@@ -236,7 +244,6 @@ export async function pendingTransactions(
     accountId: row.accountId,
     accountName: row.accountName,
     memo: row.memo,
-    note: row.note,
     envelopeId: row.envelopeId,
     envelopeName: row.envelopeName,
     confidence: row.confidence,
@@ -245,6 +252,8 @@ export async function pendingTransactions(
     band: row.confidence === null ? null : bandOf(row.confidence),
     ageDays: Math.floor((today - row.createdAt.getTime()) / 86_400_000),
     handedToId: row.handedToId,
+    handedById: row.handedById,
+    messages: messages.get(row.id) ?? [],
   }));
 }
 
@@ -274,14 +283,29 @@ export async function pendingCount(db: Database, options: { handedTo?: string } 
  *
  * Who the member is, and that they are one, is the caller's to check: members
  * live in the home database, and this is one ledger's.
+ *
+ * A note goes on every row handed, rather than once for the lot, so each row
+ * carries it however the rows are later reviewed or passed on.
  */
-export async function handOver(db: Database, ids: string[], toUserId: string): Promise<number> {
+export async function handOver(
+  db: Database,
+  ids: string[],
+  toUserId: string,
+  options: { note?: string } = {},
+): Promise<number> {
   if (ids.length === 0) return 0;
-  // In a transaction so the audit trail says who handed it over (src/audit/actor.ts).
-  const handed = await db.transaction((tx) =>
-    tx
+  const note = cleanMessage(options.note ?? '');
+  // In a transaction so the audit trail says who handed it over, and the
+  // handover and its note are both theirs (src/audit/actor.ts).
+  return db.transaction(async (tx) => {
+    const handed = await tx
       .update(transactions)
-      .set({ handedToId: toUserId, handedAt: new Date(), updatedAt: new Date() })
+      .set({
+        handedToId: toUserId,
+        handedById: sql`manilla_actor_id()`,
+        handedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           inArray(transactions.id, ids),
@@ -289,9 +313,12 @@ export async function handOver(db: Database, ids: string[], toUserId: string): P
           eq(transactions.kind, 'spending'),
         ),
       )
-      .returning({ id: transactions.id }),
-  );
-  return handed.length;
+      .returning({ id: transactions.id });
+    if (note && handed.length > 0) {
+      await tx.insert(transactionMessages).values(handed.map((row) => ({ transactionId: row.id, body: note })));
+    }
+    return handed.length;
+  });
 }
 
 /** Envelope picker options, grouped and ordered as the user arranged them. */

@@ -162,6 +162,13 @@
       "when": 1791292531808,
       "tag": "0022_edit_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791650865369,
+      "tag": "0023_transaction_messages",
+      "breakpoints": true
     }
   ]
 }

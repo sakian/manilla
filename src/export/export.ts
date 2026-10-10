@@ -27,6 +27,7 @@ import {
   importBatches,
   rules,
   transactionExternalIds,
+  transactionMessages,
   transactions,
   txnLines,
 } from '../../db/schema.ts';
@@ -43,7 +44,8 @@ export type ExportedTransaction = {
   payee: string;
   payeeRaw: string;
   memo: string | null;
-  note: string | null;
+  /** What the household wrote about it, oldest first (src/transactions/thread.ts). */
+  messages: { author: string | null; body: string; at: string }[];
   checkNumber: string | null;
   amountCents: number;
   kind: string;
@@ -81,6 +83,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
     transactionRows,
     lineRows,
     externalIdRows,
+    messageRows,
     moveRows,
     budgetRows,
     ruleRows,
@@ -94,6 +97,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
     db.select().from(transactions).orderBy(asc(transactions.date), asc(transactions.createdAt)),
     db.select().from(txnLines),
     db.select().from(transactionExternalIds),
+    db.select().from(transactionMessages).orderBy(asc(transactionMessages.createdAt), asc(transactionMessages.id)),
     db.select().from(envelopeMoves).orderBy(asc(envelopeMoves.date)),
     db.select().from(budgetLines),
     db.select().from(rules).orderBy(asc(rules.position)),
@@ -118,6 +122,13 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
     linesByTransaction.set(line.transactionId, list);
   }
 
+  const messagesByTransaction = new Map<string, ExportedTransaction['messages']>();
+  for (const message of messageRows) {
+    const list = messagesByTransaction.get(message.transactionId) ?? [];
+    list.push({ author: message.authorName, body: message.body, at: message.createdAt.toISOString() });
+    messagesByTransaction.set(message.transactionId, list);
+  }
+
   const idsByTransaction = new Map<string, ExportedTransaction['externalIds']>();
   for (const external of externalIdRows) {
     const list = idsByTransaction.get(external.transactionId) ?? [];
@@ -132,7 +143,7 @@ export async function exportLedger(db: Database): Promise<LedgerExport> {
     payee: row.payeeKey,
     payeeRaw: row.payeeRaw,
     memo: row.memo,
-    note: row.note,
+    messages: messagesByTransaction.get(row.id) ?? [],
     checkNumber: row.checkNumber,
     amountCents: Number(row.amountCents),
     kind: row.kind,
@@ -224,7 +235,10 @@ export async function exportCsv(db: Database, table: CsvTableName): Promise<stri
           account: transaction.account,
           payee: transaction.payeeRaw,
           memo: transaction.memo ?? '',
-          note: transaction.note ?? '',
+          // The thread in one cell, a line each, so a spreadsheet keeps who said what.
+          note: transaction.messages
+            .map((message) => (message.author ? `${message.author}: ${message.body}` : message.body))
+            .join('\n'),
           amount: amount(transaction.amountCents),
           kind: transaction.kind,
           status: transaction.status,

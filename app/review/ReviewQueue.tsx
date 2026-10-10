@@ -32,7 +32,8 @@
  * over turns each row into something to tick, starting with every row not
  * decided this sitting ticked, since "the rest are yours" is the usual end of a
  * first pass. That is written at once, unlike the envelopes, and tells the
- * person it went to.
+ * person it went to. A note can go with it, and each handed row shows what
+ * was said about it with a way to answer.
  */
 
 import { Fragment, useCallback, useMemo, useState, useTransition } from 'react';
@@ -40,13 +41,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
 import { handOverAction, markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
-import { setTransactionNoteAction } from '../transactions/actions.ts';
 import { Money } from '../Money.tsx';
 import { useOverlay } from '../useOverlay.ts';
 import EnvelopeChoices from '../EnvelopeChoices.tsx';
 import { displayDate } from '../../src/budget/month.ts';
 import { splitLines, type LineDraft } from '../../src/transactions/formLines.ts';
 import SplitLines from '../SplitLines.tsx';
+import { Thread, threadPrompt, type ThreadPeople } from '../Thread.tsx';
+import type { Message } from '../../src/transactions/thread.ts';
+import { NOTE_LIMIT } from '../../src/transactions/limits.ts';
 
 /**
  * How sure the pipeline is: one word and a number.
@@ -56,7 +59,7 @@ import SplitLines from '../SplitLines.tsx';
  * - the word is whether to trust it, the number is how close to the line it sits.
  * "Likely 62" and "likely 94" both mean look, but not equally hard.
  */
-function confidenceOf(row: QueueRow): { label: string; tone: string; detail: string } {
+export function confidenceOf(row: QueueRow): { label: string; tone: string; detail: string } {
   if (row.confidence === null || !row.envelopeId) {
     return { label: 'unknown', tone: 'none', detail: '' };
   }
@@ -84,7 +87,7 @@ type Decision = {
 const UNDECIDED: Decision = { envelopeId: null, split: null, confirmed: false, createRule: false };
 
 /** Whether the bank's text carries anything the cleaned-up name dropped. */
-function saysMore(row: QueueRow): boolean {
+export function saysMore(row: QueueRow): boolean {
   const squeeze = (text: string) => text.toUpperCase().replace(/[^A-Z0-9]/g, '');
   return squeeze(row.payeeRaw) !== squeeze(row.payeeDisplay);
 }
@@ -154,37 +157,32 @@ export default function ReviewQueue({
   );
 
   /**
-   * Notes save on their own, straight away: they are not part of the envelope
-   * decisions saved together at the bottom, and should not wait for them. What
-   * was saved here is kept locally rather than refetched, so writing a note
-   * never disturbs a decision still being made further down.
+   * Threads write on their own, straight away: they are not part of the
+   * envelope decisions saved together at the bottom, and should not wait for
+   * them. What was written here is kept locally rather than refetched, so
+   * writing never disturbs a decision still being made further down.
    */
-  const [notes, setNotes] = useState<Record<string, string | null>>({});
-  const [noteDraft, setNoteDraft] = useState<{ id: string; text: string } | null>(null);
-  const [savingNote, startNoteSave] = useTransition();
-  const noteOf = (row: QueueRow) => (row.id in notes ? notes[row.id]! : row.note);
-
-  const saveNote = useCallback(() => {
-    if (!noteDraft) return;
-    const { id, text } = noteDraft;
-    startNoteSave(async () => {
-      const result = await setTransactionNoteAction(id, text);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setNotes((current) => ({ ...current, [id]: text.trim() || null }));
-      setNoteDraft(null);
-    });
-  }, [noteDraft]);
+  const [threads, setThreads] = useState<Record<string, Message[]>>({});
+  const [writingOn, setWritingOn] = useState<string | null>(null);
+  const threadOf = (row: QueueRow) => threads[row.id] ?? row.messages;
+  const setThreadOf = (row: QueueRow) => (update: (current: Message[]) => Message[]) =>
+    setThreads((current) => ({ ...current, [row.id]: update(current[row.id] ?? row.messages) }));
+  const peopleFor = (row: QueueRow): ThreadPeople => ({
+    me,
+    handedToId: row.handedToId,
+    handedById: row.handedById,
+    names,
+  });
 
   /** Who else rows can be handed to. Nobody, in a household of one. */
   const others = useMemo(() => members.filter((member) => member.id !== me), [members, me]);
   const nameOf = useMemo(() => new Map(members.map((member) => [member.id, member.name])), [members]);
+  const names = useMemo(() => Object.fromEntries(nameOf), [nameOf]);
   /** Ticking rows to hand over, when Hand over has been pressed. */
   const [handing, setHanding] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [handTo, setHandTo] = useState<string>(others[0]?.id ?? '');
+  const [handNote, setHandNote] = useState('');
 
   /** How many are waiting in each account, for its heading. */
   const perAccount = useMemo(() => {
@@ -295,13 +293,14 @@ export default function ReviewQueue({
     if (!handTo || selected.size === 0) return;
     setError(null);
     startTransition(async () => {
-      const result = await handOverAction([...selected], handTo);
+      const result = await handOverAction([...selected], handTo, handNote);
       if (!result.ok) {
         setError(result.error);
         return;
       }
       setHanding(false);
       setSelected(new Set());
+      setHandNote('');
       setNote(
         result.handed === 0
           ? 'Those were reviewed meanwhile, so there was nothing to hand over.'
@@ -309,7 +308,7 @@ export default function ReviewQueue({
       );
       router.refresh();
     });
-  }, [handTo, router, selected]);
+  }, [handNote, handTo, router, selected]);
 
   /** Join two rows that already exist, rather than writing a third (FR-5). */
   const pairTransfer = useCallback(
@@ -482,37 +481,21 @@ export default function ReviewQueue({
                     {decision.confirmed ? 'Unconfirm' : 'Confirm'}
                   </button>
                 )}
-                <button
-                  className="link-button"
-                  onClick={() => setNoteDraft({ id: row.id, text: noteOf(row) ?? '' })}
-                  disabled={savingNote}
-                >
-                  {noteOf(row) ? 'Edit note' : 'Add a note'}
-                </button>
+                {writingOn !== row.id && (
+                  <button className="link-button" onClick={() => setWritingOn(row.id)}>
+                    {threadPrompt(threadOf(row), peopleFor(row))}
+                  </button>
+                )}
               </span>
 
-              {noteDraft?.id === row.id ? (
-                <span className="queue-row-note editing">
-                  <textarea
-                    rows={2}
-                    maxLength={500}
-                    autoFocus
-                    value={noteDraft.text}
-                    placeholder="Anything you want to remember about this one"
-                    onChange={(event) => setNoteDraft({ id: row.id, text: event.target.value })}
-                  />
-                  <span className="allocation-actions">
-                    <button className="primary" onClick={saveNote} disabled={savingNote}>
-                      {savingNote ? 'Saving…' : 'Save note'}
-                    </button>
-                    <button onClick={() => setNoteDraft(null)} disabled={savingNote}>
-                      Cancel
-                    </button>
-                  </span>
-                </span>
-              ) : (
-                noteOf(row) && <span className="queue-row-note">{noteOf(row)}</span>
-              )}
+              <Thread
+                transactionId={row.id}
+                messages={threadOf(row)}
+                setMessages={setThreadOf(row)}
+                people={peopleFor(row)}
+                writing={writingOn === row.id}
+                onDoneWriting={() => setWritingOn(null)}
+              />
             </div>
           </Fragment>
         );
@@ -522,6 +505,17 @@ export default function ReviewQueue({
           bottom of it as often as the top. */}
       {handing ? (
         <div className="queue-save">
+          {/* Two lines, so a question can be read back whole before it goes. */}
+          <textarea
+            className="hand-note"
+            rows={2}
+            value={handNote}
+            maxLength={NOTE_LIMIT}
+            placeholder={`Note for ${nameOf.get(handTo) ?? 'them'} (optional)`}
+            aria-label="Note to go with them"
+            onChange={(event) => setHandNote(event.target.value)}
+            disabled={pending}
+          />
           <span className="muted">{selected.size} selected</span>
           {/* Every undecided row starts ticked, which on a long list is many
               to untick one at a time when only a few are meant. */}
