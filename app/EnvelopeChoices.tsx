@@ -1,8 +1,11 @@
 'use client';
 
 /**
- * The envelope half of the review queue's picker: a box to narrow it, a row of
- * category names to jump by, and every envelope under its heading (RQ-3).
+ * The one way to choose an envelope for a transaction: a box to narrow it, a row
+ * of category names to jump by, and every envelope under its heading (RQ-3).
+ * The review queue's picker and each part of a split, there and in the
+ * transaction dialog, are all this list, so it reads and types the same
+ * wherever a transaction is given an envelope.
  *
  * The filter box was taken out once, on the grounds that fifty envelopes under
  * nine headings can be read and scanning beats typing when you do not know the
@@ -16,8 +19,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { EnvelopeOption } from '../../src/queue/queue.ts';
-import { narrowEnvelopes } from '../../src/queue/narrow.ts';
+import type { EnvelopeOption } from '../src/queue/queue.ts';
+import { narrowEnvelopes } from '../src/queue/narrow.ts';
 
 export default function EnvelopeChoices({
   envelopes,

@@ -287,6 +287,53 @@ describe(
       );
     });
 
+    test('a row can be saved split across envelopes (FR-4)', async () => {
+      const id = await pending({
+        payee: 'COSTCO',
+        amountCents: -9000,
+        envelopeId: env.groceriesId,
+        confidence: 0.7,
+      });
+
+      const result = await saveReview(db, [
+        {
+          transactionId: id,
+          lines: [
+            { envelopeId: env.groceriesId, amountCents: -6000 },
+            { envelopeId: env.gasId, amountCents: -3000 },
+          ],
+        },
+      ]);
+
+      assert.deepEqual(result, { confirmed: 1, failed: [] });
+      assert.equal(await balanceOf(env.groceriesId), -6000);
+      assert.equal(await balanceOf(env.gasId), -3000);
+      assert.equal(await pendingCount(db), 0);
+      const [suggestion] = await db.select().from(suggestions);
+      assert.equal(suggestion!.acceptedEnvelopeId, env.groceriesId, 'the first part, as elsewhere');
+      assert.ok((await checkInvariant(db)).ok);
+    });
+
+    test("a split that does not add up is refused, and the row keeps waiting", async () => {
+      const id = await pending({ payee: 'COSTCO', amountCents: -9000 });
+
+      const empty = await saveReview(db, [{ transactionId: id, lines: [] }]);
+      const short = await saveReview(db, [
+        {
+          transactionId: id,
+          lines: [
+            { envelopeId: env.groceriesId, amountCents: -6000 },
+            { envelopeId: env.gasId, amountCents: -2000 },
+          ],
+        },
+      ]);
+
+      assert.equal(empty.confirmed + short.confirmed, 0);
+      assert.match(short.failed[0]!.error, /does not balance/);
+      assert.equal(await pendingCount(db), 1);
+      assert.ok((await checkInvariant(db)).ok);
+    });
+
     test('a row with no suggestion saves without one being invented', async () => {
       const id = await pending({ payee: 'NEVER SEEN', amountCents: -1000 });
       await saveReview(db, [{ transactionId: id, envelopeId: env.gasId }]);

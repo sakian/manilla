@@ -26,13 +26,22 @@ export function overlayUrl(
   return text ? `${pathname}?${text}` : pathname;
 }
 
-/** The changes that open an overlay, along with whatever travels with it. */
+/**
+ * The changes that open an overlay, along with whatever travels with it.
+ * `extraNames` are the params that only mean something while it is open, and
+ * any not in `extra` are dropped: opening it again without one is how a view
+ * inside it goes back to the first, and keeping the old one meant "Back to
+ * envelopes" in the review picker stayed on the accounts it was leaving.
+ */
 export function openingChanges(
   name: string,
   value: string,
   extra: Record<string, string> = {},
-): Record<string, string> {
-  return { [name]: value, ...extra };
+  extraNames: string[] = [],
+): Record<string, string | null> {
+  const changes: Record<string, string | null> = { [name]: value };
+  for (const extraName of extraNames) changes[extraName] = null;
+  return { ...changes, ...extra };
 }
 
 /**
