@@ -7,11 +7,8 @@
  * as signed figures. It is how people say it, and it removes the single easiest
  * way to enter a month backwards.
  *
- * The split rows carry the same direction as the transaction, and the dialog
- * keeps a running "left to assign" figure - the FR-4 rule is that the parts sum
- * to the whole, so the arithmetic belongs on screen rather than in an error
- * message after the fact. For the same reason any part can be set to the rest
- * in one press, or by typing "=".
+ * The envelope parts are `SplitLines`, shared with the review queue so that
+ * choosing an envelope and splitting work the same in both places.
  */
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
@@ -34,12 +31,8 @@ import {
 import { formatMoney } from '../../src/money.ts';
 import TransactionHistory from './TransactionHistory.tsx';
 import { displayDate, localToday } from '../../src/budget/month.ts';
-import {
-  fillBlankLine,
-  linesToSave,
-  restFor,
-  type LineDraft,
-} from '../../src/transactions/formLines.ts';
+import { linesToSave, type LineDraft } from '../../src/transactions/formLines.ts';
+import SplitLines from '../SplitLines.tsx';
 
 export type AccountChoice = { id: string; name: string };
 /** Another ledger the other side of a new transaction could be entered in (LG-6). */
@@ -139,34 +132,7 @@ export default function TransactionForm({
     }
   }, [amount]);
 
-  /** What each line will save, the one blank line given the rest (#37). */
-  const filled = useMemo(() => fillBlankLine(lines, totalCents), [lines, totalCents]);
-
-  const assignedCents = useMemo(() => {
-    let total = 0;
-    for (const line of filled) {
-      if (!line.envelopeId || line.amount.trim() === '') continue;
-      try {
-        total += centsFromInput(line.amount);
-      } catch {
-        // Still being typed; the server has the last word either way.
-      }
-    }
-    return total;
-  }, [filled]);
-
   const usable = linesToSave(lines, totalCents);
-  const leftToAssign = totalCents - assignedCents;
-
-  /** One part takes whatever the others leave: the usual last step of a split. */
-  const setRest = useCallback(
-    (index: number) =>
-      setLines((current) => {
-        const rest = restFor(current, index, totalCents);
-        return rest === null ? current : current.map((row, at) => (at === index ? { ...row, amount: rest } : row));
-      }),
-    [totalCents],
-  );
 
   const run = useCallback(
     (work: () => Promise<{ ok: true; message?: string } | { ok: false; error: string }>) => {
@@ -440,94 +406,14 @@ export default function TransactionForm({
 
               <div className="field">
                 <span>Envelopes</span>
-                {lines.map((line, index) => (
-                  <div key={index} className={`split-row${lines.length > 1 ? ' with-rest' : ''}`}>
-                    <select
-                      value={line.envelopeId}
-                      onChange={(event) =>
-                        setLines((current) =>
-                          current.map((row, at) =>
-                            at === index ? { ...row, envelopeId: event.target.value } : row,
-                          ),
-                        )
-                      }
-                    >
-                      <option value="">Leave for the review queue</option>
-                      {envelopes.map((envelope) => (
-                        <option key={envelope.id} value={envelope.id}>
-                          {envelope.groupName} · {envelope.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="amount"
-                      inputMode="decimal"
-                      value={line.amount}
-                      // What a blank line will save, so leaving it blank is safe.
-                      placeholder={
-                        filled[index]!.amount ||
-                        (index === 0 ? inputFromCents(totalCents) : '0.00')
-                      }
-                      onChange={(event) =>
-                        setLines((current) =>
-                          current.map((row, at) =>
-                            at === index ? { ...row, amount: event.target.value } : row,
-                          ),
-                        )
-                      }
-                      onKeyDown={(event) => {
-                        // "=" for "the rest", the same as the button beside it.
-                        if (event.key !== '=' || lines.length < 2) return;
-                        event.preventDefault();
-                        setRest(index);
-                      }}
-                    />
-                    {lines.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setRest(index)}
-                        disabled={restFor(lines, index, totalCents) === null}
-                        title="Set this part to what the others leave (or type = in the amount)"
-                      >
-                        Rest
-                      </button>
-                    )}
-                    {lines.length > 1 && (
-                      <button
-                        onClick={() =>
-                          setLines((current) => current.filter((_, at) => at !== index))
-                        }
-                        title="Remove this part"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))}
-
-                <div className="split-foot">
-                  <button
-                    onClick={() =>
-                      setLines((current) => [
-                        ...current,
-                        {
-                          envelopeId: '',
-                          // The obvious next amount is whatever is still unassigned.
-                          amount: leftToAssign > 0 ? inputFromCents(leftToAssign) : '',
-                        },
-                      ])
-                    }
-                  >
-                    Split across another envelope
-                  </button>
-                  {usable.length > 0 && (
-                    <span className={leftToAssign === 0 ? 'muted' : 'split-short'}>
-                      {leftToAssign === 0
-                        ? 'All assigned'
-                        : `${formatMoney(leftToAssign)} left to assign`}
-                    </span>
-                  )}
-                </div>
+                <SplitLines
+                  lines={lines}
+                  setLines={setLines}
+                  totalCents={totalCents}
+                  envelopes={envelopes}
+                  title={payeeRaw.trim() || (editing ? 'Edit transaction' : 'New transaction')}
+                  blankLabel="Leave for the review queue"
+                />
               </div>
 
               {usable.length === 0 && (

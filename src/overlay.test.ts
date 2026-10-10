@@ -20,6 +20,17 @@ test('opening one that is already open changes it rather than adding a second', 
   assert.equal(overlayUrl('/', 'on=fund&x=1', openingChanges('on', 'move')), '/?on=move&x=1');
 });
 
+test("opening it again without what travelled with it drops that, and only that", () => {
+  assert.equal(
+    overlayUrl('/review', 'pick=t1&to=account&q=x', openingChanges('pick', 't1', {}, ['to'])),
+    '/review?pick=t1&q=x',
+  );
+  assert.equal(
+    overlayUrl('/review', 'pick=t1&to=account', openingChanges('pick', 't1', { to: 'split' }, ['to'])),
+    '/review?pick=t1&to=split',
+  );
+});
+
 test('closing takes the overlay and what came with it, and nothing else', () => {
   assert.equal(
     overlayUrl('/', 'on=move&envelope=e2&view=edit', closingChanges('on', ['envelope'])),

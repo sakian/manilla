@@ -24,7 +24,11 @@ import {
 } from '../../db/schema.ts';
 import { bandOf, type Band } from '../categorize/pipeline.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
-import { AlreadyReviewedError, setTransactionEnvelopes } from '../ledger/ledger.ts';
+import {
+  AlreadyReviewedError,
+  setTransactionEnvelopes,
+  type NewTransactionLine,
+} from '../ledger/ledger.ts';
 
 export type QueueRow = {
   id: string;
@@ -362,12 +366,22 @@ export async function highConfidenceIds(db: Database): Promise<string[]> {
   return rows.filter((row) => row.band === 'high' && row.envelopeId).map((row) => row.id);
 }
 
-export type ReviewDecision = {
-  transactionId: string;
-  envelopeId: string;
-  /** CA-2: turn this decision into a standing rule for the payee. */
-  createRule?: boolean;
-};
+export type ReviewDecision =
+  | {
+      transactionId: string;
+      envelopeId: string;
+      /** CA-2: turn this decision into a standing rule for the payee. */
+      createRule?: boolean;
+    }
+  | {
+      transactionId: string;
+      /**
+       * Split across envelopes (FR-4), signed like the transaction. No rule:
+       * a rule names one envelope, and a split is about this purchase, not
+       * every purchase from the payee.
+       */
+      lines: NewTransactionLine[];
+    };
 
 export type ReviewResult = {
   confirmed: number;
@@ -408,13 +422,23 @@ export async function saveReview(
 
   for (const decision of decisions) {
     try {
-      await recategorize(db, {
-        transactionId: decision.transactionId,
-        envelopeId: decision.envelopeId,
-        confirm: true,
-        onlyIfPending: true,
-        ...(decision.createRule ? { createRule: true } : {}),
-      });
+      if ('lines' in decision) {
+        // No lines would confirm the row with nothing assigned, which is not
+        // a decision about where the money went.
+        if (decision.lines.length === 0) throw new Error('A split needs at least one envelope');
+        await setTransactionEnvelopes(db, decision.transactionId, decision.lines, {
+          confirm: true,
+          onlyIfPending: true,
+        });
+      } else {
+        await recategorize(db, {
+          transactionId: decision.transactionId,
+          envelopeId: decision.envelopeId,
+          confirm: true,
+          onlyIfPending: true,
+          ...(decision.createRule ? { createRule: true } : {}),
+        });
+      }
       confirmed += 1;
     } catch (error) {
       failed.push(

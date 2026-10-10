@@ -35,7 +35,12 @@ import { closingChanges, openingChanges, overlayUrl } from '../src/overlay.ts';
 export type Overlay = {
   /** The param's value, or null when the overlay is shut. */
   value: string | null;
-  open: (value: string, extra?: Record<string, string>) => void;
+  /**
+   * `replace` swaps one view of an open overlay for another without a history
+   * entry of its own, for a view that closing should leave rather than step
+   * back out of.
+   */
+  open: (value: string, extra?: Record<string, string>, options?: { replace?: boolean }) => void;
   close: () => void;
 };
 
@@ -65,11 +70,16 @@ export function useOverlay(
   );
 
   const open = useCallback(
-    (next: string, extra: Record<string, string> = {}) => {
+    (next: string, extra: Record<string, string> = {}, options: { replace?: boolean } = {}) => {
+      const url = urlWith(openingChanges(name, next, extra, extraNames));
+      if (options.replace && value !== null) {
+        window.history.replaceState(null, '', url);
+        return;
+      }
       ours.current = true;
-      window.history.pushState(null, '', urlWith(openingChanges(name, next, extra)));
+      window.history.pushState(null, '', url);
     },
-    [name, urlWith],
+    [extraNames, name, urlWith, value],
   );
 
   const close = useCallback(() => {

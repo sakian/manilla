@@ -69,3 +69,50 @@ export function restFor(drafts: LineDraft[], index: number, totalCents: number):
   const rest = totalCents - others;
   return rest > 0 ? formatCents(rest) : null;
 }
+
+/** What the parts leave unassigned, counting the blank line's share as assigned. */
+export function leftToAssign(drafts: LineDraft[], totalCents: number): number {
+  let assigned = 0;
+  for (const line of fillBlankLine(drafts, totalCents)) {
+    if (!line.envelopeId || line.amount.trim() === '') continue;
+    try {
+      assigned += parseAmount(line.amount).cents;
+    } catch {
+      // Still being typed; the server has the last word either way.
+    }
+  }
+  return totalCents - assigned;
+}
+
+/**
+ * A split as the ledger takes it: signed like `amountCents`, the transaction's
+ * own amount, since the parts are typed as positive figures whatever the
+ * direction. Null unless it is a finished split - two parts or more, each with
+ * an envelope, adding up to the whole - because the review queue stages it as a
+ * decision, and a decision that cannot be saved should not count as one.
+ */
+export function splitLines(
+  drafts: LineDraft[],
+  amountCents: number,
+): { envelopeId: string; amountCents: number }[] | null {
+  const total = Math.abs(amountCents);
+  const filled = fillBlankLine(drafts, total);
+  if (filled.some((line) => !line.envelopeId || line.amount.trim() === '')) return null;
+
+  const sign = amountCents < 0 ? -1 : 1;
+  const lines: { envelopeId: string; amountCents: number }[] = [];
+  for (const line of filled) {
+    let cents: number;
+    try {
+      const parsed = parseAmount(line.amount);
+      if (parsed.warning) return null;
+      cents = parsed.cents;
+    } catch {
+      return null;
+    }
+    if (cents <= 0) return null;
+    lines.push({ envelopeId: line.envelopeId, amountCents: sign * cents });
+  }
+  if (lines.length < 2) return null;
+  return lines.reduce((sum, line) => sum + line.amountCents, 0) === amountCents ? lines : null;
+}

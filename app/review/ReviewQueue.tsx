@@ -43,8 +43,10 @@ import { handOverAction, markAsTransferAction, pairTransferAction, saveReviewAct
 import { setTransactionNoteAction } from '../transactions/actions.ts';
 import { Money } from '../Money.tsx';
 import { useOverlay } from '../useOverlay.ts';
-import EnvelopeChoices from './EnvelopeChoices.tsx';
+import EnvelopeChoices from '../EnvelopeChoices.tsx';
 import { displayDate } from '../../src/budget/month.ts';
+import { splitLines, type LineDraft } from '../../src/transactions/formLines.ts';
+import SplitLines from '../SplitLines.tsx';
 
 /**
  * How sure the pipeline is: one word and a number.
@@ -71,11 +73,15 @@ function confidenceOf(row: QueueRow): { label: string; tone: string; detail: str
 }
 
 type Decision = {
-  /** Null means undecided; a row cannot be confirmed without one. */
+  /** Null means undecided; a row cannot be confirmed without one, or a split. */
   envelopeId: string | null;
+  /** Parts as typed, when the row is split rather than given one envelope (FR-4). */
+  split: LineDraft[] | null;
   confirmed: boolean;
   createRule: boolean;
 };
+
+const UNDECIDED: Decision = { envelopeId: null, split: null, confirmed: false, createRule: false };
 
 /** Whether the bank's text carries anything the cleaned-up name dropped. */
 function saysMore(row: QueueRow): boolean {
@@ -120,9 +126,8 @@ export default function ReviewQueue({
           // was that an unsure guess reads as an answer - but the card says how
           // sure it is right beside the name, so it reads as what it is, and
           // starting from a guess beats starting from nothing on every row.
+          ...UNDECIDED,
           envelopeId: row.envelopeId,
-          confirmed: false,
-          createRule: false,
         },
       ]),
     ),
@@ -138,8 +143,9 @@ export default function ReviewQueue({
     () => rows.find((row) => row.id === overlay.value) ?? null,
     [overlay.value, rows],
   );
-  /** The picker shows envelopes first, and the account list once "not spending". */
+  /** The picker shows envelopes first, then the account list for "not spending" or the parts of a split. */
   const pickingTransfer = searchParams.get('to') === 'account';
+  const pickingSplit = searchParams.get('to') === 'split';
   const [transferRule, setTransferRule] = useState(true);
 
   const transferFor = useMemo(
@@ -192,17 +198,13 @@ export default function ReviewQueue({
     [envelopes],
   );
 
-  const decisionFor = useCallback(
-    (id: string): Decision =>
-      decisions[id] ?? { envelopeId: null, confirmed: false, createRule: false },
-    [decisions],
-  );
+  const decisionFor = useCallback((id: string): Decision => decisions[id] ?? UNDECIDED, [decisions]);
 
   const set = useCallback((id: string, patch: Partial<Decision>) => {
     setDecisions((current) => ({
       ...current,
       [id]: {
-        ...(current[id] ?? { envelopeId: null, confirmed: false, createRule: false }),
+        ...(current[id] ?? UNDECIDED),
         ...patch,
       },
     }));
@@ -220,7 +222,7 @@ export default function ReviewQueue({
   /** Choosing an envelope is a decision, so it confirms the row as well. */
   const choose = useCallback(
     (id: string, envelopeId: string, createRule = false) => {
-      set(id, { envelopeId, confirmed: true, createRule });
+      set(id, { envelopeId, split: null, confirmed: true, createRule });
       closePicker();
     },
     [closePicker, set],
@@ -230,7 +232,7 @@ export default function ReviewQueue({
     () =>
       rows.filter((row) => {
         const decision = decisionFor(row.id);
-        return decision.confirmed && decision.envelopeId !== null;
+        return decision.confirmed && (decision.envelopeId !== null || decision.split !== null);
       }),
     [decisionFor, rows],
   );
@@ -242,6 +244,8 @@ export default function ReviewQueue({
       const result = await saveReviewAction(
         ready.map((row) => {
           const decision = decisionFor(row.id);
+          const lines = decision.split && splitLines(decision.split, row.amountCents);
+          if (lines) return { transactionId: row.id, lines };
           return {
             transactionId: row.id,
             envelopeId: decision.envelopeId!,
@@ -375,6 +379,7 @@ export default function ReviewQueue({
         const decision = decisionFor(row.id);
         const confidence = confidenceOf(row);
         const chosen = decision.envelopeId;
+        const split = decision.split;
         /** Filled in by the pipeline rather than chosen here: this is the row a press settles. */
         const prefilled = row.envelopeId !== null;
 
@@ -434,13 +439,18 @@ export default function ReviewQueue({
               <span className="queue-choice">
                 {/* Everything this row can become is behind this one control. */}
                 <button
-                  className={`envelope-pick${chosen ? ' chosen' : ''}`}
+                  className={`envelope-pick${chosen || split ? ' chosen' : ''}`}
                   onClick={() => openPicker(row)}
                   disabled={pending}
                 >
                   {/* With its category: "Insurance" alone could be the car's or the
                       house's, and the queue is where that gets settled. */}
-                  {chosen ? (
+                  {split ? (
+                    <>
+                      <span className="envelope-pick-group">split</span>{' '}
+                      {split.map((line) => envelopeById.get(line.envelopeId)?.name).join(', ')}
+                    </>
+                  ) : chosen ? (
                     <>
                       <span className="envelope-pick-group">
                         {envelopeById.get(chosen)?.groupName}
@@ -456,14 +466,14 @@ export default function ReviewQueue({
                     by the pipeline has not been decided by anyone yet, and that is
                     the one a press settles. Unconfirming empties it again rather
                     than leaving a figure nobody has agreed to sitting there. */}
-                {(prefilled || decision.confirmed) && chosen && (
+                {(prefilled || decision.confirmed) && (chosen || split) && (
                   <button
                     className={decision.confirmed ? 'link-button' : 'primary confirm'}
                     onClick={() =>
                       set(
                         row.id,
                         decision.confirmed
-                          ? { confirmed: false, envelopeId: row.envelopeId, createRule: false }
+                          ? { ...UNDECIDED, envelopeId: row.envelopeId }
                           : { confirmed: true },
                       )
                     }
@@ -557,13 +567,28 @@ export default function ReviewQueue({
 
       {picking && (
         <div className="picker-backdrop" onClick={closePicker}>
-          <div className="picker" onClick={(event) => event.stopPropagation()}>
+          <div
+            className={`picker${pickingSplit ? ' dialog' : ''}`}
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="picker-head">
               <strong>{picking.payeeDisplay}</strong>
               <Money cents={picking.amountCents} sign="incoming" />
             </div>
 
-            {pickingTransfer ? (
+            {pickingSplit ? (
+              <ReviewSplit
+                key={picking.id}
+                row={picking}
+                envelopes={envelopes}
+                decision={decisionFor(picking.id)}
+                onBack={() => overlay.open(picking.id, {}, { replace: true })}
+                onDone={(lines) => {
+                  set(picking.id, { envelopeId: null, split: lines, confirmed: true, createRule: false });
+                  closePicker();
+                }}
+              />
+            ) : pickingTransfer ? (
               <>
                 <div className="dialog-body">
                   <p className="muted">
@@ -646,6 +671,19 @@ export default function ReviewQueue({
                     </button>
                   )}
 
+                  {/* Several envelopes is the same question again, answered in parts. */}
+                  <button
+                    className="picker-option"
+                    // In place of the envelopes rather than after them, so that
+                    // closing once the split is staged leaves the picker instead
+                    // of stepping back into it.
+                    onClick={() => picking && overlay.open(picking.id, { to: 'split' }, { replace: true })}
+                    disabled={pending}
+                  >
+                    <span className="picker-name">Split between envelopes</span>
+                    <span className="muted picker-group">part here, part there</span>
+                  </button>
+
                   {/* "No envelope at all" is the same question as "which one". */}
                   <button
                     className="picker-option"
@@ -667,5 +705,59 @@ export default function ReviewQueue({
       )}
 
     </div>
+  );
+}
+
+/**
+ * The parts of one row's split, staged like any other decision: nothing is
+ * written until Save. Opened from the row's picker, it starts from the
+ * envelope the row has - usually the larger part - with a second part to
+ * fill in, and that first part left blank takes whatever the second leaves.
+ */
+function ReviewSplit({
+  row,
+  envelopes,
+  decision,
+  onBack,
+  onDone,
+}: {
+  row: QueueRow;
+  envelopes: EnvelopeOption[];
+  decision: Decision;
+  onBack: () => void;
+  onDone: (lines: LineDraft[]) => void;
+}) {
+  const [lines, setLines] = useState<LineDraft[]>(
+    () =>
+      decision.split ?? [
+        { envelopeId: decision.envelopeId ?? '', amount: '' },
+        { envelopeId: '', amount: '' },
+      ],
+  );
+  const finished = splitLines(lines, row.amountCents) !== null;
+
+  return (
+    <>
+      <div className="dialog-body">
+        <SplitLines
+          lines={lines}
+          setLines={setLines}
+          totalCents={Math.abs(row.amountCents)}
+          envelopes={envelopes}
+          title={row.payeeDisplay}
+        />
+        {!finished && (
+          <p className="muted">
+            Every part needs an envelope, and the parts need to add up to the whole.
+          </p>
+        )}
+      </div>
+      <div className="picker-foot dialog-foot">
+        <button className="primary" onClick={() => onDone(lines)} disabled={!finished}>
+          Use this split
+        </button>
+        <button onClick={onBack}>Back to envelopes</button>
+      </div>
+    </>
   );
 }

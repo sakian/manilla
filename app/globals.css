@@ -1628,9 +1628,18 @@ details[open] > summary > .group-summary::before {
     grid-template-columns: minmax(0, 1fr) auto auto;
     margin-bottom: 12px;
   }
-  .split-row.with-rest select {
+  .split-row.with-rest .envelope-pick {
     grid-column: 1 / -1;
   }
+}
+
+/* A part's envelope opens the picker; it sits in the row as a field would. */
+.split-row .envelope-pick {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  font-size: 14px;
+  padding: 7px 10px;
 }
 
 .split-foot {
@@ -2967,6 +2976,11 @@ details[open] > summary > .group-summary::before {
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+}
+
+/* Focused only so Escape starts inside it (see SplitLines); not a control. */
+.picker:focus {
+  outline: none;
 }
 
 .picker-head {
