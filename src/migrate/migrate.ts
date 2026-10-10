@@ -42,6 +42,7 @@ import {
   envelopes,
   importBatches,
   transactionExternalIds,
+  transactionMessages,
   transactions,
   txnLines,
 } from '../../db/schema.ts';
@@ -911,7 +912,6 @@ export async function commitMigration(
           amountCents: planned.amountCents,
           payeeRaw: planned.payeeRaw,
           payeeKey: normalizePayee(planned.payeeRaw).key,
-          note: planned.note ?? null,
           kind: 'spending',
           status: 'confirmed',
           source: 'goodbudget',
@@ -920,6 +920,11 @@ export async function commitMigration(
         .returning({ id: transactions.id });
 
       const transactionId = created!.id;
+
+      // What was typed in the old app starts the thread, as any note does.
+      if (planned.note?.trim()) {
+        await tx.insert(transactionMessages).values({ transactionId, body: planned.note.trim() });
+      }
 
       if (planned.lines.length > 0) {
         await tx.insert(txnLines).values(

@@ -1,5 +1,6 @@
 import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { threadOf } from '../transactions/thread.ts';
 import type { Database } from '../../db/client.ts';
 import { checkInvariant, envelopeBalances, openAccount } from '../ledger/ledger.ts';
 import { listAccounts } from '../accounts/manage.ts';
@@ -398,7 +399,11 @@ describe(
     test('the export’s Notes arrive as notes, not as a bank memo', async () => {
       await commitMigration(db, planMigration([EXPORT]), mappingFor());
       const [zehrs] = await db.select().from(transactions).where(eq(transactions.payeeRaw, 'ZEHRS'));
-      assert.equal(zehrs!.note, 'weekly shop', 'typed by the user in the old app');
+      assert.deepEqual(
+        (await threadOf(db, zehrs!.id)).map((message) => message.body),
+        ['weekly shop'],
+        'typed by the user in the old app',
+      );
       assert.equal(zehrs!.memo, null);
     });
 

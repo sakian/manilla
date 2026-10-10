@@ -374,7 +374,7 @@ kbd {
     'payee amount'
     'meta  meta'
     'choice choice'
-    'note  note';
+    'thread thread';
   gap: 4px 12px;
   align-items: baseline;
   padding: 10px 14px;
@@ -513,6 +513,26 @@ kbd {
   margin-right: auto;
 }
 
+/* The note for whoever rows are handed to: a line of its own above the
+   count and the buttons, at any width. */
+.queue-save > .hand-note {
+  flex: 1 1 100%;
+  margin-right: 0;
+  font: inherit;
+  font-size: 14px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  min-width: 0;
+  resize: vertical;
+}
+
+.queue-save > .hand-note + span {
+  margin-right: auto;
+}
+
 .hand-to {
   display: inline-flex;
   align-items: center;
@@ -540,8 +560,102 @@ kbd {
 
 /* For me and All, under the heading. */
 .segmented.review-view {
-  max-width: 320px;
+  max-width: 400px;
   margin: 10px 0 0;
+}
+
+.review-one {
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+
+/* One at a time (RQ-7): a single card with room to read it, and the same
+   sticky bar as the list for what to do about it. */
+.one {
+  max-width: 640px;
+}
+
+.one-progress {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.one-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.one-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.one-payee {
+  font-size: 19px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.one-head .money {
+  font-size: 19px;
+  white-space: nowrap;
+}
+
+.one-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.one-facts dt {
+  color: var(--text-dim);
+}
+
+.one-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.one-thread .thread {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.one-decide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-save.one-actions {
+  margin-top: 14px;
+}
+
+.one-actions > :first-child {
+  margin-right: auto;
+}
+
+.one + .footnote,
+.one .footnote {
+  margin-top: 10px;
 }
 
 /* --- Pages -------------------------------------------------------------- */
@@ -3253,29 +3367,76 @@ details[open] > summary > .group-summary::before {
   padding-top: 4px;
 }
 
-/* A note of your own on a review row: quoted, so it reads as yours rather
-   than as something the bank or the app said. */
-.queue-row-note {
-  grid-area: note;
+
+/* What the household has written about a transaction (RQ-7). Quoted, so it
+   reads as people talking rather than as something the bank or the app said;
+   in the accent once someone else is in it, because then it is a conversation. */
+.thread {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   font-size: 13px;
-  color: var(--text-dim);
-  border-left: 2px solid var(--border);
-  padding: 2px 0 2px 8px;
+  min-width: 0;
+}
+
+.queue-row > .thread,
+.queue-row > .thread-block {
+  grid-area: thread;
   margin-top: 4px;
+}
+
+.thread ol {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-self: stretch;
+  color: var(--text-dim);
+}
+
+.thread.shared ol {
+  border-left-color: var(--accent);
+}
+
+.thread li {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.queue-row-note.editing {
+.thread strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.thread-own {
+  white-space: nowrap;
+}
+
+.thread-own .link-button {
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.thread-compose {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border-left: none;
-  padding-left: 0;
+  align-self: stretch;
 }
 
-.queue-row-note.editing textarea {
+.thread-compose textarea {
   width: 100%;
+}
+
+.thread-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 /*

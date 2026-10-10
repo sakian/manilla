@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 import { homeDb } from '../db/client.ts';
 import { allLedgers, currentLedger, ledgerDb, rememberLedger } from './ledger.ts';
-import { handOverTo } from '../src/queue/handover.ts';
+import { handOverTo, writeAbout } from '../src/queue/handover.ts';
+import { editMessage, removeMessage } from '../src/transactions/thread.ts';
 import { reviewStates } from '../src/push/edits.ts';
 import { tellOthers } from './editNotices.ts';
 import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
@@ -47,7 +48,7 @@ export async function saveReviewAction(decisions: ReviewDecision[]) {
  * as soon as it is done. The notification goes after the answer, so a slow
  * push service does not hold the screen up.
  */
-export async function handOverAction(transactionIds: string[], toUserId: string) {
+export async function handOverAction(transactionIds: string[], toUserId: string, note = '') {
   try {
     const session = actAs(await requireUser());
     const [ledgers, open] = await Promise.all([allLedgers(), currentLedger()]);
@@ -55,6 +56,7 @@ export async function handOverAction(transactionIds: string[], toUserId: string)
       ids: transactionIds,
       to: toUserId,
       from: { id: session.userId, name: session.userName },
+      note,
       ...(ledgers.length > 1 ? { ledger: { key: open.key, name: open.name } } : {}),
     });
     after(() => result.sent);
@@ -67,6 +69,68 @@ export async function handOverAction(transactionIds: string[], toUserId: string)
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * Write in a transaction's thread (RQ-7). On a handed-over row the person at
+ * the other end of the handover is told; on any other row it is a change like
+ * a note always was, and the household hears as they chose to.
+ */
+export async function writeAboutAction(transactionId: string, body: string) {
+  try {
+    const session = actAs(await requireUser());
+    const [ledgers, open] = await Promise.all([allLedgers(), currentLedger()]);
+    const result = await writeAbout(await ledgerDb(), homeDb(), {
+      transactionId,
+      body,
+      from: { id: session.userId, name: session.userName },
+      ...(ledgers.length > 1 ? { ledger: { key: open.key, name: open.name } } : {}),
+    });
+    after(() => result.sent);
+    if (!result.handed) {
+      await tellOthers(
+        session,
+        result.status === 'pending_review'
+          ? { kind: 'review', action: 'changed', count: 1 }
+          : { kind: 'changes', action: 'changed', count: 1 },
+      );
+    }
+    revalidateThreads();
+    return { ok: true as const, message: result.message };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** Change your own message; anyone else's is refused (src/transactions/thread.ts). */
+export async function editMessageAction(messageId: string, body: string) {
+  try {
+    const session = actAs(await requireUser());
+    const connection = await ledgerDb();
+    const message = await editMessage(connection, messageId, session.userId, body);
+    revalidateThreads();
+    return { ok: true as const, message };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export async function removeMessageAction(messageId: string) {
+  try {
+    const session = actAs(await requireUser());
+    await removeMessage(await ledgerDb(), messageId, session.userId);
+    revalidateThreads();
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** Everywhere a thread, or the latest of one, is shown. */
+function revalidateThreads() {
+  revalidatePath('/review');
+  revalidatePath('/review/notes');
+  revalidatePath('/transactions');
 }
 
 /**

@@ -20,7 +20,6 @@ import {
   deleteTransfer,
   sendBackToReview,
   transactionDetail,
-  setTransactionNote,
   updateTransaction,
   updateTransfer,
 } from '../../src/transactions/manage.ts';
@@ -32,6 +31,8 @@ import { reviewStates } from '../../src/push/edits.ts';
 import { tellOthers } from '../editNotices.ts';
 import { homeDb } from '../../db/client.ts';
 import { displayInstant } from '../../src/budget/month.ts';
+import type { Message } from '../../src/transactions/thread.ts';
+import type { ThreadPeople } from '../Thread.tsx';
 import { centsFromInput } from '../../src/amount.ts';
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -65,19 +66,22 @@ export async function transactionDetailAction(transactionId: string): Promise<
         payeeRaw: string;
         /** The bank's, shown and never edited. */
         memo: string | null;
-        note: string | null;
         kind: 'spending' | 'account_transfer';
         status: 'pending_review' | 'confirmed';
         transferPairId: string | null;
         source: string;
         lines: { envelopeId: string; amountCents: number }[];
+        thread: { messages: Message[]; people: ThreadPeople };
       };
     }
   | { ok: false; error: string }
 > {
   try {
-    actAs(await requireUser());
-    const detail = await transactionDetail(await ledgerDb(), transactionId);
+    const session = actAs(await requireUser());
+    const [detail, members] = await Promise.all([
+      transactionDetail(await ledgerDb(), transactionId),
+      listMembers(homeDb()),
+    ]);
     if (!detail) return { ok: false, error: 'That transaction is no longer there.' };
 
     return {
@@ -89,7 +93,6 @@ export async function transactionDetailAction(transactionId: string): Promise<
         amountCents: detail.amountCents,
         payeeRaw: detail.payeeRaw,
         memo: detail.memo,
-        note: detail.note,
         kind: detail.kind,
         status: detail.status,
         transferPairId: detail.transferPairId,
@@ -98,6 +101,15 @@ export async function transactionDetailAction(transactionId: string): Promise<
           envelopeId: line.envelopeId,
           amountCents: line.amountCents,
         })),
+        thread: {
+          messages: detail.messages,
+          people: {
+            me: session.userId,
+            handedToId: detail.handedToId,
+            handedById: detail.handedById,
+            names: Object.fromEntries(members.map((member) => [member.id, member.name])),
+          },
+        },
       },
     };
   } catch (error) {
@@ -183,7 +195,6 @@ export async function updateTransactionAction(
       date: fields.date,
       amountCents: signed(fields.amount, fields.direction),
       payeeRaw: fields.payeeRaw,
-      note: fields.note ?? null,
       lines,
       // Giving it an envelope by hand is the same statement confirming makes.
       ...(lines.length > 0 ? { status: 'confirmed' as const } : {}),
@@ -197,32 +208,6 @@ export async function updateTransactionAction(
 
     refreshed();
     return { ok: true, message: 'Saved.' };
-  } catch (error) {
-    return failed(error);
-  }
-}
-
-/**
- * Write or clear a note on its own - from the review queue, where it must not
- * wait for (or disturb) the envelope decisions saved together at the end.
- */
-export async function setTransactionNoteAction(
-  transactionId: string,
-  note: string,
-): Promise<ActionResult> {
-  try {
-    const session = actAs(await requireUser());
-    const connection = await ledgerDb();
-    const before = await reviewStates(connection, [transactionId]);
-    await setTransactionNote(connection, transactionId, note);
-    // A note on its own is a change worth hearing about.
-    await tellOthers(
-      session,
-      { kind: 'review', action: 'changed', count: before.waiting },
-      { kind: 'changes', action: 'changed', count: before.reviewed },
-    );
-    revalidatePath('/transactions');
-    return { ok: true, message: note.trim() ? 'Note saved.' : 'Note removed.' };
   } catch (error) {
     return failed(error);
   }

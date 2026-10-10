@@ -12,9 +12,9 @@ import { auditLog, envelopeMoves, transactions } from '../../db/schema.ts';
 import { openAccount } from '../ledger/ledger.ts';
 import {
   createManualTransaction,
-  setTransactionNote,
   updateTransaction,
 } from '../transactions/manage.ts';
+import { addMessage, editMessage, removeMessage } from '../transactions/thread.ts';
 import { confirmTransactions } from '../queue/queue.ts';
 import { fundEnvelopes, reverseAllocation } from '../budget/budget.ts';
 import { envelopeHistory } from '../envelopes/manage.ts';
@@ -129,7 +129,7 @@ describe(
       await db.update(transactions).set({ status: 'pending_review' }).where(eq(transactions.id, id));
       await db.delete(auditLog);
       await runAs(SAM, async () => {
-        await setTransactionNote(db, id, 'birthday');
+        await updateTransaction(db, id, { payeeRaw: 'Birthday' });
         await confirmTransactions(db, [id]);
       });
       const names = (await entries()).map((row) => row.actorName);
@@ -212,13 +212,13 @@ describe(
       await runAs(SAM, () =>
         updateTransaction(db, id, { lines: [{ envelopeId: env.gasId, amountCents: -2250 }] }),
       );
-      await runAs(SAM, () => setTransactionNote(db, id, 'fuel, not food'));
+      await runAs(SAM, () => addMessage(db, id, 'fuel, not food'));
 
       const history = await transactionHistory(db, id);
       assert.deepEqual(
         history.map(({ who, changes }) => ({ who, changes: [...changes].sort() })),
         [
-          { who: 'Sam', changes: ['note "fuel, not food"'] },
+          { who: 'Sam', changes: ['wrote "fuel, not food"'] },
           { who: 'Sam', changes: [`envelopes changed (was Groceries ${formatMoney(-2250)})`] },
           { who: 'Alex', changes: ['date 2026-09-20 → 2026-09-21', 'payee "Farmers market" → "Market"'] },
           { who: null, changes: ['date 2026-09-19 → 2026-09-20'] },
@@ -226,6 +226,19 @@ describe(
         ].map((entry) => ({ ...entry, changes: entry.changes.sort() })),
         'compared with each entry sorted, since column order is not promised',
       );
+    });
+
+    test('a message changed or taken back is in the trail, in the name of whoever did it', async () => {
+      const id = await groceries();
+      const sam = { id: crypto.randomUUID(), name: 'Sam' };
+      const message = await runAs(sam, () => addMessage(db, id, 'for the trip'));
+      await runAs(sam, () => editMessage(db, message.id, sam.id, 'for the cottage'));
+      const second = await runAs(sam, () => addMessage(db, id, 'never mind'));
+      await runAs(sam, () => removeMessage(db, second.id, sam.id));
+      const said = (await transactionHistory(db, id)).flatMap((entry) => entry.changes.map((change) => `${entry.who}: ${change}`));
+      assert.ok(said.includes('Sam: changed "for the trip" to "for the cottage"'), JSON.stringify(said));
+      assert.ok(said.includes('Sam: removed "never mind"'), JSON.stringify(said));
+      assert.ok(said.includes('Sam: wrote "for the cottage"'), 'the message as it stands, when it was first written');
     });
 
     test('saving the same split again is not an envelope change', async () => {

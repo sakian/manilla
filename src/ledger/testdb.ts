@@ -102,7 +102,7 @@ export function pgErrorCode(error: unknown): string | undefined {
 export async function truncateAll(db: Database): Promise<void> {
   await db.execute(sql`
     truncate table
-      txn_lines, suggestions, transaction_external_ids, transactions,
+      transaction_messages, txn_lines, suggestions, transaction_external_ids, transactions,
       envelope_moves, budget_lines, rules, import_batches,
       envelopes, envelope_groups, accounts, account_groups,
       sessions, credentials, recovery_codes, webauthn_challenges, users,

@@ -1,5 +1,7 @@
 import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { runAs } from '../audit/actor.ts';
+import { addMessage, editMessage, removeMessage, ThreadError } from './thread.ts';
 import { and, eq } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import {
@@ -18,7 +20,6 @@ import {
   deleteTransaction,
   deleteTransfer,
   sendBackToReview,
-  setTransactionNote,
   transactionDetail,
   transferDetail,
   undoTransferPairing,
@@ -812,9 +813,9 @@ describe(
       );
     });
 
-    // -- notes ---------------------------------------------------------------
+    // -- notes: the thread ---------------------------------------------------
 
-    test('a note typed with a transaction is its own, apart from any memo', async () => {
+    test('a note typed with a transaction starts its thread, apart from any memo', async () => {
       const id = await createManualTransaction(db, {
         accountId: chequing,
         amountCents: -2500,
@@ -822,11 +823,11 @@ describe(
         note: '  for the birthday dinner  ',
       });
       const detail = await transactionDetail(db, id);
-      assert.equal(detail!.note, 'for the birthday dinner');
+      assert.deepEqual(detail!.messages.map((message) => message.body), ['for the birthday dinner']);
       assert.equal(detail!.memo, null);
     });
 
-    test('a note can be written and cleared without touching anything else', async () => {
+    test('writing adds to the thread without touching anything else', async () => {
       const id = await recordTransaction(db, {
         accountId: chequing,
         date: '2026-09-01',
@@ -837,16 +838,14 @@ describe(
         lines: [{ envelopeId: env.gasId, amountCents: -4520 }],
       });
 
-      await setTransactionNote(db, id, 'the rental car, not ours');
-      let detail = await transactionDetail(db, id);
-      assert.equal(detail!.note, 'the rental car, not ours');
+      await addMessage(db, id, 'the rental car, not ours');
+      await addMessage(db, id, 'expensed, too');
+      const detail = await transactionDetail(db, id);
+      assert.deepEqual(detail!.messages.map((message) => message.body), ['the rental car, not ours', 'expensed, too']);
       assert.equal(detail!.memo, 'POS PURCHASE', 'what the bank said is kept as it came');
       assert.equal(detail!.status, 'pending_review', 'a note is not a review decision');
       assert.equal(detail!.lines.length, 1);
-
-      await setTransactionNote(db, id, '   ');
-      detail = await transactionDetail(db, id);
-      assert.equal(detail!.note, null, 'blank clears it');
+      await assert.rejects(addMessage(db, id, '   '), ThreadError, 'nothing to say is not a message');
     });
 
     test('a note can go on a transfer, which an edit would refuse', async () => {
@@ -862,20 +861,28 @@ describe(
         .where(eq(transactions.transferPairId, pairId))
         .limit(1);
 
-      await setTransactionNote(db, half!.id, 'emergency fund top-up');
-      assert.equal((await transactionDetail(db, half!.id))!.note, 'emergency fund top-up');
+      await addMessage(db, half!.id, 'emergency fund top-up');
+      assert.equal((await transactionDetail(db, half!.id))!.messages[0]!.body, 'emergency fund top-up');
     });
 
-    test('a note is edited along with the rest, and a long one is refused', async () => {
-      const id = await createManualTransaction(db, {
-        accountId: chequing,
-        amountCents: -2500,
-        payeeRaw: 'Farmers market',
-      });
-      await updateTransaction(db, id, { note: 'eggs and honey' });
-      assert.equal((await transactionDetail(db, id))!.note, 'eggs and honey');
+    test('only its author changes or removes a message, and a long one is refused', async () => {
+      const id = await createManualTransaction(db, { accountId: chequing, amountCents: -2500, payeeRaw: 'Farmers market' });
+      const alex = { id: crypto.randomUUID(), name: 'Alex' };
+      const sam = { id: crypto.randomUUID(), name: 'Sam' };
+      const message = await runAs(alex, () => addMessage(db, id, 'eggs'));
+      assert.equal(message.authorName, 'Alex');
 
-      await assert.rejects(setTransactionNote(db, id, 'x'.repeat(NOTE_LIMIT + 1)), TransactionError);
+      await assert.rejects(runAs(sam, () => editMessage(db, message.id, sam.id, 'not eggs')), ThreadError);
+      await assert.rejects(runAs(sam, () => removeMessage(db, message.id, sam.id)), ThreadError);
+
+      const edited = await runAs(alex, () => editMessage(db, message.id, alex.id, 'eggs and honey'));
+      assert.equal(edited.body, 'eggs and honey');
+      assert.ok(edited.editedAt, 'says it was changed');
+      await assert.rejects(runAs(alex, () => editMessage(db, message.id, alex.id, '  ')), ThreadError, 'emptying is removing');
+      await assert.rejects(addMessage(db, id, 'x'.repeat(NOTE_LIMIT + 1)), ThreadError);
+
+      await runAs(alex, () => removeMessage(db, message.id, alex.id));
+      assert.deepEqual((await transactionDetail(db, id))!.messages, []);
     });
   },
 );

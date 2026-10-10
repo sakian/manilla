@@ -1,5 +1,6 @@
 import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { ThreadError } from '../transactions/thread.ts';
 import { createECDH, randomBytes } from 'node:crypto';
 import type { Database } from '../../db/client.ts';
 import { users } from '../../db/schema.ts';
@@ -12,11 +13,15 @@ import { saveSubscription, setDeviceKinds, listDevices } from '../push/push.ts';
 import { handOver, pendingCount, pendingTransactions, saveReview } from './queue.ts';
 import {
   HandoverError,
+  conversations,
   handOverTo,
   handoverMessage,
   handoverPath,
+  notesPath,
+  replyMessage,
   reviewOpensOn,
   setReviewOpensOn,
+  writeAbout,
 } from './handover.ts';
 
 test('the notification says who, how many, and how many are waiting in all', () => {
@@ -30,9 +35,23 @@ test('the notification says who, how many, and how many are waiting in all', () 
   );
 });
 
+test('a note is mentioned, never quoted, because a lock screen is read by whoever holds the phone', () => {
+  assert.equal(
+    handoverMessage({ from: 'Alex', handed: 2, waiting: 2, withNote: true }).body,
+    'Alex handed you 2 transactions to review, with a note.',
+  );
+  assert.equal(replyMessage({ from: 'Sam', handedIt: false }).body, 'Sam replied about a transaction you handed over.');
+  assert.equal(
+    replyMessage({ from: 'Alex', handedIt: true, ledger: 'Business' }).body,
+    'Alex wrote about a transaction they handed you in Business.',
+  );
+  assert.equal(notesPath(), '/review/notes');
+  assert.equal(notesPath('manilla_ledger_business'), '/open?ledger=manilla_ledger_business&to=%2Freview%2Fnotes');
+});
+
 test('tapping it opens the list in the ledger the rows are in, when there is more than one', () => {
-  assert.equal(handoverPath(), '/review?view=mine');
-  assert.equal(handoverPath('manilla_ledger_business'), '/open?ledger=manilla_ledger_business&to=%2Freview%3Fview%3Dmine');
+  assert.equal(handoverPath(), '/review/one?view=mine');
+  assert.equal(handoverPath('manilla_ledger_business'), '/open?ledger=manilla_ledger_business&to=%2Freview%2Fone%3Fview%3Dmine');
 });
 
 const available = await databaseAvailable();
@@ -176,6 +195,110 @@ describe(
       const history = await transactionHistory(db, id, new Map([[sam, 'Sam']]));
       assert.equal(history[0]!.who, 'Alex');
       assert.deepEqual(history[0]!.changes, ['handed to Sam for review']);
+    });
+
+    test('a note goes on every row handed, in the name of whoever handed them', async () => {
+      const [a, b, c] = [await waiting('ONE'), await waiting('TWO'), await waiting('THREE')];
+      const result = await runAs({ id: alex, name: 'Alex' }, () =>
+        handOverTo(db, db, { ids: [a, b], to: sam, from: { id: alex, name: 'Alex' }, note: '  Were these for the trip?  ' }),
+      );
+      assert.equal(result.handed, 2);
+      const rows = await pendingTransactions(db, { handedTo: sam });
+      for (const row of rows) {
+        assert.equal(row.handedById, alex);
+        assert.deepEqual(
+          row.messages.map((message) => [message.authorName, message.body]),
+          [['Alex', 'Were these for the trip?']],
+        );
+      }
+      assert.deepEqual((await pendingTransactions(db)).find((row) => row.id === c)!.messages, []);
+    });
+
+    test('a blank note is no note, and a long one is refused rather than cut', async () => {
+      const id = await waiting('ONE');
+      await runAs({ id: alex, name: 'Alex' }, () => handOverTo(db, db, { ids: [id], to: sam, from: { id: alex, name: 'Alex' }, note: '   ' }));
+      assert.deepEqual((await pendingTransactions(db))[0]!.messages, []);
+      await assert.rejects(
+        runAs({ id: alex, name: 'Alex' }, () =>
+          handOverTo(db, db, { ids: [id], to: sam, from: { id: alex, name: 'Alex' }, note: 'x'.repeat(501) }),
+        ),
+        HandoverError,
+      );
+    });
+
+    test('a reply goes to whoever handed it over, and theirs back to whoever it went to', async () => {
+      await saveSubscription(db, alex, browserAt('https://fcm.googleapis.com/fcm/send/alex'), 'Alex phone');
+      await saveSubscription(db, sam, browserAt('https://fcm.googleapis.com/fcm/send/sam'), 'Sam phone');
+      const id = await waiting('ONE');
+      await runAs({ id: alex, name: 'Alex' }, () => handOverTo(db, db, { ids: [id], to: sam, from: { id: alex, name: 'Alex' }, note: 'Trip?' }));
+
+      const fromSam = pushService();
+      const reply = await runAs({ id: sam, name: 'Sam' }, () =>
+        writeAbout(db, db, { transactionId: id, body: 'Yes, the gas on the way', from: { id: sam, name: 'Sam' } }, { fetch: fromSam.fetch }),
+      );
+      assert.equal(reply.message.authorName, 'Sam');
+      assert.equal(await reply.sent, 1);
+      assert.deepEqual(fromSam.posted, ['https://fcm.googleapis.com/fcm/send/alex']);
+
+      const fromAlex = pushService();
+      await runAs({ id: alex, name: 'Alex' }, async () =>
+        (await writeAbout(db, db, { transactionId: id, body: 'Thanks', from: { id: alex, name: 'Alex' } }, { fetch: fromAlex.fetch })).sent,
+      );
+      assert.deepEqual(fromAlex.posted, ['https://fcm.googleapis.com/fcm/send/sam']);
+
+      assert.deepEqual(
+        (await pendingTransactions(db))[0]!.messages.map((message) => `${message.authorName}: ${message.body}`),
+        ['Alex: Trip?', 'Sam: Yes, the gas on the way', 'Alex: Thanks'],
+      );
+    });
+
+    test('a row nobody handed over can be written on, and tells nobody in particular', async () => {
+      await saveSubscription(db, alex, browserAt('https://fcm.googleapis.com/fcm/send/alex'), 'Alex phone');
+      const id = await waiting('ONE');
+      const service = pushService();
+      const write = (body: string) =>
+        runAs({ id: sam, name: 'Sam' }, () =>
+          writeAbout(db, db, { transactionId: id, body, from: { id: sam, name: 'Sam' } }, { fetch: service.fetch }),
+        );
+      const result = await write('Hello');
+      assert.equal(result.handed, false, 'so the caller tells the household as it would of any change');
+      assert.equal(await result.sent, 0);
+      assert.deepEqual(service.posted, []);
+      await assert.rejects(write('   '), ThreadError);
+      await assert.rejects(write('x'.repeat(501)), ThreadError);
+    });
+
+    test('conversations stay after the row is reviewed, latest first, for the people in them', async () => {
+      const [a, b] = [await waiting('ONE'), await waiting('TWO')];
+      await runAs({ id: alex, name: 'Alex' }, () => handOverTo(db, db, { ids: [a], to: sam, from: { id: alex, name: 'Alex' }, note: 'First' }));
+      await runAs({ id: alex, name: 'Alex' }, () => handOverTo(db, db, { ids: [b], to: sam, from: { id: alex, name: 'Alex' }, note: 'Second' }));
+      await runAs({ id: sam, name: 'Sam' }, async () => {
+        await saveReview(db, [{ transactionId: a, envelopeId: env.groceriesId }]);
+        await writeAbout(db, db, { transactionId: a, body: 'Groceries', from: { id: sam, name: 'Sam' } });
+      });
+
+      const forAlex = await conversations(db, alex);
+      assert.deepEqual(forAlex.map((row) => row.id), [a, b], 'the one answered last comes first');
+      assert.equal(forAlex[0]!.status, 'confirmed');
+      assert.deepEqual(forAlex[0]!.envelopeNames, ['Groceries']);
+      assert.deepEqual((await conversations(db, sam)).map((row) => row.id), [a, b]);
+
+      const [pat] = await db.insert(users).values({ name: 'Pat' }).returning();
+      assert.deepEqual(await conversations(db, pat!.id), [], 'not theirs to read');
+    });
+
+    test('the history tells what was written, with the handover it came with', async () => {
+      const id = await waiting('ONE');
+      await runAs({ id: alex, name: 'Alex' }, () => handOverTo(db, db, { ids: [id], to: sam, from: { id: alex, name: 'Alex' }, note: 'Trip?' }));
+      await runAs({ id: sam, name: 'Sam' }, () => writeAbout(db, db, { transactionId: id, body: 'Yes', from: { id: sam, name: 'Sam' } }));
+      const history = await transactionHistory(db, id, new Map([[sam, 'Sam']]));
+      assert.deepEqual(
+        history.slice(0, 2).map((entry) => [entry.who, entry.changes]),
+        [
+          ['Sam', ['wrote "Yes"']],
+          ['Alex', ['handed to Sam for review', 'wrote "Trip?"']],
+        ],
+      );
     });
 
     test('each person chooses which view their review list opens on', async () => {

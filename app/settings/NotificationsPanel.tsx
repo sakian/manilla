@@ -25,7 +25,7 @@ type Device = PushDevice;
 /** In the order a person meets them: the sync, what it found, then what is wrong. */
 const SWITCHES: [PushKind, string, string][] = [
   ['sync', 'Bank sync', 'What came in from the bank, income to give to envelopes, and a bank that wants you to sign in again'],
-  ['handed', 'Handed to me for review', 'Transactions someone else left for you to look at'],
+  ['handed', 'Handed to me for review', 'Transactions someone else left for you to look at, and replies about ones you handed over'],
   ['review', 'Review activity', 'Someone else reviewing transactions, or changing one still waiting for review'],
   ['changes', 'Changes to reviewed transactions', 'Someone else changing, deleting or sending back a transaction already reviewed'],
   ['overspent', 'Overspent envelopes', 'Envelopes the sync took below zero'],

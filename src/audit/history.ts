@@ -10,11 +10,16 @@
  * Only updates and deletions are in the trail (the trigger skips inserts), so
  * the oldest entry - how it arrived, and who brought it - comes from the
  * transaction itself, which says when it came and who made it.
+ *
+ * What people wrote about it (its thread, RQ-7) is told here too: a message
+ * shares its moment and person with whatever was saved beside it, so a
+ * handover and its note are one entry. An edit or removal of a message is in
+ * the trail like any other change.
  */
 
 import { asc, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
-import { accounts, auditLog, envelopes, transactions } from '../../db/schema.ts';
+import { accounts, auditLog, envelopes, transactionMessages, transactions } from '../../db/schema.ts';
 import { formatMoney } from '../money.ts';
 
 export type HistoryEntry = {
@@ -36,17 +41,22 @@ export async function transactionHistory(
   /** Members by id, from the home database, so a handover can name who it went to (RQ-7). */
   members: Map<string, string> = new Map(),
 ): Promise<HistoryEntry[]> {
-  const [rows, [arrival]] = await Promise.all([
+  const [rows, [arrival], messages] = await Promise.all([
     db.select().from(auditLog).where(eq(auditLog.transactionId, transactionId)).orderBy(asc(auditLog.id)),
     db
       .select({ at: transactions.createdAt, who: transactions.createdByName, source: transactions.source })
       .from(transactions)
       .where(eq(transactions.id, transactionId)),
+    db
+      .select({ at: transactionMessages.createdAt, who: transactionMessages.authorName, body: transactionMessages.body })
+      .from(transactionMessages)
+      .where(eq(transactionMessages.transactionId, transactionId))
+      .orderBy(asc(transactionMessages.createdAt), asc(transactionMessages.id)),
   ]);
   const arrived: HistoryEntry[] = arrival
     ? [{ at: arrival.at, who: arrival.who, changes: [ARRIVED[arrival.source]] }]
     : [];
-  if (rows.length === 0) return arrived;
+  if (rows.length === 0 && messages.length === 0) return arrived;
 
   const names = { ...(await namesFor(db, rows)), member: members };
   const entries: HistoryEntry[] = [];
@@ -61,6 +71,14 @@ export async function transactionHistory(
     if (entry !== last) entries.push(entry);
     entry.changes.push(...describe(row, names));
   }
+
+  for (const message of messages) {
+    const said = `wrote ${quoted(message.body)}`;
+    const same = entries.find((entry) => entry.at.getTime() === message.at.getTime() && entry.who === message.who);
+    if (same) same.changes.push(said);
+    else entries.push({ at: message.at, who: message.who, changes: [said] });
+  }
+  entries.sort((a, b) => a.at.getTime() - b.at.getTime());
 
   // A save that deleted several lines says so once.
   for (const entry of entries) entry.changes = mergeLineRemovals(entry.changes);
@@ -166,6 +184,12 @@ function describe(row: Row, names: Names): string[] {
       changes.push(`${which} ${money(before.amount_cents)} → ${money(after.amount_cents)}`);
     }
     return changes;
+  }
+
+  if (row.tableName === 'transaction_messages') {
+    if (row.action === 'delete') return [`removed ${quoted(before.body)}`];
+    if ('body' in before) return [`changed ${quoted(before.body)} to ${quoted(after.body)}`];
+    return [];
   }
 
   return [];
