@@ -298,7 +298,10 @@ passkey to replace rather than four.
 In production the boot check refuses to start on a localhost relying-party ID or
 a schema it could not bring up to date, with the reason in
 `docker compose logs app`. Serving against a half-migrated schema is how a ledger
-ends up half-written, so both are fatal rather than warnings.
+ends up half-written, so both are fatal rather than warnings: the app exits, and
+Docker keeps restarting it until the cause is fixed. A database that is still
+starting — Postgres recovering after a power cut, say — is waited for, for up to
+two minutes, before that counts as failure.
 
 **Every rebuild leaves the last one behind.** `--build` keeps the previous image
 and the build cache, and Docker never clears either: on this project's own
