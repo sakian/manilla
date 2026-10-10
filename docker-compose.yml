@@ -114,9 +114,9 @@ services:
       # Passkeys are bound to this hostname; it must match what you type in the
       # browser, e.g. manilla.your-tailnet.ts.net. The localhost defaults are for
       # development only: in production the boot-time check in instrumentation.ts
-      # rejects them, and the app then serves nothing but 500s with the reason in
-      # the log (`docker compose logs app`). That is deliberate - a session issued
-      # for the wrong origin is worse than no session at all.
+      # rejects them, and the app then exits - restarting until it is fixed - with
+      # the reason in the log (`docker compose logs app`). That is deliberate - a
+      # session issued for the wrong origin is worse than no session at all.
       MANILLA_RP_ID: ${MANILLA_RP_ID:-localhost}
       MANILLA_ORIGIN: ${MANILLA_ORIGIN:-http://localhost:3000}
       # Unset is right for a tailnet user's first visit; see .env.example.

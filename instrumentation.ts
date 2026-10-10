@@ -14,11 +14,21 @@
 export async function register(): Promise<void> {
   const production = process.env.NODE_ENV === 'production';
 
-  await migrateIfNeeded(production);
-  await checkAuthConfig(production);
-  await checkTimeZone(production);
-  await startBankSync(production);
-  await startProblemWatch(production);
+  try {
+    await migrateIfNeeded(production);
+    await checkAuthConfig(production);
+    await checkTimeZone(production);
+    await startBankSync(production);
+    await startProblemWatch(production);
+  } catch (error) {
+    // Next runs this once and, when it throws, keeps the process up answering
+    // every request with a 500 - so `restart: unless-stopped` never fires and
+    // nothing short of a hand restart recovers. Exiting hands the retry to
+    // Docker, and the reason stays in `docker compose logs app`.
+    if (!production || process.env.NEXT_RUNTIME !== 'nodejs') throw error;
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
 }
 
 /**
@@ -91,11 +101,17 @@ async function migrateIfNeeded(production: boolean): Promise<void> {
   if (!production || !process.env.DATABASE_URL) return;
 
   const { prepareEveryLedger } = await import('./src/ledgers/registry.ts');
+  const { retryWhileDatabaseStarts, rootMessage } = await import('./src/ledgers/boot.ts');
+  const databaseUrl = process.env.DATABASE_URL;
+  const log = (line: string) => console.log(`[manilla] ${line}`);
 
   try {
-    await prepareEveryLedger(process.env.DATABASE_URL, (line) => console.log(`[manilla] ${line}`));
+    // After a power cut Postgres can still be recovering when this runs.
+    await retryWhileDatabaseStarts(() => prepareEveryLedger(databaseUrl, log), { log });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const outer = error instanceof Error ? error.message : String(error);
+    const root = rootMessage(error);
+    const message = outer.includes(root) ? outer : `${outer} (${root})`;
     // Serving against a schema we could not bring up to date is how a ledger
     // ends up half-written, so this is fatal rather than a warning.
     throw new Error(`Manilla refuses to start: ${message}`);
