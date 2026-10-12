@@ -6,6 +6,8 @@ import { monthPace } from '../src/budget/progress.ts';
 import { listEnvelopes } from '../src/envelopes/manage.ts';
 import { attention } from '../src/notices/notices.ts';
 import { diskUsedShare } from '../src/system/disk.ts';
+import { aiKeyRejectedSince } from '../src/ai/ai.ts';
+import { homeDb } from '../db/client.ts';
 import { requireUser, reviewViewer } from './auth.ts';
 import HomeScreen, { type MonthFigures } from './HomeScreen.tsx';
 import { Notices } from './Notices.tsx';
@@ -25,7 +27,11 @@ export default async function Home(props: {
   const [groups, budget, report] = await Promise.all([
     listEnvelopes(connection, { includeArchived: true }),
     budgetMonth(connection, month),
-    attention(connection, month, { diskUsage: diskUsedShare, viewer: await reviewViewer(session) }),
+    attention(connection, month, {
+      diskUsage: diskUsedShare,
+      aiKeyRejectedSince: () => aiKeyRejectedSince(homeDb()),
+      viewer: await reviewViewer(session),
+    }),
   ]);
 
   const figures: MonthFigures = {};

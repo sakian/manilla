@@ -51,6 +51,17 @@ describe(
         lines: [{ envelopeId: env.unallocatedId, amountCents: cents }],
       });
 
+    test('a rejected AI key is said, with the day it started (NF-11)', async () => {
+      await receiveIncome(400000);
+      const report = (since: string | null) =>
+        attention(db, '2026-09', { aiKeyRejectedSince: async () => since });
+
+      assert.deepEqual((await report('2026-09-14')).notices, [
+        { kind: 'ai_key_rejected', severity: 'warn', since: '2026-09-14' },
+      ]);
+      assert.deepEqual((await report(null)).notices, []);
+    });
+
     test('an untouched ledger says where to start, and nothing else', async () => {
       assert.deepEqual(await kinds(), ['nothing_recorded']);
     });

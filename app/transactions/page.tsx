@@ -1,6 +1,8 @@
 import { ledgerDb } from '../ledger.ts';
 import { attention } from '../../src/notices/notices.ts';
 import { diskUsedShare } from '../../src/system/disk.ts';
+import { aiKeyRejectedSince } from '../../src/ai/ai.ts';
+import { homeDb } from '../../db/client.ts';
 import { requireUser, reviewViewer } from '../auth.ts';
 import { Notices } from '../Notices.tsx';
 import TransactionsView from './TransactionsView.tsx';
@@ -31,7 +33,11 @@ export default async function TransactionsPage(props: {
 }) {
   const session = await requireUser();
   const params = await props.searchParams;
-  const report = await attention(await ledgerDb(), undefined, { diskUsage: diskUsedShare, viewer: await reviewViewer(session) });
+  const report = await attention(await ledgerDb(), undefined, {
+    diskUsage: diskUsedShare,
+    aiKeyRejectedSince: () => aiKeyRejectedSince(homeDb()),
+    viewer: await reviewViewer(session),
+  });
 
   return (
     <>

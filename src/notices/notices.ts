@@ -48,6 +48,8 @@ export type AttentionKind =
   | 'unusual_charge'
   /** A bank feed stopped because the bank wants its login again (FR-16). */
   | 'bank_login_needed'
+  /** NF-11: Anthropic turned away the API key, so nothing is being suggested. */
+  | 'ai_key_rejected'
   /** A sync held back transactions that need a person's decision. */
   | 'sync_held'
   /** The server's disk is nearly full, which would stop every write. */
@@ -72,6 +74,8 @@ export type Attention = {
   mine?: number;
   /** For `awaiting_review`: the view that person's review list opens on, which decides what it counts. */
   view?: ReviewView;
+  /** For `ai_key_rejected`: the calendar day it started. */
+  since?: string;
 };
 
 export type AttentionReport = {
@@ -149,6 +153,12 @@ export async function attention(
      * it the review notice counts everything waiting, as it always did.
      */
     viewer?: { userId: string; opensOn: ReviewView };
+    /**
+     * The day the API key was first turned away, if it has been (src/ai/ai.ts).
+     * Passed in for the same reason as the disk, and because it belongs to the
+     * account rather than the ledger this reads (LG-5).
+     */
+    aiKeyRejectedSince?: () => Promise<string | null>;
   } = {},
 ): Promise<AttentionReport> {
   const [balances, invariant, waiting, received, expected, average, suggestions, mismatched, unusual, bank] =
@@ -165,6 +175,7 @@ export async function attention(
       bankAttention(db),
     ]);
   const disk = options.diskUsage ? await options.diskUsage() : null;
+  const keyRejectedSince = options.aiKeyRejectedSince ? await options.aiKeyRejectedSince() : null;
   const mine = options.viewer ? await pendingCount(db, { handedTo: options.viewer.userId }) : 0;
 
   const notices: Attention[] = [];
@@ -234,6 +245,12 @@ export async function attention(
       count: bank.loginNeeded.length,
       ...(bank.loginNeeded.length === 1 && only ? { institution: only } : {}),
     });
+  }
+
+  // The same silence as a stopped feed: imports carry on without the model
+  // (NF-10), so the only sign would be fewer suggestions.
+  if (keyRejectedSince) {
+    notices.push({ kind: 'ai_key_rejected', severity: 'warn', since: keyRejectedSince });
   }
 
   if (bank.held > 0) {

@@ -12,6 +12,7 @@
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AccuracyReport, AiUsageReport } from '../../src/ai/ai.ts';
+import { displayDate } from '../../src/budget/month.ts';
 import { clearAiCacheAction, setAiSettingsAction } from './actions.ts';
 
 function dollars(milliCents: number): string {
@@ -29,6 +30,7 @@ export default function AiPanel({
   accuracy,
   unknownMerchants,
   keyPresent,
+  keyRejectedSince,
 }: {
   enabled: boolean;
   budget: number;
@@ -36,6 +38,8 @@ export default function AiPanel({
   accuracy: AccuracyReport;
   unknownMerchants: number;
   keyPresent: boolean;
+  /** The day Anthropic first turned away the key in use, if it has. */
+  keyRejectedSince: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -73,7 +77,7 @@ export default function AiPanel({
   }, [router]);
 
   return (
-    <section className="panel">
+    <section className="panel" id="ai">
       <div className="panel-head">
         <h3>Categorizing with AI</h3>
         <button
@@ -92,6 +96,15 @@ export default function AiPanel({
         <p className="budget-warning">
           No <code>ANTHROPIC_API_KEY</code> is set, so there is nothing to turn on. Add one to
           <code>.env</code> and restart.
+        </p>
+      )}
+
+      {keyRejectedSince && (
+        <p className="budget-warning">
+          Anthropic has rejected the API key since {displayDate(keyRejectedSince)}, so nothing is
+          being suggested. Imports carry on without it. Make a new key at platform.claude.com, put it
+          in <code>.env</code> as <code>ANTHROPIC_API_KEY</code>, and run{' '}
+          <code>docker compose up -d</code>. This goes away once the new key is in.
         </p>
       )}
 

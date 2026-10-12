@@ -3,6 +3,8 @@ import { listAccounts } from '../../src/accounts/manage.ts';
 import { importHistory } from '../../src/import/ofxImport.ts';
 import { attention } from '../../src/notices/notices.ts';
 import { diskUsedShare } from '../../src/system/disk.ts';
+import { aiKeyRejectedSince } from '../../src/ai/ai.ts';
+import { homeDb } from '../../db/client.ts';
 import { listHeld } from '../../src/sync/connections.ts';
 import HeldRows from './HeldRows.tsx';
 import { requireUser, reviewViewer } from '../auth.ts';
@@ -18,7 +20,11 @@ export default async function ImportPage() {
   const [accounts, history, report, held] = await Promise.all([
     listAccounts(connection),
     importHistory(connection),
-    attention(connection, undefined, { diskUsage: diskUsedShare, viewer: await reviewViewer(session) }),
+    attention(connection, undefined, {
+      diskUsage: diskUsedShare,
+      aiKeyRejectedSince: () => aiKeyRejectedSince(homeDb()),
+      viewer: await reviewViewer(session),
+    }),
     listHeld(connection),
   ]);
 

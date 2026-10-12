@@ -4,10 +4,12 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { Database } from '../../db/client.ts';
 import { openAccount, recordTransaction } from '../ledger/ledger.ts';
 import { archiveEnvelope } from '../envelopes/manage.ts';
-import { AiCategorizer, costMilliCents } from '../categorize/ai.ts';
+import { AiCategorizer, costMilliCents, type CallRecord } from '../categorize/ai.ts';
 import {
+  AI_KEY_REJECTED_KEY,
   DEFAULT_MONTHLY_CALL_BUDGET,
   accuracy,
+  aiKeyRejectedSince,
   aiSettings,
   aiUsage,
   cachedAnswers,
@@ -25,7 +27,8 @@ import {
   truncateAll,
   type Fixture,
 } from '../ledger/testdb.ts';
-import { suggestions } from '../../db/schema.ts';
+import { appSettings, suggestions } from '../../db/schema.ts';
+import { eq } from 'drizzle-orm';
 
 /**
  * A stand-in for the SDK client. The suite makes no network calls and spends
@@ -224,6 +227,30 @@ describe('asking the model', () => {
     assert.equal(records.length, 1, 'and the failure is recorded');
   });
 
+  test('a rejected key says so in plain words, and is marked apart from an outage', async () => {
+    const failing = (status: number) =>
+      ({
+        messages: {
+          parse: async () => {
+            throw Object.assign(new Error(`${status} authentication_error`), { status });
+          },
+        },
+      }) as unknown as Anthropic;
+
+    for (const status of [401, 403]) {
+      const records: CallRecord[] = [];
+      const ai = new AiCategorizer(envelopes, {}, { client: failing(status), onCall: (r) => void records.push(r) });
+      await ai.suggestBatch([transaction('ONE')]);
+      assert.match(ai.stopped ?? '', /Anthropic rejected the API key/);
+      assert.equal(records[0]?.keyRejected, true, `${status} is the key`);
+    }
+
+    const records: CallRecord[] = [];
+    const ai = new AiCategorizer(envelopes, {}, { client: failing(529), onCall: (r) => void records.push(r) });
+    await ai.suggestBatch([transaction('ONE')]);
+    assert.equal(records[0]?.keyRejected, undefined, 'an overloaded API fixes itself');
+  });
+
   test('a failure is not remembered as an answer', async () => {
     const client = {
       messages: { parse: async () => { throw new Error('down'); } },
@@ -392,6 +419,56 @@ describe(
       const usage = await aiUsage(db, '2026-09');
       assert.equal(usage.calls, 0, 'a call that failed did not answer anything');
       assert.equal(usage.failedCalls, 1);
+    });
+
+    describe('a rejected key', () => {
+      const call = (extra: Partial<CallRecord> = {}): CallRecord => ({
+        model: 'claude-opus-5',
+        transactions: 3,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        costMilliCents: 0,
+        ...extra,
+      });
+      const rejected = call({ error: '401 invalid x-api-key', keyRejected: true });
+
+      test('is remembered against the key it happened to', async () => {
+        assert.equal(await aiKeyRejectedSince(db, 'sk-old'), null);
+        await recordAiCall(db, rejected, '2026-09', 'sk-old');
+
+        assert.match((await aiKeyRejectedSince(db, 'sk-old')) ?? '', /^\d{4}-\d{2}-\d{2}$/);
+        assert.equal(await aiKeyRejectedSince(db, 'sk-new'), null, 'a new key in .env clears it at once');
+        assert.equal(await aiKeyRejectedSince(db, undefined), null, 'no key is a different message');
+      });
+
+      test('keeps the first day, not the latest', async () => {
+        await setRejection('sk-old', '2026-09-01');
+        await recordAiCall(db, rejected, '2026-09', 'sk-old');
+        assert.equal(await aiKeyRejectedSince(db, 'sk-old'), '2026-09-01');
+      });
+
+      test('is cleared by an answer, and not by an outage', async () => {
+        await recordAiCall(db, rejected, '2026-09', 'sk-old');
+        await recordAiCall(db, call({ error: 'connection reset' }), '2026-09', 'sk-old');
+        assert.notEqual(await aiKeyRejectedSince(db, 'sk-old'), null, 'a dropped connection says nothing about the key');
+
+        await recordAiCall(db, call({ inputTokens: 500, outputTokens: 80 }), '2026-09', 'sk-old');
+        assert.equal(await aiKeyRejectedSince(db, 'sk-old'), null);
+      });
+
+      test('stores a fingerprint, never the key', async () => {
+        await recordAiCall(db, rejected, '2026-09', 'sk-ant-secret-value');
+        const rows = await db.select().from(appSettings);
+        assert.ok(rows.every((row) => !row.value.includes('secret')));
+      });
+
+      async function setRejection(key: string, since: string) {
+        await recordAiCall(db, rejected, '2026-09', key);
+        const [row] = await db.select().from(appSettings).where(eq(appSettings.key, AI_KEY_REJECTED_KEY));
+        const value = JSON.stringify({ ...JSON.parse(row!.value), since });
+        await db.update(appSettings).set({ value }).where(eq(appSettings.key, AI_KEY_REJECTED_KEY));
+      }
     });
 
     test('answers survive to the next import, keyed by merchant', async () => {
