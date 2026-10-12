@@ -102,6 +102,8 @@ export type CallRecord = {
   outputTokens: number;
   costMilliCents: number;
   error?: string;
+  /** Anthropic turned the key away (401 or 403), which waiting will not fix. */
+  keyRejected?: boolean;
 };
 
 export type AiOptions = {
@@ -252,7 +254,14 @@ export class AiCategorizer {
     } catch (error) {
       // NF-10: the import carries on without this layer rather than failing.
       const message = error instanceof Error ? error.message : String(error);
-      this.stopped = `The AI layer stopped after an error: ${message}`;
+      // Read from the status rather than the SDK's error classes, which a test's
+      // stand-in client cannot throw. An outage or a dropped connection is not
+      // this: those fix themselves, and the next run asks again.
+      const status = (error as { status?: unknown } | null)?.status;
+      const keyRejected = status === 401 || status === 403;
+      this.stopped = keyRejected
+        ? 'Anthropic rejected the API key, so the AI layer stopped. Put a new one in .env.'
+        : `The AI layer stopped after an error: ${message}`;
       await this.options.onCall?.({
         model: MODEL,
         transactions: transactions.length,
@@ -261,6 +270,7 @@ export class AiCategorizer {
         outputTokens: 0,
         costMilliCents: 0,
         error: message,
+        ...(keyRejected ? { keyRejected } : {}),
       });
       return transactions.map(() => NO_SUGGESTION);
     }

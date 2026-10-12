@@ -9,7 +9,7 @@ import {
 } from '../../../src/rules/rules.ts';
 import { transferOptions } from '../../../src/envelopes/transfer.ts';
 import { listAccounts } from '../../../src/accounts/manage.ts';
-import { accuracy, aiSettings, aiUsage, unknownMerchantEstimate } from '../../../src/ai/ai.ts';
+import { accuracy, aiKeyRejectedSince, aiSettings, aiUsage, unknownMerchantEstimate } from '../../../src/ai/ai.ts';
 import SettingsHead from '../SettingsHead.tsx';
 import RuleSuggestions from '../RuleSuggestions.tsx';
 import Rules from '../Rules.tsx';
@@ -31,6 +31,7 @@ export default async function SortingSettings() {
     usage,
     quality,
     unknown,
+    keyRejectedSince,
   ] = await Promise.all([
     listRules(connection),
     // Searched and counted together, so the notice that leads here always
@@ -44,6 +45,7 @@ export default async function SortingSettings() {
     aiUsage(homeDb(), undefined, connection),
     accuracy(connection),
     unknownMerchantEstimate(connection),
+    aiKeyRejectedSince(homeDb()),
   ]);
 
   return (
@@ -70,6 +72,7 @@ export default async function SortingSettings() {
         accuracy={quality}
         unknownMerchants={unknown}
         keyPresent={Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN)}
+        keyRejectedSince={keyRejectedSince}
       />
     </>
   );

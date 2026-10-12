@@ -86,6 +86,11 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
             : `${notice.institution ?? 'Your bank'} wants you to sign in again`,
         href: '/settings/ledgers#bank-feeds',
       };
+    case 'ai_key_rejected':
+      return {
+        text: `AI suggestions stopped on ${displayDate(notice.since!)}: Anthropic rejected the API key`,
+        href: '/settings/sorting#ai',
+      };
     case 'sync_held':
       return {
         text: `${count} from your bank feed need${count === 1 ? 's' : ''} a decision`,

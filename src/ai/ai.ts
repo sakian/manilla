@@ -28,15 +28,17 @@
  * Claiming otherwise in the interface would be the actual problem (NF-5).
  */
 
+import { createHash } from 'node:crypto';
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import { aiCalls, aiSuggestionCache, appSettings, envelopes, suggestions } from '../../db/schema.ts';
-import { monthStart, currentMonth, type MonthKey } from '../budget/month.ts';
+import { localToday, monthStart, currentMonth, type MonthKey } from '../budget/month.ts';
 import type { CallRecord } from '../categorize/ai.ts';
 import type { Suggestion } from '../categorize/types.ts';
 
 export const AI_ENABLED_KEY = 'ai_enabled';
 export const AI_BUDGET_KEY = 'ai_monthly_call_budget';
+export const AI_KEY_REJECTED_KEY = 'ai_key_rejected';
 
 /** Enough for a few hundred unknown merchants a month, at about $2 per thousand. */
 export const DEFAULT_MONTHLY_CALL_BUDGET = 40;
@@ -167,6 +169,7 @@ export async function recordAiCall(
   db: Database,
   record: CallRecord,
   month: MonthKey = currentMonth(),
+  key: string | undefined = configuredKey(),
 ): Promise<void> {
   await db.insert(aiCalls).values({
     month: monthStart(month),
@@ -178,6 +181,76 @@ export async function recordAiCall(
     costMilliCents: record.costMilliCents,
     error: record.error ?? null,
   });
+
+  if (record.keyRejected) await noteKeyRejected(db, key);
+  // Only an answer clears it. An outage says nothing about the key either way.
+  else if (record.error === undefined) await db.delete(appSettings).where(eq(appSettings.key, AI_KEY_REJECTED_KEY));
+}
+
+// ---------------------------------------------------------------------------
+// A key Anthropic has turned away
+// ---------------------------------------------------------------------------
+
+/*
+ * A rejected key fails quietly by design (NF-10): imports carry on and the
+ * review queue just gets fewer suggestions, which looks like a slow week. So
+ * the rejection is remembered and the notices say so (NF-11).
+ *
+ * It is remembered against a fingerprint of the key it happened to, so that
+ * putting a new key in .env clears it at the restart rather than at the next
+ * import - which may be a day away - and restarting with the same dead key does
+ * not. Twelve hex characters of a hash: enough to tell two keys apart, and
+ * nothing that leads back to either.
+ */
+
+type KeyRejection = { fingerprint: string; since: string };
+
+export function configuredKey(): string | undefined {
+  return process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || undefined;
+}
+
+export function keyFingerprint(key: string): string {
+  return createHash('sha256').update(key).digest('hex').slice(0, 12);
+}
+
+async function readRejection(db: Database): Promise<KeyRejection | null> {
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, AI_KEY_REJECTED_KEY));
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value) as Partial<KeyRejection>;
+    return typeof parsed.fingerprint === 'string' && typeof parsed.since === 'string'
+      ? { fingerprint: parsed.fingerprint, since: parsed.since }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function noteKeyRejected(db: Database, key: string | undefined): Promise<void> {
+  if (!key) return;
+  const fingerprint = keyFingerprint(key);
+  // The first day it was turned away, not the latest, so the notice says how
+  // long suggestions have been missing.
+  if ((await readRejection(db))?.fingerprint === fingerprint) return;
+  const value = JSON.stringify({ fingerprint, since: localToday() } satisfies KeyRejection);
+  await db
+    .insert(appSettings)
+    .values({ key: AI_KEY_REJECTED_KEY, value })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+}
+
+/**
+ * The calendar day Anthropic first turned away the key in use now, or null
+ * when it has not. Account-wide like the rest of the AI layer (LG-5), so pass
+ * the home database.
+ */
+export async function aiKeyRejectedSince(
+  db: Database,
+  key: string | undefined = configuredKey(),
+): Promise<string | null> {
+  if (!key) return null;
+  const rejection = await readRejection(db);
+  return rejection?.fingerprint === keyFingerprint(key) ? rejection.since : null;
 }
 
 // ---------------------------------------------------------------------------

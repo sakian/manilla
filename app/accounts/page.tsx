@@ -3,6 +3,8 @@ import { ledgerDb } from '../ledger.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
 import { attention } from '../../src/notices/notices.ts';
 import { diskUsedShare } from '../../src/system/disk.ts';
+import { aiKeyRejectedSince } from '../../src/ai/ai.ts';
+import { homeDb } from '../../db/client.ts';
 import { requireUser, reviewViewer } from '../auth.ts';
 import { Notices } from '../Notices.tsx';
 import AccountManager from './AccountManager.tsx';
@@ -25,7 +27,11 @@ export default async function AccountsPage(props: {
 
   const [categories, report] = await Promise.all([
     listAccountCategories(connection, { includeArchived: true }),
-    attention(connection, undefined, { diskUsage: diskUsedShare, viewer: await reviewViewer(session) }),
+    attention(connection, undefined, {
+      diskUsage: diskUsedShare,
+      aiKeyRejectedSince: () => aiKeyRejectedSince(homeDb()),
+      viewer: await reviewViewer(session),
+    }),
   ]);
 
   return (
