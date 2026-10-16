@@ -45,6 +45,16 @@ export function localToday(now: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * The instant a calendar day begins here, for comparing a day someone chose
+ * against when something was written. The reverse of `localToday`, and in the
+ * same zone: the server's, which MANILLA_TIMEZONE sets.
+ */
+export function dayStartInstant(date: string): Date {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year!, month! - 1, day!);
+}
+
 export function monthStart(month: MonthKey): string {
   return `${assertMonth(month)}-01`;
 }

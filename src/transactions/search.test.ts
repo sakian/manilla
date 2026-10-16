@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import type { Database } from '../../db/client.ts';
 import { recordAccountTransfer, recordTransaction } from '../ledger/ledger.ts';
 import { createAccount } from '../accounts/manage.ts';
+import { runAs } from '../audit/actor.ts';
+import { addDays, localToday } from '../budget/month.ts';
+import { saveReview } from '../queue/queue.ts';
+import { addMessage } from './thread.ts';
 import {
   describeQuery,
   filterChoices,
@@ -103,6 +107,41 @@ describe(
         payeeRaw: 'TFR-TO C C',
       });
     }
+
+    test('changed by someone: what they reviewed, wrote about or entered, and from which day', async () => {
+      // Members live in the home database, so any id will do for who did it.
+      const alex = { id: '00000000-0000-4000-8000-00000000a1e7', name: 'Alex' };
+      const sam = { id: '00000000-0000-4000-8000-0000000005a3', name: 'Sam' };
+      const waiting = (payee: string) =>
+        recordTransaction(db, { accountId: visa, date: '2026-04-02', amountCents: -1200, payeeRaw: payee, source: 'bank_sync' });
+      const [reviewed, written, untouched] = [await waiting('REVIEWED'), await waiting('WRITTEN'), await waiting('UNTOUCHED')];
+
+      await runAs(alex, async () => {
+        await saveReview(db, [{ transactionId: reviewed, envelopeId: env.groceriesId }]);
+        await recordTransaction(db, {
+          accountId: chequing,
+          date: '2026-04-03',
+          amountCents: -500,
+          payeeRaw: 'ENTERED BY HAND',
+          source: 'manual',
+          status: 'confirmed',
+          lines: [{ envelopeId: env.groceriesId, amountCents: -500 }],
+        });
+      });
+      await runAs(sam, () => addMessage(db, written, 'What was this?'));
+
+      const payees = async (changedBy: string, changedSince?: string) =>
+        (await searchTransactions(db, { changedBy, ...(changedSince ? { changedSince } : {}) })).rows
+          .map((row) => row.payeeRaw)
+          .sort();
+
+      assert.deepEqual(await payees(alex.id), ['ENTERED BY HAND', 'REVIEWED']);
+      assert.deepEqual(await payees(sam.id), ['WRITTEN'], 'a note is something done to it');
+      assert.deepEqual(await payees(alex.id, localToday()), ['ENTERED BY HAND', 'REVIEWED']);
+      assert.deepEqual(await payees(alex.id, addDays(localToday(), 1)), [], 'nothing yet tomorrow');
+      assert.ok(!(await payees(alex.id)).includes('UNTOUCHED'));
+      void untouched;
+    });
 
     test('an empty query returns everything, newest first', async () => {
       await seedHistory();

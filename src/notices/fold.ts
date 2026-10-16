@@ -10,7 +10,8 @@ const RANK = { bad: 0, warn: 1, info: 2 } as const;
  * screen of notices and the envelopes started after a scroll. So what is up
  * front is what is usually wanted, and the rest is one press away:
  *
- * - The review queue, because it is the other reason to open the app.
+ * - The review queue, because it is the other reason to open the app, and a
+ *   reply in Notes, which is somebody waiting on an answer.
  * - Anything bad. Envelopes and accounts disagreeing is the one thing the home
  *   screen must say (FR-37); folding a broken ledger under a count would be
  *   hiding it.
@@ -24,7 +25,8 @@ export function foldNotices<T extends Pick<Attention, 'kind' | 'severity'>>(
   notices: T[],
 ): { shown: T[]; folded: T[] } {
   const ordered = [...notices].sort((left, right) => RANK[left.severity] - RANK[right.severity]);
-  const upFront = (notice: T) => notice.severity === 'bad' || notice.kind === 'awaiting_review';
+  const upFront = (notice: T) =>
+    notice.severity === 'bad' || notice.kind === 'awaiting_review' || notice.kind === 'notes_unread';
   const folded = ordered.filter((notice) => !upFront(notice));
   if (folded.length <= 1) return { shown: ordered, folded: [] };
   return { shown: ordered.filter(upFront), folded };

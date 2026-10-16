@@ -18,9 +18,9 @@
  * someone wrote, and the words are in the app.
  */
 
-import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
-import { accounts, envelopes, transactionMessages, transactions, txnLines, users } from '../../db/schema.ts';
+import { accounts, conversationClears, envelopes, transactionMessages, transactions, txnLines, users } from '../../db/schema.ts';
 import { normalizePayee } from '../categorize/normalize.ts';
 import { notifyMembers, type PushOptions } from '../push/push.ts';
 import { handOver, pendingCount } from './queue.ts';
@@ -207,16 +207,44 @@ export type Conversation = {
   messages: Message[];
 };
 
+/*
+ * What makes a conversation someone's: a handed-over row somebody wrote about,
+ * that they handed, were handed, or wrote about themselves. A note on a row
+ * nobody handed is the household's, and is on the transactions screen. Written
+ * with the table names in full, as `latestMessage` in search.ts is, so the
+ * subqueries cannot capture an unqualified column.
+ */
+const partOf = (userId: string) => sql`(
+  "transactions"."handed_to_id" is not null
+  and exists (select 1 from transaction_messages m where m.transaction_id = "transactions"."id")
+  and (
+    "transactions"."handed_to_id" = ${userId}
+    or "transactions"."handed_by_id" = ${userId}
+    or exists (
+      select 1 from transaction_messages m
+      where m.transaction_id = "transactions"."id" and m.author_id = ${userId}
+    )
+  )
+)`;
+
+/** Put away by this person, and nothing written since. */
+const clearedBy = (userId: string) => sql`exists (
+  select 1 from conversation_clears c
+  where c.user_id = ${userId} and c.transaction_id = "transactions"."id"
+    and c.cleared_through >= (
+      select max(m.created_at) from transaction_messages m where m.transaction_id = "transactions"."id"
+    )
+)`;
+
 /**
- * Every handed-over row someone has written about that this person is part
- * of - handed it, was handed it, or wrote about it - with the latest
- * conversation first. Reviewed rows stay, since that is when the answer
- * usually comes.
+ * Every conversation this person is part of, with the latest first. Reviewed
+ * rows stay, since that is when the answer usually comes - until they clear
+ * it, and then only until someone writes in it again.
  */
 export async function conversations(
   db: Database,
   userId: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; cleared?: boolean } = {},
 ): Promise<Conversation[]> {
   const latest = sql<Date>`(select max(${transactionMessages.createdAt}) from ${transactionMessages} where ${transactionMessages.transactionId} = ${transactions.id})`;
   const rows = await db
@@ -232,26 +260,7 @@ export async function conversations(
     })
     .from(transactions)
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
-    .where(
-      and(
-        // Handed over, and written about: a note on a row nobody handed is the
-        // household's, and is on the transactions screen.
-        sql`${transactions.handedToId} is not null`,
-        exists(
-          db.select({ one: sql`1` }).from(transactionMessages).where(eq(transactionMessages.transactionId, transactions.id)),
-        ),
-        or(
-          eq(transactions.handedToId, userId),
-          eq(transactions.handedById, userId),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(transactionMessages)
-              .where(and(eq(transactionMessages.transactionId, transactions.id), eq(transactionMessages.authorId, userId))),
-          ),
-        ),
-      ),
-    )
+    .where(and(partOf(userId), options.cleared ? clearedBy(userId) : sql`not ${clearedBy(userId)}`))
     .orderBy(desc(latest), desc(transactions.id))
     .limit(options.limit ?? 50);
 
@@ -281,4 +290,57 @@ export async function conversations(
     handedById: row.handedById,
     messages: messages.get(row.id) ?? [],
   }));
+}
+
+/**
+ * Put conversations away for this person, through their latest message. Only
+ * ones they are part of, so an id from anywhere else does nothing. Not in the
+ * audit trail's tables, but through `tx` like every write, so it says who.
+ */
+export async function clearConversations(db: Database, userId: string, transactionIds: string[]): Promise<number> {
+  if (transactionIds.length === 0) return 0;
+  return db.transaction(async (tx) => {
+    const cleared = await tx.execute(sql`
+      insert into conversation_clears (user_id, transaction_id, cleared_through)
+      select ${userId}, "transactions"."id",
+        (select max(m.created_at) from transaction_messages m where m.transaction_id = "transactions"."id")
+      from transactions
+      where "transactions"."id" in ${sql`(${sql.join(transactionIds.map((id) => sql`${id}`), sql`, `)})`}
+        and ${partOf(userId)}
+      on conflict (user_id, transaction_id) do update set cleared_through = excluded.cleared_through
+    `);
+    return cleared.count ?? 0;
+  });
+}
+
+/** Every conversation still on this person's list, put away at once. */
+export async function clearAllConversations(db: Database, userId: string): Promise<number> {
+  const open = await conversations(db, userId, { limit: 1000 });
+  return clearConversations(db, userId, open.map((conversation) => conversation.id));
+}
+
+/**
+ * Conversations with something someone else wrote that this person has not
+ * put away yet, for the notice that leads to Notes: once the queue is empty,
+ * nothing else does.
+ */
+export async function unreadNoteCount(db: Database, userId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<string>`count(*)::int` })
+    .from(transactions)
+    .where(
+      and(
+        partOf(userId),
+        sql`exists (
+          select 1 from transaction_messages m
+          where m.transaction_id = "transactions"."id"
+            and m.author_id is distinct from ${userId}
+            and m.created_at > coalesce((
+              select c.cleared_through from conversation_clears c
+              where c.user_id = ${userId} and c.transaction_id = "transactions"."id"
+            ), '-infinity')
+        )`,
+      ),
+    );
+  return Number(row?.count ?? 0);
 }

@@ -17,7 +17,7 @@ import { currentMonth, monthEnd, monthStart, type MonthKey } from '../budget/mon
 import { budgetLines, envelopes } from '../../db/schema.ts';
 import { checkInvariant } from '../ledger/ledger.ts';
 import { pendingCount } from '../queue/queue.ts';
-import type { ReviewView } from '../queue/handover.ts';
+import { unreadNoteCount, type ReviewView } from '../queue/handover.ts';
 import { ruleSuggestionCount } from '../rules/rules.ts';
 import { statementMismatches } from '../import/ofxImport.ts';
 import { unusualCharges, type Insight } from '../insights/insights.ts';
@@ -32,6 +32,8 @@ export type AttentionKind =
   | 'envelopes_overspent'
   /** FR-14: an account's latest statement states a balance the ledger does not reach. */
   | 'statement_mismatch'
+  /** RQ-7: someone wrote in a Notes conversation the person looking has not cleared. */
+  | 'notes_unread'
   /** Imported transactions are waiting to be categorized (RQ-1). */
   | 'awaiting_review'
   /** Nothing has been recorded yet, so the first thing to do is bring history in. */
@@ -176,7 +178,12 @@ export async function attention(
     ]);
   const disk = options.diskUsage ? await options.diskUsage() : null;
   const keyRejectedSince = options.aiKeyRejectedSince ? await options.aiKeyRejectedSince() : null;
-  const mine = options.viewer ? await pendingCount(db, { handedTo: options.viewer.userId }) : 0;
+  const [mine, unreadNotes] = options.viewer
+    ? await Promise.all([
+        pendingCount(db, { handedTo: options.viewer.userId }),
+        unreadNoteCount(db, options.viewer.userId),
+      ])
+    : [0, 0];
 
   const notices: Attention[] = [];
   const overspent = balances.overspent;
@@ -269,6 +276,12 @@ export async function attention(
     if (mine > 0) notices.push({ kind: 'awaiting_review', severity: 'info', count: mine, mine, view: 'mine' });
   } else if (waiting > 0) {
     notices.push({ kind: 'awaiting_review', severity: 'info', count: waiting, mine, view: 'all' });
+  }
+
+  // The way to Notes once nothing is waiting: the review notice above is the
+  // only other link to the review screen, and it goes when the queue empties.
+  if (unreadNotes > 0) {
+    notices.push({ kind: 'notes_unread', severity: 'info', count: unreadNotes });
   }
 
   // Read from a cached count rather than found here: the search is a scan of

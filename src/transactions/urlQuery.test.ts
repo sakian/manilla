@@ -14,6 +14,18 @@ describe('filters in the URL', () => {
     assert.deepEqual(query, { limit: PAGE_SIZE, offset: 0 });
   });
 
+  test('changed by a member, from a day: kept only with a real id', () => {
+    const id = '00000000-0000-4000-8000-00000000a1e7';
+    assert.deepEqual(
+      [readQuery({ by: id, since: '2026-10-16' }).changedBy, readQuery({ by: id, since: '2026-10-16' }).changedSince],
+      [id, '2026-10-16'],
+    );
+    assert.equal(readQuery({ by: 'Talia' }).changedBy, undefined, 'not a uuid, so Postgres never sees it');
+    assert.equal(readQuery({ since: '2026-10-16' }).changedSince, undefined, 'a day alone narrows nothing');
+    assert.equal(writeQuery({ by: id, since: '2026-10-16' }), `by=${id}&since=2026-10-16`);
+    assert.equal(writeQuery({ since: '2026-10-16' }), '');
+  });
+
   test('text, payee and memo are separate filters', () => {
     const query = readQuery({ q: 'coffee', payee: 'TIM', memo: 'refund' });
     assert.equal(query.text, 'coffee');
@@ -82,6 +94,8 @@ describe('filters back into a URL', () => {
       dir: 'out',
       status: 'confirmed',
       kind: 'spending',
+      by: '00000000-0000-4000-8000-00000000a1e7',
+      since: '2026-03-01',
       accounts: ['acc-1'],
       accountGroups: [],
       envelopes: ['env-1', 'env-2'],

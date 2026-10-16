@@ -64,6 +64,8 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
         text: `${count} to review${notice.mine ? `, ${notice.mine} for you` : ''}`,
         href: '/review',
       };
+    case 'notes_unread':
+      return { text: `${count} note${count === 1 ? '' : 's'} to read`, href: '/review/notes' };
     case 'plan_exceeds_income':
       return {
         text: (

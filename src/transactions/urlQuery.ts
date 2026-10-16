@@ -22,6 +22,9 @@ import {
 export type Params = Record<string, string | string[] | undefined>;
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+// Checked here because the column is a uuid: anything else would have Postgres
+// refuse the whole search rather than find nothing.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function one(value: string | string[] | undefined): string | undefined {
   const first = Array.isArray(value) ? value[0] : value;
@@ -91,6 +94,7 @@ export function readQuery(params: Params, options: { pageSize?: number } = {}): 
   const direction = one(params.dir);
   const sort = one(params.sort);
   const order = one(params.order);
+  const by = one(params.by) && UUID.test(one(params.by)!) ? one(params.by) : undefined;
 
   return {
     ...(one(params.q) ? { text: one(params.q)! } : {}),
@@ -107,6 +111,7 @@ export function readQuery(params: Params, options: { pageSize?: number } = {}): 
     ...(cents(one(params.min)) !== undefined ? { minCents: cents(one(params.min))! } : {}),
     ...(cents(one(params.max)) !== undefined ? { maxCents: cents(one(params.max))! } : {}),
     ...(direction === 'in' || direction === 'out' ? { direction } : {}),
+    ...(by ? { changedBy: by, ...(day(one(params.since)) ? { changedSince: day(one(params.since))! } : {}) } : {}),
     ...(isSortField(sort) ? { sort } : {}),
     ...(order === 'asc' || order === 'desc' ? { order } : {}),
     limit: pageSize,
@@ -139,6 +144,9 @@ export type FormValues = {
   dir: string;
   status: string;
   kind: string;
+  /** Who changed them (`changedBy`), and from which day. */
+  by: string;
+  since: string;
   accounts: string[];
   accountGroups: string[];
   envelopes: string[];
@@ -159,6 +167,8 @@ export function readForm(params: Params): FormValues {
     dir: one(params.dir) ?? '',
     status: one(params.status) ?? '',
     kind: one(params.kind) ?? '',
+    by: one(params.by) ?? '',
+    since: one(params.since) ?? '',
     accounts: manyRaw(params.account),
     accountGroups: many(params.acctgroup),
     envelopes: many(params.env),
@@ -196,6 +206,9 @@ export function writeQuery(values: Partial<FormValues>, extra: Params = {}): str
   put('dir', values.dir);
   put('status', values.status);
   put('kind', values.kind);
+  put('by', values.by);
+  // A day on its own narrows nothing, so it is not written without a person.
+  if (values.by?.trim()) put('since', values.since);
   if (values.sort && values.sort !== 'date') put('sort', values.sort);
   if (values.order && values.order !== 'desc') put('order', values.order);
 

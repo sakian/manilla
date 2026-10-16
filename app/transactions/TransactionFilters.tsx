@@ -21,7 +21,7 @@ import { useCallback, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { UNCATEGORIZED } from '../../src/transactions/search.ts';
 import { writeQuery, type FormValues } from '../../src/transactions/urlQuery.ts';
-import { displayDate } from '../../src/budget/month.ts';
+import { addDays, displayDate, localToday } from '../../src/budget/month.ts';
 
 export type FilterChoice = { id: string; name: string; archived?: boolean };
 export type EnvelopeFilterChoice = { id: string; name: string; groupName: string };
@@ -38,6 +38,7 @@ export default function TransactionFilters({
   everyAccountValue,
   active,
   keepScroll = false,
+  members = [],
 }: {
   /** Where to navigate: the transactions page, or an account's own view. */
   path: string;
@@ -58,6 +59,8 @@ export default function TransactionFilters({
   active: boolean;
   /** In a pane beside the list it was opened from, which filtering should not scroll away. */
   keepScroll?: boolean;
+  /** The household, for "changed by"; offered only when there is more than one person. */
+  members?: { id: string; name: string; you: boolean }[];
 }) {
   const router = useRouter();
   const [form, setForm] = useState<FormValues>(values);
@@ -147,6 +150,15 @@ export default function TransactionFilters({
     });
   }
 
+  if (form.by) {
+    const person = members.find((member) => member.id === form.by);
+    const who = person ? (person.you ? 'you' : person.name) : 'someone';
+    chip('by', `changed by ${who}${form.since ? ` since ${displayDate(form.since)}` : ''}`, {
+      by: '',
+      since: '',
+    });
+  }
+
   const clear = () => {
     const blank: FormValues = {
       q: '',
@@ -159,6 +171,8 @@ export default function TransactionFilters({
       dir: '',
       status: '',
       kind: '',
+      by: '',
+      since: '',
       accounts: [],
       accountGroups: [],
       envelopes: [],
@@ -383,6 +397,38 @@ export default function TransactionFilters({
               <option value="account_transfer">Transfers between accounts</option>
             </select>
           </label>
+
+          {members.length > 1 && (
+            <label className="field">
+              <span>Changed by</span>
+              <select
+                value={form.by}
+                onChange={(event) => {
+                  const by = event.target.value;
+                  // A week back unless a day was already chosen: "what did they
+                  // do" is nearly always a question about the last few days.
+                  setForm((current) => ({
+                    ...current,
+                    by,
+                    since: by ? current.since || addDays(localToday(), -6) : '',
+                  }));
+                }}
+              >
+                <option value="">Anyone</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.you ? 'You' : member.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {members.length > 1 && form.by && (
+            <label className="field">
+              <span>Changed since</span>
+              <input type="date" value={form.since} onChange={(event) => set('since', event.target.value)} />
+            </label>
+          )}
 
           <label className="field">
             <span>Sort by</span>

@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 import { homeDb } from '../db/client.ts';
 import { allLedgers, currentLedger, ledgerDb, rememberLedger } from './ledger.ts';
-import { handOverTo, writeAbout } from '../src/queue/handover.ts';
+import { clearAllConversations, clearConversations, handOverTo, writeAbout } from '../src/queue/handover.ts';
 import { editMessage, removeMessage } from '../src/transactions/thread.ts';
 import { reviewStates } from '../src/push/edits.ts';
 import { tellOthers } from './editNotices.ts';
@@ -241,4 +241,19 @@ export async function dismissInsightAction(transactionId: string) {
   await dismissInsight(await ledgerDb(), transactionId);
   revalidatePath('/', 'layout');
   return { ok: true as const };
+}
+
+/**
+ * Put Notes conversations away for whoever is signed in (RQ-7): one, or every
+ * one on their list. A reply afterwards brings it back.
+ */
+export async function clearConversationsAction(transactionIds: string[] | 'all') {
+  const session = actAs(await requireUser());
+  const connection = await ledgerDb();
+  const cleared =
+    transactionIds === 'all'
+      ? await clearAllConversations(connection, session.userId)
+      : await clearConversations(connection, session.userId, transactionIds);
+  revalidatePath('/', 'layout');
+  return { ok: true as const, cleared };
 }

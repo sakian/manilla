@@ -169,6 +169,13 @@
       "when": 1791650865369,
       "tag": "0023_transaction_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792152166339,
+      "tag": "0024_notes_cleared",
+      "breakpoints": true
     }
   ]
 }
