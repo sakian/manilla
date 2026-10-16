@@ -13,8 +13,11 @@ import { saveSubscription, setDeviceKinds, listDevices } from '../push/push.ts';
 import { handOver, pendingCount, pendingTransactions, saveReview } from './queue.ts';
 import {
   HandoverError,
+  clearAllConversations,
+  clearConversations,
   conversations,
   handOverTo,
+  unreadNoteCount,
   handoverMessage,
   handoverPath,
   notesPath,
@@ -285,6 +288,57 @@ describe(
 
       const [pat] = await db.insert(users).values({ name: 'Pat' }).returning();
       assert.deepEqual(await conversations(db, pat!.id), [], 'not theirs to read');
+    });
+
+    describe('putting a conversation away', () => {
+      const handed = async (payee: string) => {
+        const id = await waiting(payee);
+        await runAs({ id: alex, name: 'Alex' }, () => handOverTo(db, db, { ids: [id], to: sam, from: { id: alex, name: 'Alex' }, note: 'This one?' }));
+        return id;
+      };
+      const reply = (id: string, who: { id: string; name: string }, body: string) =>
+        runAs(who, () => writeAbout(db, db, { transactionId: id, body, from: who }));
+      const listed = async (userId: string, cleared = false) => (await conversations(db, userId, { cleared })).map((row) => row.id);
+
+      test('is for the person who did it, and a reply brings it back', async () => {
+        const [a, b] = [await handed('ONE'), await handed('TWO')];
+        assert.equal(await clearConversations(db, sam, [a]), 1);
+        assert.deepEqual(await listed(sam), [b]);
+        assert.deepEqual(await listed(sam, true), [a], 'still there to look back at');
+        assert.deepEqual((await listed(alex)).sort(), [a, b].sort(), 'Alex has not read it');
+
+        await reply(a, { id: alex, name: 'Alex' }, 'Never mind, found it');
+        assert.deepEqual(await listed(sam), [a, b], 'back, at the top');
+      });
+
+      test('clearing them all, and only ones that are theirs', async () => {
+        await handed('ONE');
+        await handed('TWO');
+        assert.equal(await clearAllConversations(db, sam), 2);
+        assert.deepEqual(await listed(sam), []);
+
+        const [pat] = await db.insert(users).values({ name: 'Pat' }).returning();
+        const theirs = await handed('THREE');
+        assert.equal(await clearConversations(db, pat!.id, [theirs]), 0, 'not part of it, so nothing to clear');
+      });
+
+      test('what someone else wrote is to read until it is cleared, and the notice leads there', async () => {
+        const notes = async (userId: string) =>
+          (await attention(db, '2026-10', { viewer: { userId, opensOn: 'all' } })).notices.find((notice) => notice.kind === 'notes_unread');
+        const id = await handed('ONE');
+        assert.equal(await unreadNoteCount(db, sam), 1);
+        assert.equal(await unreadNoteCount(db, alex), 0, 'your own note is not news to you');
+        assert.equal((await notes(sam))?.count, 1);
+
+        await saveReview(db, [{ transactionId: id, envelopeId: env.groceriesId }]);
+        assert.equal((await notes(sam))?.count, 1, 'still there with nothing left to review, which is the point');
+
+        await clearConversations(db, sam, [id]);
+        assert.equal(await notes(sam), undefined);
+        await reply(id, { id: sam, name: 'Sam' }, 'Groceries');
+        assert.equal(await unreadNoteCount(db, sam), 0, 'writing in it yourself is not unread');
+        assert.equal(await unreadNoteCount(db, alex), 1);
+      });
     });
 
     test('the history tells what was written, with the handover it came with', async () => {

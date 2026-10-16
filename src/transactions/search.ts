@@ -38,6 +38,7 @@ import {
   type SQLWrapper,
 } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
+import { dayStartInstant } from '../budget/month.ts';
 import {
   accountGroups,
   accounts,
@@ -85,6 +86,14 @@ export type TransactionQuery = {
   minCents?: number;
   maxCents?: number;
   direction?: Direction;
+  /**
+   * A member's id: only what they reviewed, changed, added by hand or wrote
+   * about, so a notification that someone else reviewed transactions can lead
+   * to exactly those, and anyone can look at what someone did.
+   */
+  changedBy?: string;
+  /** With `changedBy`: only changes on or after this calendar day. */
+  changedSince?: string;
   sort?: SortField;
   order?: 'asc' | 'desc';
   limit?: number;
@@ -264,6 +273,25 @@ function conditions(query: TransactionQuery): SQL[] {
 
   if (query.direction === 'in') where.push(sql`${transactions.amountCents} > 0`);
   if (query.direction === 'out') where.push(sql`${transactions.amountCents} < 0`);
+
+  if (query.changedBy) {
+    // Three records between them say who touched a transaction: the audit
+    // trail for every update and deletion (a review is an update), the
+    // transaction itself for one entered by hand, and its thread for a note.
+    // As text: the driver takes no Date as a raw parameter.
+    const since = query.changedSince ? dayStartInstant(query.changedSince).toISOString() : null;
+    const after = (column: SQL) => (since ? sql` and ${column} >= ${since}::timestamptz` : sql``);
+    where.push(sql`"transactions"."id" in (
+      select a.transaction_id from audit_log a
+      where a.actor_id = ${query.changedBy} and a.transaction_id is not null${after(sql`a.at`)}
+      union
+      select m.transaction_id from transaction_messages m
+      where m.author_id = ${query.changedBy}${after(sql`m.created_at`)}
+      union
+      select t.id from transactions t
+      where t.created_by_id = ${query.changedBy} and t.source = 'manual'${after(sql`t.created_at`)}
+    )`);
+  }
 
   return where;
 }
@@ -589,6 +617,7 @@ export function isEmptyQuery(query: TransactionQuery): boolean {
     !query.to &&
     query.minCents === undefined &&
     query.maxCents === undefined &&
-    !query.direction
+    !query.direction &&
+    !query.changedBy
   );
 }

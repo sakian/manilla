@@ -598,6 +598,26 @@ export const transactionMessages = pgTable(
 );
 
 /**
+ * Where a person put a Notes conversation away (RQ-7): everything in it up to
+ * `cleared_through`, the latest message when they cleared it. Not a flag, so a
+ * reply written afterwards brings it back without anyone remembering to.
+ * Each person's own, since one person having read a reply says nothing about
+ * the other. No foreign key to the person, for the reason `audit_log.actor_id`
+ * has none.
+ */
+export const conversationClears = pgTable(
+  'conversation_clears',
+  {
+    userId: uuid('user_id').notNull(),
+    transactionId: uuid('transaction_id')
+      .notNull()
+      .references(() => transactions.id, { onDelete: 'cascade' }),
+    clearedThrough: timestamp('cleared_through', { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.transactionId] })],
+);
+
+/**
  * Every external identifier a transaction has ever had (FR-10, FR-18, MG-9).
  *
  * Kept as rows rather than a column because one transaction can accumulate

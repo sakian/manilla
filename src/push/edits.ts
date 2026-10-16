@@ -17,6 +17,7 @@ import type { Database } from '../../db/client.ts';
 import { transactions } from '../../db/schema.ts';
 import { notifyMembers, type PushOptions } from './push.ts';
 import { openInLedger } from '../safePath.ts';
+import { localToday } from '../budget/month.ts';
 
 export type EditNotice =
   | { kind: 'review'; action: 'reviewed' | 'changed' | 'deleted'; count: number }
@@ -62,10 +63,13 @@ export async function tellAboutEdit(
 ): Promise<{ sent: Promise<number> }> {
   if (input.notice.count <= 0) return { sent: Promise.resolve(0) };
   const message = editMessage(input.actor.name, input.notice, input.ledger?.name);
+  // What they changed today rather than every transaction: the list a tap
+  // opens is the answer to "what did they do?" (src/transactions/search.ts).
+  const list = `/transactions?${new URLSearchParams({ by: input.actor.id, since: localToday() })}`;
   return notifyMembers(
     home,
     { kind: input.notice.kind, except: input.actor.id },
-    { ...message, path: input.ledger ? openInLedger(input.ledger.key, '/transactions') : '/transactions' },
+    { ...message, path: input.ledger ? openInLedger(input.ledger.key, list) : list },
     options,
   );
 }

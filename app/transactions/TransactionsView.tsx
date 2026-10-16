@@ -13,6 +13,9 @@ import TransactionList from './TransactionList.tsx';
 import { BalanceCheckpoints } from './BalanceCheckpoints.tsx';
 import { balanceCheckpoints } from '../../src/import/ofxImport.ts';
 import { envelopeActivity } from '../../src/envelopes/activity.ts';
+import { homeDb } from '../../db/client.ts';
+import { listMembers } from '../../src/auth/invites.ts';
+import { requireUser } from '../auth.ts';
 
 /**
  * The transactions screen's contents, wherever they are shown (VW-5, VW-6, #35).
@@ -45,13 +48,19 @@ export default async function TransactionsView({
     .filter((other) => other.key !== ledger.key)
     .map(({ key, name }) => ({ key, name }));
 
-  const [found, choices, envelopes, categories, budget] = await Promise.all([
+  const [found, choices, envelopes, categories, budget, people, session] = await Promise.all([
     searchTransactions(connection, query),
     filterChoices(connection),
     transferOptions(connection),
     listAccountCategories(connection, { includeArchived: true }),
     budgetMonth(connection, currentMonth()),
+    listMembers(homeDb()),
+    requireUser(),
   ]);
+  const members = people.map(({ id, name }) => ({ id, name, you: id === session.userId }));
+  // Someone else's changes name the screen, since that is the question a
+  // notification about them asks; your own read as a filter like any other.
+  const changedBy = members.find((member) => member.id === query.changedBy && !member.you);
 
   // Exactly one of something, so its own figures can stand above the list.
   const onlyEnvelope =
@@ -86,6 +95,7 @@ export default async function TransactionsView({
     query.minCents === undefined &&
     query.maxCents === undefined &&
     !query.direction &&
+    !query.changedBy &&
     (query.sort ?? 'date') === 'date'
       ? await envelopeActivity(connection, onlyEnvelope.envelopeId, {
           ...(query.from ? { from: query.from } : {}),
@@ -115,7 +125,7 @@ export default async function TransactionsView({
       <div className="page-head">
         <div className="month-head">
           <h2>
-            {onlyEnvelope?.name ?? onlyAccount?.name ?? 'Transactions'}{' '}
+            {onlyEnvelope?.name ?? onlyAccount?.name ?? (changedBy ? `Changed by ${changedBy.name}` : 'Transactions')}{' '}
             <Hint label="What this screen shows">
               Every transaction in this ledger. Use the search and filters to narrow the list.
               Arriving from an envelope or an account only sets a filter, so you can change or clear
@@ -168,6 +178,7 @@ export default async function TransactionsView({
           envelopes={choices.envelopes}
           envelopeGroups={choices.envelopeGroups}
           active={!empty}
+          members={members}
         />
 
         {onlyAccount && checkpoints && (
