@@ -38,14 +38,24 @@ self.addEventListener('notificationclick', (event) => {
       const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
       if (open) {
         try {
+          // Focus first. A window may only come forward while the tap is still
+          // fresh, and loading the page first used it up on Android: the page
+          // changed behind the other apps and the tap seemed to do nothing.
+          const focused = await open.focus();
           // Refused for a window opened before this worker was, hence the fallback.
-          await open.navigate(target);
-          return open.focus();
+          await focused.navigate(target);
+          return;
         } catch {
           // Falls through to a new window.
         }
       }
-      return self.clients.openWindow(target);
+      await self.clients.openWindow(target);
     })(),
   );
 });
+
+// Nothing is cached, so a new version can take over at once rather than
+// waiting for every Manilla window to close - which on a phone, where the app
+// is rarely closed, could mean an old tap handler for weeks.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
