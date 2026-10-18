@@ -16,6 +16,7 @@ import type { ReactNode } from 'react';
 import type { Attention, AttentionReport } from '../src/notices/notices.ts';
 import { Money } from './Money.tsx';
 import { DismissInsight } from './DismissInsight.tsx';
+import { MarkPaid } from './MarkPaid.tsx';
 import { displayDate } from '../src/budget/month.ts';
 import { jumpShare } from '../src/insights/insights.ts';
 import { SignInActivityNotice } from './SignInActivityNotice.tsx';
@@ -100,6 +101,33 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
       };
     case 'disk_nearly_full':
       return { text: `The server's disk is ${count}% full; Docker's build cache is the usual cause` };
+    case 'card_payment_due': {
+      // FR-38. Inside the notice's link, so no amount here can be a copy button.
+      const payment = notice.payment!;
+      const owing = <Money cents={payment.remainingCents} plain copy={false} />;
+      const when =
+        payment.daysLeft === 0 ? 'today' : payment.daysLeft === 1 ? 'tomorrow' : displayDate(payment.dueDate);
+      const paid =
+        payment.paidCents > 0 ? (
+          <>
+            , <Money cents={payment.paidCents} plain copy={false} /> paid so far
+          </>
+        ) : null;
+      return {
+        text:
+          payment.daysLeft < 0 ? (
+            <>
+              {payment.name}: {owing} still owing, was due {displayDate(payment.dueDate)}
+            </>
+          ) : (
+            <>
+              {payment.name}: {owing} due {when}
+              {paid}
+            </>
+          ),
+        href: `/transactions?account=${payment.accountId}`,
+      };
+    }
     case 'nothing_recorded':
       return { text: 'Nothing recorded yet — bring your history in', href: '/migrate' };
     case 'unusual_charge': {
@@ -135,17 +163,22 @@ function describe(notice: Attention): { text: ReactNode; href?: string } {
 
 function NoticeLine({ notice }: { notice: Attention }) {
   const { text, href } = describe(notice);
-  const insight = notice.insight;
+  const { insight, payment } = notice;
   return (
-    <li className={`notice ${notice.severity}${insight ? ' with-action' : ''}`}>
+    <li className={`notice ${notice.severity}${insight || payment ? ' with-action' : ''}`}>
       {href ? <Link href={href}>{text}</Link> : text}
       {insight && <DismissInsight transactionId={insight.transactionId} payee={insight.payee} />}
+      {payment && <MarkPaid accountId={payment.accountId} name={payment.name} />}
     </li>
   );
 }
 
 const keyOf = (notice: Attention) =>
-  notice.insight ? `${notice.kind}-${notice.insight.transactionId}` : notice.kind;
+  notice.insight
+    ? `${notice.kind}-${notice.insight.transactionId}`
+    : notice.payment
+      ? `${notice.kind}-${notice.payment.accountId}`
+      : notice.kind;
 
 export async function Notices({ report }: { report: AttentionReport }) {
   // First, and outside the ranking: someone else's way in changing outranks

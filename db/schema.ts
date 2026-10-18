@@ -26,6 +26,7 @@ import {
   timestamp,
   boolean,
   integer,
+  smallint,
   real,
   index,
   uniqueIndex,
@@ -209,6 +210,8 @@ export const pushSubscriptions = pgTable(
     review: boolean('review').notNull().default(false),
     /** Someone else changing a transaction already reviewed. */
     changes: boolean('changes').notNull().default(false),
+    /** A credit card payment coming due and not yet covered (FR-38). */
+    bills: boolean('bills').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('push_subscriptions_user_idx').on(table.userId)],
@@ -310,6 +313,19 @@ export const accounts = pgTable(
      * map a statement to this account on re-import (FR-7).
      */
     externalAccountId: text('external_account_id'),
+    /**
+     * A credit card's statement and payment-due days of the month, for the
+     * reminder before it is due (FR-38). Both or neither; a day past the end of
+     * a short month is that month's last day.
+     */
+    statementDay: smallint('statement_day'),
+    paymentDueDay: smallint('payment_due_day'),
+    /**
+     * The due date of the statement someone said was paid, for a payment the
+     * bank has not sent through yet. Only that one statement: the next is
+     * reminded about as usual.
+     */
+    paymentMarkedFor: date('payment_marked_for'),
     position: integer('position').notNull().default(0),
     archivedAt: timestamp('archived_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -317,6 +333,12 @@ export const accounts = pgTable(
   (table) => [
     uniqueIndex('accounts_external_idx').on(table.externalAccountId),
     index('accounts_group_idx').on(table.groupId),
+    check(
+      'accounts_payment_days',
+      sql`(${table.statementDay} is null) = (${table.paymentDueDay} is null)
+        and coalesce(${table.statementDay} between 1 and 31, true)
+        and coalesce(${table.paymentDueDay} between 1 and 31, true)`,
+    ),
   ],
 );
 

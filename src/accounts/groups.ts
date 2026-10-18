@@ -34,6 +34,9 @@ export type GroupedAccount = {
   kind: string;
   currency: string;
   externalAccountId: string | null;
+  /** A credit card's statement and due days, when its payment reminder is set (FR-38). */
+  statementDay: number | null;
+  paymentDueDay: number | null;
   archivedAt: Date | null;
   balanceCents: number;
   transactionCount: number;
@@ -75,6 +78,8 @@ export async function listAccountCategories(
       kind: accounts.kind,
       currency: accounts.currency,
       externalAccountId: accounts.externalAccountId,
+      statementDay: accounts.statementDay,
+      paymentDueDay: accounts.paymentDueDay,
       archivedAt: accounts.archivedAt,
       balanceCents: sql<string>`coalesce(sum(${transactions.amountCents}), 0)::bigint`,
       transactionCount: sql<string>`count(${transactions.id})::bigint`,
@@ -94,6 +99,8 @@ export async function listAccountCategories(
       accounts.kind,
       accounts.currency,
       accounts.externalAccountId,
+      accounts.statementDay,
+      accounts.paymentDueDay,
       accounts.archivedAt,
     )
     .orderBy(asc(accountGroups.position), asc(accounts.name));
@@ -132,6 +139,8 @@ export async function listAccountCategories(
       kind: row.kind,
       currency: row.currency,
       externalAccountId: row.externalAccountId,
+      statementDay: row.statementDay,
+      paymentDueDay: row.paymentDueDay,
       archivedAt: row.archivedAt,
       balanceCents: Number(row.balanceCents),
       transactionCount: Number(row.transactionCount),

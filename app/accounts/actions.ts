@@ -20,6 +20,7 @@ import {
   renameAccountGroup,
   unarchiveAccountGroup,
 } from '../../src/accounts/groups.ts';
+import { markPaymentMade, setPaymentDays } from '../../src/accounts/bills.ts';
 import { requireUser } from '../auth.ts';
 import { actAs } from '../../src/audit/actor.ts';
 import { centsFromInput } from '../../src/amount.ts';
@@ -102,6 +103,33 @@ export async function unarchiveAccountAction(accountId: string): Promise<ActionR
     actAs(await requireUser());
     await unarchiveAccount(await ledgerDb(), accountId);
     refreshed();
+    return { ok: true };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** A credit card's statement and due days (FR-38); null stops the reminder. */
+export async function setPaymentDaysAction(
+  accountId: string,
+  days: { statementDay: number; paymentDueDay: number } | null,
+): Promise<ActionResult> {
+  try {
+    actAs(await requireUser());
+    await setPaymentDays(await ledgerDb(), accountId, days);
+    refreshed();
+    return { ok: true, message: days ? 'Payment reminder set.' : 'Payment reminder turned off.' };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** The current statement paid, before the payment has reached the ledger, or not after all (FR-38). */
+export async function markPaymentMadeAction(accountId: string, paid: boolean): Promise<ActionResult> {
+  try {
+    actAs(await requireUser());
+    await markPaymentMade(await ledgerDb(), accountId, paid);
+    revalidatePath('/', 'layout');
     return { ok: true };
   } catch (error) {
     return failed(error);

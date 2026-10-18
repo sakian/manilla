@@ -30,6 +30,7 @@ const SWITCHES: [PushKind, string, string][] = [
   ['changes', 'Changes to reviewed transactions', 'Someone else changing, deleting or sending back a transaction already reviewed'],
   ['overspent', 'Overspent envelopes', 'Envelopes the sync took below zero'],
   ['unusual', 'Unusual charges', 'A regular charge well above its usual, or a large first charge from a new payee'],
+  ['bills', 'Card payments due', 'A credit card payment coming due that payments haven’t covered yet'],
   ['problems', 'Problems', 'A ledger that no longer adds up, or the server’s disk filling'],
   ['signin', 'Sign-in activity', 'Someone adding a passkey, using a recovery code, or joining'],
 ];
