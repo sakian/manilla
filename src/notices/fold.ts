@@ -12,6 +12,8 @@ const RANK = { bad: 0, warn: 1, info: 2 } as const;
  *
  * - The review queue, because it is the other reason to open the app, and a
  *   reply in Notes, which is somebody waiting on an answer.
+ * - A card payment coming due (FR-38). Forgetting it is the whole problem the
+ *   reminder is for, and it is only there for a few days a month.
  * - Anything bad. Envelopes and accounts disagreeing is the one thing the home
  *   screen must say (FR-37); folding a broken ledger under a count would be
  *   hiding it.
@@ -26,7 +28,10 @@ export function foldNotices<T extends Pick<Attention, 'kind' | 'severity'>>(
 ): { shown: T[]; folded: T[] } {
   const ordered = [...notices].sort((left, right) => RANK[left.severity] - RANK[right.severity]);
   const upFront = (notice: T) =>
-    notice.severity === 'bad' || notice.kind === 'awaiting_review' || notice.kind === 'notes_unread';
+    notice.severity === 'bad' ||
+    notice.kind === 'awaiting_review' ||
+    notice.kind === 'notes_unread' ||
+    notice.kind === 'card_payment_due';
   const folded = ordered.filter((notice) => !upFront(notice));
   if (folded.length <= 1) return { shown: ordered, folded: [] };
   return { shown: ordered.filter(upFront), folded };

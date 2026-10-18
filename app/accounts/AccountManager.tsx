@@ -29,6 +29,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ACCOUNT_KINDS, accountKindLabel } from '../../src/accounts/manage.ts';
 import type { AccountCategory } from '../../src/accounts/groups.ts';
+import { isSettled, type CardPayment } from '../../src/accounts/bills.ts';
 import { Hint } from '../Hint.tsx';
 import { Split, usePaneLink } from '../Split.tsx';
 import { Money } from '../Money.tsx';
@@ -39,9 +40,11 @@ import {
   createAccountAction,
   createAccountGroupAction,
   editAccountAction,
+  markPaymentMadeAction,
   moveAccountToGroupAction,
   nudgeAccountGroupAction,
   renameAccountGroupAction,
+  setPaymentDaysAction,
   unarchiveAccountAction,
   unarchiveAccountGroupAction,
 } from './actions.ts';
@@ -51,10 +54,13 @@ type Result = { ok: true; message?: string } | { ok: false; error: string };
 
 export default function AccountManager({
   categories,
+  payments = [],
   notices,
   pane,
 }: {
   categories: AccountCategory[];
+  /** Where each credit card with a payment reminder stands (FR-38). */
+  payments?: CardPayment[];
   notices?: ReactNode;
   /** The transactions beside the list on a wide screen, rendered on the server (#35). */
   pane?: ReactNode;
@@ -71,6 +77,8 @@ export default function AccountManager({
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newGroup, setNewGroup] = useState('');
+  /** The card whose payment reminder is open for setting, in edit mode. */
+  const [reminderFor, setReminderFor] = useState<string | null>(null);
 
   // The new-account form.
   const [name, setName] = useState('');
@@ -157,7 +165,8 @@ export default function AccountManager({
             <Hint label="What this screen shows">
               Your accounts and their balances, grouped into categories you choose. Tap an account
               to see its transactions. Press Edit to rename accounts and categories, reorder
-              categories, move accounts between categories, and archive what you no longer use. An
+              categories, move accounts between categories, set a credit card's payment reminder, and
+              archive what you no longer use. An
               account must have a zero balance before you can archive it, so that no money goes
               missing from view.
             </Hint>
@@ -256,6 +265,7 @@ export default function AccountManager({
               /** The one the pane beside the list is showing. */
               const shown =
                 !editing && shownAccounts.length === 1 && shownAccounts[0] === account.id;
+              const payment = payments.find((card) => card.accountId === account.id);
               return (
               <div
                 key={account.id}
@@ -311,6 +321,22 @@ export default function AccountManager({
                     <span className="figure-label">last</span>
                     {account.lastActivity ? displayDate(account.lastActivity) : 'nothing yet'}
                   </span>
+                  {payment && (
+                    <span
+                      className="figure"
+                      title="When this card's latest statement is due. It counts as paid once payments since the statement add up to what it said was owing."
+                    >
+                      <span className="figure-label">due</span>
+                      {displayDate(payment.dueDate)}
+                      {payment.statementCents === 0
+                        ? ', nothing owing'
+                        : payment.markedPaid && payment.remainingCents > 0
+                          ? ', marked paid'
+                          : isSettled(payment)
+                            ? ', paid'
+                            : ''}
+                    </span>
+                  )}
                 </span>
 
                 <span className="envelope-actions">
@@ -336,6 +362,15 @@ export default function AccountManager({
                           ))}
                         </select>
                       </label>
+                      {account.kind === 'credit_card' && (
+                        <button
+                          onClick={() => setReminderFor(reminderFor === account.id ? null : account.id)}
+                          disabled={pending}
+                          aria-expanded={reminderFor === account.id}
+                        >
+                          Payment reminder
+                        </button>
+                      )}
                       <button
                         onClick={() => run(() => archiveAccountAction(account.id))}
                         disabled={pending}
@@ -345,6 +380,18 @@ export default function AccountManager({
                     </>
                   )}
                 </span>
+                {editing && reminderFor === account.id && (
+                  <PaymentReminder
+                    key={`${account.statementDay}-${account.paymentDueDay}`}
+                    name={account.name}
+                    statementDay={account.statementDay}
+                    paymentDueDay={account.paymentDueDay}
+                    markedPaid={payment?.markedPaid ?? false}
+                    pending={pending}
+                    onSave={(days) => run(() => setPaymentDaysAction(account.id, days))}
+                    onUnmark={() => run(() => markPaymentMadeAction(account.id, false))}
+                  />
+                )}
               </div>
               );
             })}
@@ -492,4 +539,84 @@ function isAmount(text: string): boolean {
   } catch {
     return false;
   }
+}
+
+const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
+
+/**
+ * A credit card's statement and due days (FR-38). Both are on the statement;
+ * from them Manilla knows what the card owed and when, and reminds before the
+ * due date until payments since the statement cover it.
+ */
+function PaymentReminder({
+  name,
+  statementDay,
+  paymentDueDay,
+  markedPaid,
+  pending,
+  onSave,
+  onUnmark,
+}: {
+  name: string;
+  statementDay: number | null;
+  paymentDueDay: number | null;
+  markedPaid: boolean;
+  pending: boolean;
+  onSave: (days: { statementDay: number; paymentDueDay: number } | null) => void;
+  onUnmark: () => void;
+}) {
+  const [statement, setStatement] = useState(String(statementDay ?? ''));
+  const [due, setDue] = useState(String(paymentDueDay ?? ''));
+  const ready = statement !== '' && due !== '' && statement !== due;
+  return (
+    <div className="payment-reminder">
+      <p className="muted">
+        Manilla reminds you before {name} is due, until payments since the statement cover what it
+        said you owed. The automatic minimum payment counts, but on its own it won&apos;t cover it.
+      </p>
+      <div className="payment-days">
+        <label className="field">
+          <span>Statement day</span>
+          <select value={statement} onChange={(event) => setStatement(event.target.value)}>
+            <option value="">Choose</option>
+            {DAYS.map((day) => (
+              <option key={day} value={day}>
+                {day}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Due day</span>
+          <select value={due} onChange={(event) => setDue(event.target.value)}>
+            <option value="">Choose</option>
+            {DAYS.map((day) => (
+              <option key={day} value={day}>
+                {day}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="payment-buttons">
+        <button
+          className="primary"
+          disabled={pending || !ready}
+          onClick={() => onSave({ statementDay: Number(statement), paymentDueDay: Number(due) })}
+        >
+          Save
+        </button>
+        {statementDay !== null && (
+          <button disabled={pending} onClick={() => onSave(null)}>
+            Turn off
+          </button>
+        )}
+        {markedPaid && (
+          <button disabled={pending} onClick={onUnmark}>
+            Not paid after all
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }

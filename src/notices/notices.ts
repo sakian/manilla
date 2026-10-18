@@ -22,6 +22,7 @@ import { ruleSuggestionCount } from '../rules/rules.ts';
 import { statementMismatches } from '../import/ofxImport.ts';
 import { unusualCharges, type Insight } from '../insights/insights.ts';
 import { bankAttention } from '../sync/connections.ts';
+import { cardPayments, needsReminder, type CardPayment } from '../accounts/bills.ts';
 
 export type AttentionKind =
   /** The two sides of the ledger disagree, which should be impossible (FR-37). */
@@ -55,7 +56,9 @@ export type AttentionKind =
   /** A sync held back transactions that need a person's decision. */
   | 'sync_held'
   /** The server's disk is nearly full, which would stop every write. */
-  | 'disk_nearly_full';
+  | 'disk_nearly_full'
+  /** FR-38: a credit card is due soon, or was, and payments have not covered its statement. */
+  | 'card_payment_due';
 
 export type Attention = {
   kind: AttentionKind;
@@ -78,6 +81,8 @@ export type Attention = {
   view?: ReviewView;
   /** For `ai_key_rejected`: the calendar day it started. */
   since?: string;
+  /** For `card_payment_due`: the card, its statement and what is left of it. */
+  payment?: CardPayment;
 };
 
 export type AttentionReport = {
@@ -163,7 +168,7 @@ export async function attention(
     aiKeyRejectedSince?: () => Promise<string | null>;
   } = {},
 ): Promise<AttentionReport> {
-  const [balances, invariant, waiting, received, expected, average, suggestions, mismatched, unusual, bank] =
+  const [balances, invariant, waiting, received, expected, average, suggestions, mismatched, unusual, bank, cards] =
     await Promise.all([
       balancesForNotices(db, month),
       checkInvariant(db),
@@ -175,6 +180,7 @@ export async function attention(
       statementMismatches(db),
       unusualCharges(db),
       bankAttention(db),
+      cardPayments(db),
     ]);
   const disk = options.diskUsage ? await options.diskUsage() : null;
   const keyRejectedSince = options.aiKeyRejectedSince ? await options.aiKeyRejectedSince() : null;
@@ -262,6 +268,12 @@ export async function attention(
 
   if (bank.held > 0) {
     notices.push({ kind: 'sync_held', severity: 'warn', count: bank.held });
+  }
+
+  // A deadline that costs interest when it passes, so it is said by name and
+  // with its figures rather than counted.
+  for (const payment of cards.filter(needsReminder)) {
+    notices.push({ kind: 'card_payment_due', severity: 'warn', cents: payment.remainingCents, payment });
   }
 
   // One line each, since each is about one charge and is put away on its own.

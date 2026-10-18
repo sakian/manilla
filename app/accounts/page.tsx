@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { ledgerDb } from '../ledger.ts';
 import { listAccountCategories } from '../../src/accounts/groups.ts';
+import { cardPayments } from '../../src/accounts/bills.ts';
 import { attention } from '../../src/notices/notices.ts';
 import { diskUsedShare } from '../../src/system/disk.ts';
 import { aiKeyRejectedSince } from '../../src/ai/ai.ts';
@@ -25,8 +26,9 @@ export default async function AccountsPage(props: {
   const params = await props.searchParams;
   const connection = await ledgerDb();
 
-  const [categories, report] = await Promise.all([
+  const [categories, payments, report] = await Promise.all([
     listAccountCategories(connection, { includeArchived: true }),
+    cardPayments(connection),
     attention(connection, undefined, {
       diskUsage: diskUsedShare,
       aiKeyRejectedSince: () => aiKeyRejectedSince(homeDb()),
@@ -37,6 +39,7 @@ export default async function AccountsPage(props: {
   return (
     <AccountManager
       categories={categories}
+      payments={payments}
       notices={<Notices report={report} />}
       pane={
         <Suspense fallback={<PaneLoading />}>

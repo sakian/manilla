@@ -1533,6 +1533,34 @@ details[open] > summary > .group-summary::before {
   max-width: 420px;
 }
 
+/* A credit card's statement and due days (FR-38), opened under its row in
+   edit mode and the full width of it. */
+.payment-reminder {
+  grid-column: 1 / -1;
+  max-width: 420px;
+  padding: 10px 0 4px;
+}
+
+.payment-reminder p {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.payment-days {
+  display: flex;
+  gap: 12px;
+}
+
+.payment-days .field {
+  flex: 1;
+}
+
+.payment-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* A statement Manilla cannot place, asked about in a panel of its own beside
    the statements it can: the same width as they are, the picker kept short. */
 .account-question .field {
