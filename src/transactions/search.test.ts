@@ -1,6 +1,8 @@
 import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { eq } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
+import { transactions } from '../../db/schema.ts';
 import { recordAccountTransfer, recordTransaction } from '../ledger/ledger.ts';
 import { createAccount } from '../accounts/manage.ts';
 import { runAs } from '../audit/actor.ts';
@@ -462,6 +464,37 @@ describe(
 
       const both = await searchTransactions(db, { accountIds: [chequing, visa] });
       assert.ok(both.rows.every((row) => row.balanceAfterCents === undefined), 'two accounts, no one balance');
+    });
+
+    test('a card charge sits on the day it was bought, its balance in step, while the month goes by posting', async () => {
+      const add = (date: string, amountCents: number, payeeRaw: string) =>
+        recordTransaction(db, { accountId: visa, date, amountCents, payeeRaw, source: 'manual' });
+      await add('2026-05-29', -1000, 'GAS');
+      // Bought on the 28th, posted June 2: before the gas, and in June's budget.
+      const hotel = await add('2026-06-02', -20000, 'HOTEL');
+      await db.update(transactions).set({ purchasedOn: '2026-05-28' }).where(eq(transactions.id, hotel));
+      await add('2026-06-01', -500, 'COFFEE');
+
+      const all = await searchTransactions(db, { accountIds: [visa] });
+      assert.deepEqual(
+        all.rows.map((row) => [row.payeeRaw, row.purchasedOn, row.balanceAfterCents]),
+        [
+          ['COFFEE', null, -21500],
+          ['GAS', null, -21000],
+          ['HOTEL', '2026-05-28', -20000],
+        ],
+        'newest purchase first, each balance following from the row below it',
+      );
+
+      const oldest = await searchTransactions(db, { accountIds: [visa], order: 'asc' });
+      assert.deepEqual(oldest.rows.map((row) => row.payeeRaw), ['HOTEL', 'GAS', 'COFFEE']);
+
+      const june = await searchTransactions(db, { accountIds: [visa], from: '2026-06-01', to: '2026-06-30' });
+      assert.deepEqual(
+        june.rows.map((row) => row.payeeRaw),
+        ['COFFEE', 'HOTEL'],
+        'a date filter is by posting, the month the charge counts in',
+      );
     });
   },
 );

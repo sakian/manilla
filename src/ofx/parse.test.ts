@@ -121,3 +121,28 @@ test('a missing FITID is flagged rather than dropped', () => {
 test('rejects a file that is not OFX', () => {
   assert.throws(() => parseOfx('Date,Amount\n2025-09-03,-45.20'), /Is this an OFX/);
 });
+
+test('DTUSER beside DTPOSTED is the day of the purchase; on its own it is the date', () => {
+  const both = sample('creditcard-ofx2.ofx').replace(
+    '<DTPOSTED>20250902000000.000[-6:MDT]</DTPOSTED>',
+    '<DTPOSTED>20250902000000.000[-6:MDT]</DTPOSTED><DTUSER>20250830000000.000[-6:MDT]</DTUSER>',
+  );
+  const [bought, ...rest] = parseOfx(both).statements[0]!.transactions;
+  assert.equal(bought!.posted, '2025-09-02');
+  assert.equal(bought!.purchased, '2025-08-30');
+  assert.ok(rest.every((transaction) => transaction.purchased === undefined), 'no DTUSER, no purchase date');
+
+  const same = sample('creditcard-ofx2.ofx').replace(
+    '<DTPOSTED>20250902000000.000[-6:MDT]</DTPOSTED>',
+    '<DTPOSTED>20250902000000.000[-6:MDT]</DTPOSTED><DTUSER>20250902000000.000[-6:MDT]</DTUSER>',
+  );
+  assert.equal(parseOfx(same).statements[0]!.transactions[0]!.purchased, undefined, 'the same day is not a second date');
+
+  const alone = sample('creditcard-ofx2.ofx').replace(
+    '<DTPOSTED>20250902000000.000[-6:MDT]</DTPOSTED>',
+    '<DTUSER>20250830000000.000[-6:MDT]</DTUSER>',
+  );
+  const [only] = parseOfx(alone).statements[0]!.transactions;
+  assert.equal(only!.posted, '2025-08-30');
+  assert.equal(only!.purchased, undefined);
+});

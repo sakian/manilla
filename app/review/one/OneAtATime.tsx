@@ -19,7 +19,7 @@ import Link from 'next/link';
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import type { EnvelopeOption, QueueRow } from '../../../src/queue/queue.ts';
 import type { Message } from '../../../src/transactions/thread.ts';
-import { displayDate } from '../../../src/budget/month.ts';
+import { transactionDate } from '../../../src/budget/month.ts';
 import { saveReviewAction } from '../../actions.ts';
 import { Money } from '../../Money.tsx';
 import EnvelopeChoices from '../../EnvelopeChoices.tsx';
@@ -172,7 +172,7 @@ export default function OneAtATime({
           )}
           <dt>Date</dt>
           <dd>
-            {displayDate(row.date)}
+            {transactionDate(row.date, row.purchasedOn)}
             {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
           </dd>
           <dt>Account</dt>

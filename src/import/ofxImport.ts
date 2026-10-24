@@ -735,6 +735,7 @@ export async function commitImport(
             {
               accountId: preview.accountId,
               date: row.transaction.posted,
+              purchasedOn: row.transaction.purchased ?? null,
               amountCents: row.transaction.amountCents,
               payeeRaw,
               payeeKey: normalizePayee(payeeRaw).key,
@@ -778,6 +779,7 @@ export async function commitImport(
         .values({
           accountId: preview.accountId,
           date: row.transaction.posted,
+          purchasedOn: row.transaction.purchased ?? null,
           amountCents: row.transaction.amountCents,
           payeeRaw,
           payeeKey: normalizePayee(payeeRaw).key,

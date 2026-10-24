@@ -150,6 +150,33 @@ describe(
       assert.deepEqual(await held(), [], 'the pending removal is nothing to ask about');
     });
 
+    test('a card charge keeps the day it was made beside the day it posted', async () => {
+      const plaid = fakePlaid({
+        'plaid-chq': [
+          page({
+            added: [
+              chq({ transaction_id: 'p-1', date: '2026-10-19', authorized_date: '2026-10-17', amount: '30.00', name: 'BAKERY' }),
+              chq({ transaction_id: 'p-2', date: '2026-10-19', authorized_date: '2026-10-19', amount: '5.00', name: 'COFFEE' }),
+              chq({ transaction_id: 'p-3', date: '2026-10-19', amount: '9.00', name: 'PARKING' }),
+            ],
+            next_cursor: 'c1',
+          }),
+        ],
+      });
+      await sync(plaid.call);
+
+      const rows = await db.select().from(transactions).orderBy(transactions.payeeRaw);
+      assert.deepEqual(
+        rows.map((row) => [row.payeeRaw, row.date, row.purchasedOn]),
+        [
+          ['BAKERY', '2026-10-19', '2026-10-17'],
+          ['COFFEE', '2026-10-19', null],
+          ['PARKING', '2026-10-19', null],
+        ],
+        'the posting date stays the date; the purchase day only when it differs',
+      );
+    });
+
     test('changes fetched again after a failure add nothing twice (FR-11)', async () => {
       const changes = () =>
         page({ added: [chq({ transaction_id: 'p-1', date: '2026-09-10', amount: '9.99', name: 'APP STORE' })], next_cursor: 'c1' });

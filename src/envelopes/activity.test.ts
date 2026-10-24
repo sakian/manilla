@@ -1,6 +1,8 @@
 import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { eq } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
+import { transactions } from '../../db/schema.ts';
 import { envelopeBalances, moveBetweenEnvelopes, openAccount, recordTransaction } from '../ledger/ledger.ts';
 import { envelopeActivity } from './activity.ts';
 import {
@@ -104,6 +106,31 @@ describe(
         activity.rows.map((row) => row.balanceAfterCents),
         [34000, 31500],
         'but it still counts towards the balance the window opens on',
+      );
+    });
+
+    test('a charge sits on the day it was bought, among the moves, balance by balance', async () => {
+      await month();
+      // Posted after the transfer on the 10th, bought before it.
+      const late = await recordTransaction(db, {
+        accountId: chequing,
+        date: '2026-09-12',
+        amountCents: -3000,
+        payeeRaw: 'FARM STAND',
+        source: 'manual',
+        lines: [{ envelopeId: env.groceriesId, amountCents: -3000 }],
+      });
+      await db.update(transactions).set({ purchasedOn: '2026-09-08' }).where(eq(transactions.id, late));
+
+      const activity = await envelopeActivity(db, env.groceriesId, { order: 'asc' });
+      assert.deepEqual(
+        activity.rows.map((row) => [row.type === 'move' ? row.move.kind : row.transaction.payeeRaw, row.balanceAfterCents]),
+        [
+          ['allocation', 40000],
+          ['COSTCO', 34000],
+          ['FARM STAND', 31000],
+          ['transfer', 28500],
+        ],
       );
     });
 

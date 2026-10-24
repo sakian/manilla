@@ -24,7 +24,7 @@ import TransactionForm, {
   type EditingTransaction,
   type EnvelopeChoice,
 } from './TransactionForm.tsx';
-import { displayDate } from '../../src/budget/month.ts';
+import { displayDate, transactionDate } from '../../src/budget/month.ts';
 
 export default function TransactionList({
   rows,
@@ -193,7 +193,9 @@ function TransactionRow({
           grid cells: a long envelope name squeezed the date's column to
           nothing and the nowrap date spilled over the top of it. */}
       <span className="muted txn-meta">
-        <span className="txn-date">{displayDate(row.date)}</span>
+        <span className="txn-date" title={row.purchasedOn ? "When it was bought, and when it posted. Card charges post a few days later, and the posting date is the month it counts in." : undefined}>
+          {transactionDate(row.date, row.purchasedOn)}
+        </span>
         <span className="txn-env">
           {partOf && (
             <>
