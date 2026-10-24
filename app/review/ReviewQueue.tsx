@@ -44,7 +44,7 @@ import { handOverAction, markAsTransferAction, pairTransferAction, saveReviewAct
 import { Money } from '../Money.tsx';
 import { useOverlay } from '../useOverlay.ts';
 import EnvelopeChoices from '../EnvelopeChoices.tsx';
-import { displayDate } from '../../src/budget/month.ts';
+import { transactionDate } from '../../src/budget/month.ts';
 import { splitLines, type LineDraft } from '../../src/transactions/formLines.ts';
 import SplitLines from '../SplitLines.tsx';
 import { Thread, threadPrompt, type ThreadPeople } from '../Thread.tsx';
@@ -425,7 +425,7 @@ export default function ReviewQueue({
               <Money cents={row.amountCents} sign="incoming" />
 
               <span className="muted queue-meta">
-                <span>{displayDate(row.date)}</span>
+                <span title={row.purchasedOn ? "When it was bought, and when it posted. Card charges post a few days later, and the posting date is the month it counts in." : undefined}>{transactionDate(row.date, row.purchasedOn)}</span>
                 {row.ageDays > 14 && <span className="tag warn">{row.ageDays} days</span>}
                 {/* In the full list, whose it is; in "for me" every row is. */}
                 {view === 'all' && row.handedToId && (

@@ -35,6 +35,8 @@ import {
 export type QueueRow = {
   id: string;
   date: string;
+  /** The day of the purchase, when it was not the posting date. */
+  purchasedOn: string | null;
   payeeRaw: string;
   payeeDisplay: string;
   amountCents: number;
@@ -164,6 +166,7 @@ export async function pendingTransactions(
     .select({
       id: transactions.id,
       date: transactions.date,
+      purchasedOn: transactions.purchasedOn,
       payeeRaw: transactions.payeeRaw,
       amountCents: transactions.amountCents,
       memo: transactions.memo,
@@ -238,6 +241,7 @@ export async function pendingTransactions(
   return rows.map((row) => ({
     id: row.id,
     date: row.date,
+    purchasedOn: row.purchasedOn,
     payeeRaw: row.payeeRaw,
     payeeDisplay: normalizePayee(row.payeeRaw).display,
     amountCents: Number(row.amountCents),

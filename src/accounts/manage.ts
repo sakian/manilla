@@ -277,6 +277,8 @@ export async function unarchiveAccount(db: Database, accountId: string): Promise
 export type AccountTransaction = {
   id: string;
   date: string;
+  /** The day of the purchase, when it was not the posting date. */
+  purchasedOn: string | null;
   payeeRaw: string;
   amountCents: number;
   status: string;

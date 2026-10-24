@@ -74,6 +74,10 @@ function asImportRow(transaction: PlaidTransaction): OfxTransaction {
     fitId: transaction.id,
     type: transaction.amountCents < 0 ? 'DEBIT' : 'CREDIT',
     posted: transaction.date,
+    // Plaid's authorized_date: when the card was used, where `date` is when it posted.
+    ...(transaction.authorizedDate && transaction.authorizedDate !== transaction.date
+      ? { purchased: transaction.authorizedDate }
+      : {}),
     amountCents: transaction.amountCents,
     name: transaction.description,
     warnings: transaction.warnings,

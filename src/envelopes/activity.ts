@@ -65,23 +65,26 @@ export async function envelopeActivity(
 
   // The balance is summed over the envelope's whole history before the date
   // window is applied: a row's balance is the envelope's, not the window's.
+  // Ordered by the day a transaction was bought, as the transactions list is,
+  // but windowed by when it posted, which is the month it counts in.
   const activity = sql`
     with activity as (
-      select 'transaction' as type, l.transaction_id as id, t.date, t.created_at,
+      select 'transaction' as type, l.transaction_id as id, t.date,
+        coalesce(t.purchased_on, t.date) as shown, t.created_at,
         sum(l.amount_cents) as amount
       from txn_lines l
       join transactions t on t.id = l.transaction_id
       where l.envelope_id = ${envelopeId}
-      group by l.transaction_id, t.date, t.created_at
+      group by l.transaction_id, t.date, t.purchased_on, t.created_at
       union all
-      select 'move' as type, m.id, m.date, m.created_at,
+      select 'move' as type, m.id, m.date, m.date as shown, m.created_at,
         case when m.to_envelope_id = ${envelopeId} then m.amount_cents else -m.amount_cents end
       from envelope_moves m
       where m.to_envelope_id = ${envelopeId} or m.from_envelope_id = ${envelopeId}
     ),
     running as (
       select *, sum(amount) over (
-        order by date, created_at, id rows between unbounded preceding and current row
+        order by shown, date, created_at, id rows between unbounded preceding and current row
       ) as balance_after
       from activity
     )`;
@@ -91,7 +94,7 @@ export async function envelopeActivity(
       ${activity}
       select type, id, amount, balance_after from running
       where ${within}
-      order by ${descending ? sql`date desc, created_at desc, id desc` : sql`date, created_at, id`}
+      order by ${descending ? sql`shown desc, date desc, created_at desc, id desc` : sql`shown, date, created_at, id`}
       limit ${limit} offset ${offset}
     `),
     db.execute<{ total: string }>(sql`

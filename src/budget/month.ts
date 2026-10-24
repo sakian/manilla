@@ -124,6 +124,18 @@ export function displayDate(date: string, today: string = localToday()): string 
 }
 
 /**
+ * A transaction's date as a list shows it: the day of the purchase, which is
+ * what the lists are ordered by, and the posting date beside it when the bank
+ * gave a purchase day that differs - "Oct 17, posted Oct 19". The posting date
+ * stays in sight because it is the month the transaction counts in.
+ */
+export function transactionDate(date: string, purchasedOn: string | null, today: string = localToday()): string {
+  if (!purchasedOn || purchasedOn === date) return displayDate(date, today);
+  // The posting date names its year only when it is not the purchase's.
+  return `${displayDate(purchasedOn, today)}, posted ${displayDate(date, purchasedOn)}`;
+}
+
+/**
  * An instant - when something was created, when a session ends - as the local
  * calendar day it falls on, in the same form.
  */

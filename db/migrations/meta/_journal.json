@@ -183,6 +183,13 @@
       "when": 1792346696566,
       "tag": "0025_card_payment_due",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792801614143,
+      "tag": "0026_purchase_date",
+      "breakpoints": true
     }
   ]
 }

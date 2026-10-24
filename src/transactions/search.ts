@@ -103,6 +103,8 @@ export type TransactionQuery = {
 export type FoundTransaction = {
   id: string;
   date: string;
+  /** The day of the purchase, when it was not the posting date (see the schema). */
+  purchasedOn: string | null;
   payeeRaw: string;
   amountCents: number;
   status: string;
@@ -296,6 +298,13 @@ function conditions(query: TransactionQuery): SQL[] {
   return where;
 }
 
+/**
+ * The day a list puts a transaction on: when it was bought, where the bank
+ * said and it differs from when it posted. Only the order and the label - the
+ * date filters, budget months and statements still go by the posting date.
+ */
+export const shownDate = sql`coalesce(${transactions.purchasedOn}, ${transactions.date})`;
+
 function ordering(query: TransactionQuery) {
   const descending = (query.order ?? 'desc') === 'desc';
   const by = (column: SQLWrapper) => (descending ? desc(column) : asc(column));
@@ -303,13 +312,13 @@ function ordering(query: TransactionQuery) {
   switch (query.sort ?? 'date') {
     case 'amount':
       // By size, not by sign: a $900 refund sorts with the $900 charges.
-      return [by(sql`abs(${transactions.amountCents})`), desc(transactions.date)];
+      return [by(sql`abs(${transactions.amountCents})`), desc(shownDate)];
     case 'payee':
-      return [by(transactions.payeeKey), desc(transactions.date)];
+      return [by(transactions.payeeKey), desc(shownDate)];
     default:
       // The same order the running balance is summed in, so each row's balance
       // follows from the one below it (newest first) or above it (oldest first).
-      return [by(transactions.date), by(transactions.createdAt), by(transactions.id)];
+      return [by(shownDate), by(transactions.date), by(transactions.createdAt), by(transactions.id)];
   }
 }
 
@@ -330,6 +339,7 @@ export async function searchTransactions(
     .select({
       id: transactions.id,
       date: transactions.date,
+      purchasedOn: transactions.purchasedOn,
       payeeRaw: transactions.payeeRaw,
       amountCents: transactions.amountCents,
       status: transactions.status,
@@ -399,6 +409,7 @@ export async function transactionsById(
     .select({
       id: transactions.id,
       date: transactions.date,
+      purchasedOn: transactions.purchasedOn,
       payeeRaw: transactions.payeeRaw,
       amountCents: transactions.amountCents,
       status: transactions.status,
@@ -430,8 +441,12 @@ export async function transactionsById(
  * rows between two matches would otherwise make it jump for no visible reason.
  * Unreviewed rows count - the money moved whether or not it has an envelope.
  *
- * Within one day the bank's own order is unknown, so rows are summed in the
- * order they arrived; the balance at the end of each day is exact either way.
+ * Summed in the order the list shows them, by the day of the purchase, so
+ * each balance follows from the row beside it. That makes a row's balance what
+ * the account held counting charges from when they were made, which can differ
+ * from the bank's posted balance on that day while a charge is still to post;
+ * the latest balance is the same either way. Within one day the bank's own
+ * order is unknown, so rows are summed in the order they arrived.
  */
 async function balancesAfter(
   db: Database,
@@ -443,7 +458,7 @@ async function balancesAfter(
     select id, balance_after from (
       select id,
         sum(amount_cents) over (
-          order by date, created_at, id
+          order by coalesce(purchased_on, date), date, created_at, id
           rows between unbounded preceding and current row
         ) as balance_after
       from transactions

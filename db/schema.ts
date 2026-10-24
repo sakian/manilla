@@ -538,6 +538,13 @@ export const transactions = pgTable(
       .references(() => accounts.id),
     /** Calendar date as the bank stated it. Never a timestamp. */
     date: date('date').notNull(),
+    /**
+     * The day the purchase was made, when the bank says and it differs from
+     * the posting date: a card charge can post days later. Shown beside the
+     * date only. Budgets, matching and statements go by the posting date,
+     * which is the one the bank's statement uses.
+     */
+    purchasedOn: date('purchased_on'),
     amountCents: cents('amount_cents').notNull(),
     /** Exactly as the bank wrote it, kept for audit and re-normalization. */
     payeeRaw: text('payee_raw').notNull(),

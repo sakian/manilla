@@ -25,6 +25,8 @@ export type OfxTransaction = {
   type: string;
   /** Calendar date, `YYYY-MM-DD`. */
   posted: string;
+  /** The day of the purchase, when the bank gives one that is not the posting date. */
+  purchased?: string;
   amountCents: number;
   name: string;
   memo?: string;
@@ -181,6 +183,12 @@ function readTransaction(node: OfxNode, warnings: string[]): OfxTransaction | un
     return undefined;
   }
 
+  // DTUSER is the day of the purchase when the bank sends both; on its own it
+  // stands in for the posting date above, and is not a second date.
+  const rawUser = text(node, 'DTPOSTED') === undefined ? undefined : text(node, 'DTUSER');
+  const user = rawUser === undefined ? null : parseOfxDate(rawUser);
+  const purchased = user && user !== posted ? user : undefined;
+
   const local: string[] = [];
   const amount = parseAmount(rawAmount);
   if (amount.warning) local.push(amount.warning);
@@ -192,6 +200,7 @@ function readTransaction(node: OfxNode, warnings: string[]): OfxTransaction | un
     fitId: fitId ?? '',
     type: text(node, 'TRNTYPE') ?? 'OTHER',
     posted,
+    ...(purchased ? { purchased } : {}),
     amountCents: amount.cents,
     name: text(node, 'NAME') ?? text(payee, 'NAME') ?? '',
     ...(text(node, 'MEMO') ? { memo: text(node, 'MEMO')! } : {}),

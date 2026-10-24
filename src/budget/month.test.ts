@@ -82,3 +82,13 @@ test('dates read the way people write them, this year without the year', async (
   // Something that is not a date is shown as it came rather than mangled.
   assert.equal(displayDate('soon', today), 'soon');
 });
+
+test('a transaction shows the day it was bought, and the day it posted when that differs', async () => {
+  const { transactionDate } = await import('./month.ts');
+  const today = '2026-10-23';
+  assert.equal(transactionDate('2026-10-19', '2026-10-17', today), 'Oct 17, posted Oct 19');
+  assert.equal(transactionDate('2026-10-19', null, today), 'Oct 19');
+  assert.equal(transactionDate('2026-10-19', '2026-10-19', today), 'Oct 19');
+  assert.equal(transactionDate('2027-01-02', '2026-12-30', today), 'Dec 30, posted Jan 2, 2027');
+  assert.equal(transactionDate('2025-09-29', '2025-09-28', today), 'Sept 28, 2025, posted Sept 29', 'one year, said once');
+});
