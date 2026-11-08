@@ -39,12 +39,19 @@
 import { Fragment, useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { EnvelopeOption, QueueRow, TransferCandidate } from '../../src/queue/queue.ts';
+import type { DuplicateCandidate } from '../../src/queue/duplicates.ts';
 import { BAND_THRESHOLDS } from '../../src/categorize/pipeline.ts';
-import { handOverAction, markAsTransferAction, pairTransferAction, saveReviewAction } from '../actions.ts';
+import {
+  handOverAction,
+  markAsTransferAction,
+  mergeDuplicateAction,
+  pairTransferAction,
+  saveReviewAction,
+} from '../actions.ts';
 import { Money } from '../Money.tsx';
 import { useOverlay } from '../useOverlay.ts';
 import EnvelopeChoices from '../EnvelopeChoices.tsx';
-import { transactionDate } from '../../src/budget/month.ts';
+import { displayDate, transactionDate } from '../../src/budget/month.ts';
 import { splitLines, type LineDraft } from '../../src/transactions/formLines.ts';
 import SplitLines from '../SplitLines.tsx';
 import { Thread, threadPrompt, type ThreadPeople } from '../Thread.tsx';
@@ -92,10 +99,22 @@ export function saysMore(row: QueueRow): boolean {
   return squeeze(row.payeeRaw) !== squeeze(row.payeeDisplay);
 }
 
+/**
+ * What a second record matched. A transfer is named as one, since its wording
+ * is the other account's ("TFR-TO C/C" on a card reads like a mistake).
+ */
+function alreadyHere(candidate: DuplicateCandidate): string {
+  const when = displayDate(candidate.existingDate);
+  return candidate.existingIsTransfer
+    ? `the transfer on ${when}`
+    : `as ${candidate.existingPayee} on ${when}`;
+}
+
 export default function ReviewQueue({
   rows,
   envelopes,
   transfers,
+  duplicates,
   accounts,
   me,
   members,
@@ -105,6 +124,8 @@ export default function ReviewQueue({
   envelopes: EnvelopeOption[];
   /** Rows that look like half of a transfer, found rather than declared. */
   transfers: TransferCandidate[];
+  /** Rows that look like a second record of a transaction already here (FR-18). */
+  duplicates: DuplicateCandidate[];
   accounts: { id: string; name: string }[];
   /** Who is reviewing, so a row handed to them says "for you". */
   me: string;
@@ -154,6 +175,10 @@ export default function ReviewQueue({
   const transferFor = useMemo(
     () => new Map(transfers.map((candidate) => [candidate.transactionId, candidate])),
     [transfers],
+  );
+  const duplicateFor = useMemo(
+    () => new Map(duplicates.map((candidate) => [candidate.transactionId, candidate])),
+    [duplicates],
   );
 
   /**
@@ -328,6 +353,24 @@ export default function ReviewQueue({
     [closePicker, router],
   );
 
+  /** Fold a second record into the one already here, rather than counting it twice (FR-18). */
+  const mergeDuplicate = useCallback(
+    (candidate: DuplicateCandidate) => {
+      setError(null);
+      startTransition(async () => {
+        const result = await mergeDuplicateAction(candidate.transactionId, candidate.existingId);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        closePicker();
+        setNote(`Merged into the one recorded ${displayDate(candidate.existingDate)}.`);
+        router.refresh();
+      });
+    },
+    [closePicker, router],
+  );
+
   const markTransfer = useCallback(
     (row: QueueRow, toAccountId: string, createRule: boolean) => {
       setError(null);
@@ -420,6 +463,7 @@ export default function ReviewQueue({
                     GOOGLE*CLOUD both read "Google". */}
                 {saysMore(row) && <span className="queue-raw">{row.payeeRaw}</span>}
                 {transferFor.get(row.id) && <span className="band medium">transfer?</span>}
+                {duplicateFor.get(row.id) && <span className="band medium">already here?</span>}
               </span>
 
               <Money cents={row.amountCents} sign="incoming" />
@@ -645,6 +689,22 @@ export default function ReviewQueue({
                     >
                       <span className="picker-name">{suggested.name}</span>
                       <span className="muted picker-group">suggested · {suggested.groupName}</span>
+                    </button>
+                  )}
+
+                  {/* A second record of something already here. Above the
+                      envelopes' alternatives, since choosing any of them would
+                      count the money twice. */}
+                  {duplicateFor.get(picking.id) && (
+                    <button
+                      className="picker-option suggested"
+                      onClick={() => mergeDuplicate(duplicateFor.get(picking.id)!)}
+                      disabled={pending}
+                    >
+                      <span className="picker-name">Already recorded</span>
+                      <span className="muted picker-group">
+                        {alreadyHere(duplicateFor.get(picking.id)!)}
+                      </span>
                     </button>
                   )}
 

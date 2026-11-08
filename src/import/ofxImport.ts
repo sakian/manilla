@@ -247,6 +247,7 @@ export async function previewImport(
     amountCents: number;
     payeeKey: string;
     payeeRaw: string;
+    copiedHalf: boolean;
   }[] = [];
   // Typed in by hand and not yet seen on a statement: the ones waiting for this
   // file. Only `manual` rows, because a migrated history is just as unbanked
@@ -276,6 +277,28 @@ export async function previewImport(
           select 1 from ${transactionExternalIds} x
           where x.transaction_id = ${transactions.id} and x.kind = ${idKind.other}
         )`,
+        // A transfer half written from the other account's statement is a copy
+        // of its partner's date and wording. Which of the two was written: an
+        // import rule writes it under the other account's batch, and "not
+        // spending" in review writes it with no batch, after its partner. Two
+        // real rows paired up never agree on both date and wording anyway.
+        // Written out as "transactions"."id" since a bare column here would
+        // bind to `p`.
+        copiedHalf: sql<boolean>`exists (
+          select 1 from transactions p
+          where p.transfer_pair_id = "transactions"."transfer_pair_id"
+            and p.id <> "transactions"."id"
+            and p.date = "transactions"."date"
+            and p.payee_raw = "transactions"."payee_raw"
+            and (
+              exists (
+                select 1 from import_batches b
+                where b.id = "transactions"."import_batch_id"
+                  and b.account_id <> "transactions"."account_id"
+              )
+              or ("transactions"."import_batch_id" is null and p.created_at < "transactions"."created_at")
+            )
+        )`,
       })
       .from(transactions)
       .where(eq(transactions.accountId, accountId));
@@ -296,6 +319,7 @@ export async function previewImport(
           amountCents: Number(row.amountCents),
           payeeKey: row.payeeKey,
           payeeRaw: row.payeeRaw,
+          copiedHalf: row.kind === 'account_transfer' && row.copiedHalf,
         });
       }
 
@@ -351,12 +375,23 @@ export async function previewImport(
     // Same day first, then the same description, then the nearest; each row
     // here answers for one at most, so two identical coffees on consecutive
     // days pair off one to one rather than both landing on one.
+    //
+    // A transfer half written from the other account's statement keeps that
+    // account's wording and date even after this account's first source
+    // claims it, so neither tells us anything here, and it is matched as a
+    // waiting half is: amount and a near date. Ex: a chequing "TFR-TO C/C" on
+    // Nov 5 writes the card's half, a card statement file links its
+    // "PAYMENT - THANK YOU" to it, and then the card's bank feed sends the
+    // same payment dated Nov 6. A half that is this account's own record
+    // keeps the bank's date, so it gets no such allowance.
     const [sameEntry] = fromOtherSource
       .filter(
         (candidate) =>
           !claimedLookAlikes.has(candidate.id) &&
           candidate.amountCents === transaction.amountCents &&
           (candidate.date === transaction.posted ||
+            (candidate.copiedHalf &&
+              daysApart(candidate.date, transaction.posted) <= TRANSFER_DATE_WINDOW_DAYS) ||
             (candidate.payeeKey === payeeKey &&
               daysApart(candidate.date, transaction.posted) <= LOOKALIKE_WINDOW_DAYS)),
       )

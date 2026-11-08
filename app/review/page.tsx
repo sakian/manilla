@@ -10,6 +10,7 @@ import {
   pendingTransactions,
   transferCandidates,
 } from '../../src/queue/queue.ts';
+import { duplicateCandidates } from '../../src/queue/duplicates.ts';
 import { requireUser } from '../auth.ts';
 import { Hint } from '../Hint.tsx';
 import ReviewQueue from './ReviewQueue.tsx';
@@ -42,7 +43,7 @@ export default async function ReviewPage(props: {
 
   // `?batch=` is what an import lands on: the same screen, looking only at what
   // just arrived. Everything else waiting is one link away.
-  const [rows, everything, mine, envelopes, accounts, transfers] = await Promise.all([
+  const [rows, everything, mine, envelopes, accounts, transfers, duplicates] = await Promise.all([
     pendingTransactions(
       connection,
       batch ? { importBatchId: batch } : view === 'mine' ? { handedTo: session.userId } : {},
@@ -52,6 +53,7 @@ export default async function ReviewPage(props: {
     envelopeOptions(connection),
     listAccounts(connection),
     transferCandidates(connection, batch ? { importBatchId: batch } : {}),
+    duplicateCandidates(connection, batch ? { importBatchId: batch } : {}),
   ]);
 
   return (
@@ -66,7 +68,9 @@ export default async function ReviewPage(props: {
             you review them. A transaction with no suggestion starts empty. Your choices are not
             saved until you press Save, so if you stop halfway, nothing has changed.
             The exception is marking a transaction as not spending. That is saved straight away, and
-            both sides of the transfer are recorded. To leave some for someone else, press Hand
+            both sides of the transfer are recorded. So is Already recorded, offered when a
+            transaction looks like one already here from another statement or the bank feed: it
+            folds this one into that one, so the money isn't counted twice. To leave some for someone else, press Hand
             over, tick the ones you want them to look at and choose who, with a note if you like.
             They are told, and the transactions appear under For me on their list, where they can
             reply about each one, or go through them one at a time. Notes keeps what was said,
@@ -97,6 +101,7 @@ export default async function ReviewPage(props: {
         rows={rows}
         envelopes={envelopes}
         transfers={transfers}
+        duplicates={duplicates}
         accounts={accounts.map((account) => ({ id: account.id, name: account.name }))}
         me={session.userId}
         members={members.map((member) => ({ id: member.id, name: member.name }))}

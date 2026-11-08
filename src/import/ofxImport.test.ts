@@ -1225,6 +1225,47 @@ describe(
         assert.equal((await db.select().from(transactions)).length, 2);
       });
 
+      test("a card's half of a payment is linked when its second source sends it days off", async () => {
+        // Seen for real: the chequing feed's "TFR-TO C/C" wrote the card's half,
+        // a card statement file then linked its payment row to that half, and
+        // the card's feed sent the same payment a day later. The half still
+        // has the chequing side's date and wording, so neither the same day
+        // nor the same description held, and it came in as new.
+        const visa = await openAccount(db, { name: 'Visa', kind: 'credit_card', externalAccountId: '7654321' });
+        const { convertToTransfer } = await import('../transactions/manage.ts');
+        const payment = await recordTransaction(db, {
+          accountId,
+          date: '2026-09-10',
+          amountCents: -50000,
+          payeeRaw: 'TFR-TO C/C',
+          source: 'bank_sync',
+          externalIds: [{ kind: 'aggregator', value: 'plaid-chq' }],
+        });
+        await convertToTransfer(db, payment, { toAccountId: visa });
+
+        const file = await previewImport(
+          db,
+          statementOf([{ fitId: 'VISA-1', posted: '2026-09-11', amountCents: 50000, name: 'PAYMENT - THANK YOU' }]),
+          visa,
+          { categorize: false },
+        );
+        assert.equal(file.rows[0]!.verdict, 'transfer_half');
+        await commitImport(db, file, new Map());
+
+        const feed = await previewImport(
+          db,
+          synced([{ fitId: 'plaid-visa', posted: '2026-09-12', amountCents: 50000, name: 'PAYMENT - THANK YOU' }]),
+          visa,
+          { categorize: false, source: 'bank_sync' },
+        );
+        assert.equal(feed.rows[0]!.verdict, 'same_entry');
+        await commitImport(db, feed, new Map());
+
+        assert.equal((await db.select().from(transactions)).length, 2, 'still the two halves, nothing added');
+        assert.deepEqual(await idsOf('aggregator'), ['plaid-chq', 'plaid-visa']);
+        assert.ok((await checkInvariant(db)).ok);
+      });
+
       test('a transfer half the feed brought in is not waiting for a statement', async () => {
         const visa = await openAccount(db, { name: 'Visa', kind: 'credit_card', externalAccountId: '7654321' });
         const { convertToTransfer } = await import('../transactions/manage.ts');
