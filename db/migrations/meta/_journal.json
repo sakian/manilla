@@ -190,6 +190,13 @@
       "when": 1792801614143,
       "tag": "0026_purchase_date",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794101336801,
+      "tag": "0027_move_reversals",
+      "breakpoints": true
     }
   ]
 }

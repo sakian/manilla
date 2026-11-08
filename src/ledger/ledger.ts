@@ -404,6 +404,8 @@ export type NewEnvelopeMove = {
   date: string;
   kind: 'allocation' | 'transfer';
   note?: string;
+  /** Set when this move undoes another (FR-30, FR-34). */
+  reversesMoveId?: string;
 };
 
 /** FR-29, FR-34. One row moves money out of one envelope and into another. */
@@ -430,11 +432,57 @@ export async function moveBetweenEnvelopes(
         date: input.date,
         kind: input.kind,
         note: input.note ?? null,
+        reversesMoveId: input.reversesMoveId ?? null,
       })
       .returning({ id: envelopeMoves.id }),
   );
 
   return row!.id;
+}
+
+/**
+ * Undo one envelope move by writing its opposite (FR-30, FR-34). The original
+ * stays: the money did move, and the envelope's history should say so.
+ *
+ * The undo takes the original's date so both land in the same month and cancel
+ * there, rather than the mistake inflating one month and its correction another.
+ * An undo is never itself undone - that would be the same move made again, which
+ * is clearer to make again - and a move is undone at most once, which the unique
+ * index on `reverses_move_id` holds even against two people pressing at once.
+ */
+export async function undoEnvelopeMove(
+  db: Database,
+  move: typeof envelopeMoves.$inferSelect,
+  note: string | undefined,
+): Promise<string> {
+  if (move.reversesMoveId !== null) {
+    throw new LedgerError('That move is itself an undo; move the money again instead');
+  }
+
+  const [already] = await db
+    .select({ id: envelopeMoves.id })
+    .from(envelopeMoves)
+    .where(eq(envelopeMoves.reversesMoveId, move.id))
+    .limit(1);
+  if (already) throw new LedgerError('That move has already been undone');
+
+  try {
+    return await moveBetweenEnvelopes(db, {
+      fromEnvelopeId: move.toEnvelopeId,
+      toEnvelopeId: move.fromEnvelopeId,
+      amountCents: Number(move.amountCents),
+      date: move.date,
+      kind: move.kind,
+      note,
+      reversesMoveId: move.id,
+    });
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string } }).cause;
+    if ((cause?.code ?? (error as { code?: string }).code) === '23505') {
+      throw new LedgerError('That move has already been undone');
+    }
+    throw error;
+  }
 }
 
 export type NewAccount = {

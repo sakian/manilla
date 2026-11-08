@@ -1,18 +1,21 @@
 'use client';
 
 /**
- * One envelope's history, and the one thing you can undo from it (VW-4, FR-30).
+ * One envelope's history, and the moves you can undo from it (VW-4, FR-30, FR-34).
  *
  * Allocations used to be listed again on the budget screen with their own undo
  * button. They are listed here, on the envelope the money went into, so this is
  * where sending one back belongs - the alternative was two lists of the same
  * records, only one of which could act on them.
  *
- * Undo is offered on money allocated *into* this envelope, and nowhere else. A
- * negative allocation on an ordinary envelope is already a reversal, and
+ * Send back is offered on money allocated *into* this envelope, and nowhere
+ * else. A negative allocation on an ordinary envelope is already a reversal, and
  * reversing a reversal would re-allocate, which is a confusing way to spell
  * "fund it again". The income pool shows the other side of every allocation, so
  * it offers nothing here at all.
+ *
+ * A transfer can be undone from either envelope, since a mistake is noticed on
+ * whichever one looks wrong. Once undone, both rows say so instead.
  */
 
 import { useCallback, useState, useTransition } from 'react';
@@ -20,6 +23,7 @@ import { useRouter } from 'next/navigation';
 import type { EnvelopeEvent } from '../../../src/envelopes/manage.ts';
 import { Money } from '../../Money.tsx';
 import { reverseAllocationAction } from '../../budget/actions.ts';
+import { undoTransferAction } from '../actions.ts';
 import { displayDate } from '../../../src/budget/month.ts';
 
 export default function History({
@@ -36,11 +40,14 @@ export default function History({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const sendBack = useCallback(
-    (moveId: string) => {
+  const undo = useCallback(
+    (moveId: string, kind: 'allocation' | 'transfer') => {
       setError(null);
       startTransition(async () => {
-        const result = await reverseAllocationAction(moveId, month);
+        const result =
+          kind === 'allocation'
+            ? await reverseAllocationAction(moveId, month)
+            : await undoTransferAction(moveId);
         if (!result.ok) {
           setError(result.error);
           return;
@@ -58,21 +65,34 @@ export default function History({
       {error && <p className="signin-error">{error}</p>}
 
       {events.map((event) => {
-        const undoable =
-          !isPool && event.kind === 'allocation' && event.amountCents > 0;
+        const isMove = event.kind !== 'transaction';
+        const undone = isMove && event.undone;
+        const action =
+          !isMove || undone || event.isUndo
+            ? null
+            : event.kind === 'transfer'
+              ? 'Undo'
+              : !isPool && event.amountCents > 0
+                ? 'Send back'
+                : null;
 
         return (
           <div key={event.id} className="txn">
             <span className="txn-payee">
               {event.description}
-              {event.kind === 'allocation' && <span className="tag">allocation</span>}
-              {event.kind === 'transfer' && <span className="tag">transfer</span>}
+              {/* One tag, so a phone does not wrap a second onto its own line. */}
+              {isMove && (
+                <span className="tag">
+                  {event.kind}
+                  {event.isUndo ? ' undo' : undone ? ', undone' : ''}
+                </span>
+              )}
             </span>
             <span className="allocation-actions">
               <Money cents={event.amountCents} />
-              {undoable && (
-                <button onClick={() => sendBack(event.moveId)} disabled={pending}>
-                  Send back
+              {isMove && action && (
+                <button onClick={() => undo(event.moveId, event.kind)} disabled={pending}>
+                  {action}
                 </button>
               )}
             </span>

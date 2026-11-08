@@ -563,6 +563,20 @@ describe(
       assert.equal(records.filter((record) => record.isReversal).length, 1);
     });
 
+    test('an allocation is sent back once, however many times it is pressed', async () => {
+      await receiveIncome(400000);
+      await fundEnvelopes(db, '2026-09', [{ envelopeId: env.gasId, amountCents: 20000 }], {
+        today: '2026-09-19',
+      });
+
+      const [allocation] = await monthAllocations(db, '2026-09');
+      await reverseAllocation(db, allocation!.id);
+      await assert.rejects(() => reverseAllocation(db, allocation!.id));
+
+      assert.equal(await balanceOf(env.gasId), 0);
+      assert.equal(await balanceOf(env.unallocatedId), 400000);
+    });
+
     test('a reversed month shows no net allocation and can be re-funded', async () => {
       await receiveIncome(400000);
       await setPlanned(db, env.gasId, 20000);

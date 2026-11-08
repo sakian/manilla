@@ -99,7 +99,7 @@ not yet against a real bank ([#10](https://github.com/sakian/manilla/issues/10))
 
 | ID | Requirement | Pri | Status |
 | --- | --- | --- | --- |
-| FR-34 | Move money between any two envelopes with an amount, date and note. | M | Built |
+| FR-34 | Move money between any two envelopes with an amount, date and note. | M | Built. A transfer made by mistake is undone from either envelope's history, which moves the money back on the original's date so both cancel in the same month. There's no edit, since that would rewrite what both histories say happened, so a wrong amount is undone and moved again. Both records stay, the original marked undone, and a move is undone at most once (an allocation's Send back included). |
 | FR-35 | From an overspent envelope, offer a one-tap "cover this" action that suggests source envelopes with spare balance. | S | Built |
 | FR-36 | Transfers appear in each envelope's history and are excluded from spending reports. | M | Built |
 | FR-37 | Show a running check that total envelope balances equal total account balances, and flag any difference. | M | Built. An hourly check also tells the phones that turned on Problems when a ledger stops adding up, once until it is put right (#87). |
