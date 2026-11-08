@@ -11,6 +11,7 @@ import { reviewStates } from '../src/push/edits.ts';
 import { tellOthers } from './editNotices.ts';
 import { refreshRuleSuggestionCount } from '../src/rules/rules.ts';
 import { pairTransferHalves, saveReview, type ReviewDecision } from '../src/queue/queue.ts';
+import { mergeDuplicate } from '../src/queue/duplicates.ts';
 import { convertToTransfer, transactionDetail } from '../src/transactions/manage.ts';
 import { createTransferRule } from '../src/rules/rules.ts';
 import { dismissInsight } from '../src/insights/insights.ts';
@@ -177,6 +178,29 @@ export async function markAsTransferAction(
     revalidatePath('/settings', 'layout');
     revalidatePath('/');
     return { ok: true as const, ruleMade };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * FR-18. A waiting row that is a second record of a transaction already here,
+ * folded into it. Only the waiting one goes, so only it counts as reviewed.
+ */
+export async function mergeDuplicateAction(duplicateId: string, keepId: string) {
+  try {
+    const session = actAs(await requireUser());
+    const connection = await ledgerDb();
+    const before = await reviewStates(connection, [duplicateId]);
+    await mergeDuplicate(connection, duplicateId, keepId);
+    await tellOthers(session, { kind: 'review', action: 'reviewed', count: before.waiting });
+    revalidatePath('/review');
+    revalidatePath('/transactions');
+    revalidatePath('/');
+    return { ok: true as const };
   } catch (error) {
     return {
       ok: false as const,
