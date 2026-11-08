@@ -22,6 +22,7 @@ import {
   coverFrom,
   coverPlan,
   transferBetweenEnvelopes,
+  undoTransfer,
   type CoverPlan,
 } from '../../src/envelopes/transfer.ts';
 import { requireUser } from '../auth.ts';
@@ -201,6 +202,18 @@ export async function transferAction(input: {
     refreshed(input.toEnvelopeId);
     refreshed(input.fromEnvelopeId);
     return { ok: true, message: 'Moved.' };
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** FR-34. Both envelopes' pages are dynamic, so refreshing the lists is enough. */
+export async function undoTransferAction(moveId: string): Promise<ActionResult> {
+  try {
+    actAs(await requireUser());
+    await undoTransfer(await ledgerDb(), moveId);
+    refreshed();
+    return { ok: true, message: 'Moved back.' };
   } catch (error) {
     return failed(error);
   }

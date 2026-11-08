@@ -145,6 +145,10 @@ export type EnvelopeEvent =
       pending: false;
       /** Who moved it; null for moves from before that was kept. */
       by: string | null;
+      /** This move undoes another, so it is not offered for undo itself. */
+      isUndo: boolean;
+      /** Already undone, so the history says so instead of offering it again. */
+      undone: boolean;
     };
 
 /**
@@ -180,6 +184,7 @@ export async function envelopeHistory(
   // unqualified name that also exists inside the subquery binds there instead.
   const source = alias(envelopes, 'source_envelope');
   const destination = alias(envelopes, 'destination_envelope');
+  const undo = alias(envelopeMoves, 'undo_move');
 
   const moves = await db
     .select({
@@ -192,10 +197,13 @@ export async function envelopeHistory(
       fromName: source.name,
       toName: destination.name,
       by: envelopeMoves.createdByName,
+      reversesMoveId: envelopeMoves.reversesMoveId,
+      undoneBy: undo.id,
     })
     .from(envelopeMoves)
     .innerJoin(source, eq(source.id, envelopeMoves.fromEnvelopeId))
     .innerJoin(destination, eq(destination.id, envelopeMoves.toEnvelopeId))
+    .leftJoin(undo, eq(undo.reversesMoveId, envelopeMoves.id))
     .where(
       or(
         eq(envelopeMoves.toEnvelopeId, envelopeId),
@@ -230,6 +238,8 @@ export async function envelopeHistory(
         amountCents: incoming ? Number(row.amountCents) : -Number(row.amountCents),
         pending: false,
         by: row.by,
+        isUndo: row.reversesMoveId !== null,
+        undone: row.undoneBy !== null,
       };
     }),
   ];

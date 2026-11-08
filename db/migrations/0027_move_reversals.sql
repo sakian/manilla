@@ -1,0 +1,3 @@
+ALTER TABLE "envelope_moves" ADD COLUMN "reverses_move_id" uuid;--> statement-breakpoint
+ALTER TABLE "envelope_moves" ADD CONSTRAINT "envelope_moves_reverses_move_id_envelope_moves_id_fk" FOREIGN KEY ("reverses_move_id") REFERENCES "public"."envelope_moves"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "envelope_moves_reverses_idx" ON "envelope_moves" USING btree ("reverses_move_id");

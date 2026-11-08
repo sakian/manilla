@@ -2,7 +2,7 @@ import { test, before, beforeEach, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
-import { checkInvariant, openAccount, recordTransaction } from '../ledger/ledger.ts';
+import { LedgerError, checkInvariant, openAccount, recordTransaction } from '../ledger/ledger.ts';
 import { envelopeBalance } from '../budget/budget.ts';
 import {
   EnvelopeError,
@@ -23,6 +23,7 @@ import {
   coverPlan,
   transferBetweenEnvelopes,
   transferOptions,
+  undoTransfer,
 } from './transfer.ts';
 import {
   closeDb,
@@ -410,6 +411,74 @@ describe(
       const groceriesHistory = await envelopeHistory(db, env.groceriesId);
       const outgoing = groceriesHistory.find((event) => event.kind === 'transfer')!;
       assert.equal(outgoing.amountCents, -15000, 'and out is negative');
+    });
+
+    // -- undoing a transfer (FR-34) ---------------------------------------
+
+    async function mistakenTransfer(): Promise<string> {
+      await fund(env.groceriesId, 50000);
+      return transferBetweenEnvelopes(db, {
+        fromEnvelopeId: env.groceriesId,
+        toEnvelopeId: env.gasId,
+        amountCents: 15000,
+        date: '2026-09-19',
+        note: 'Road trip',
+      });
+    }
+
+    test('a transfer is undone by moving the money back, and both records stay', async () => {
+      const moveId = await mistakenTransfer();
+      await undoTransfer(db, moveId);
+
+      assert.equal(await envelopeBalance(db, env.groceriesId), 50000);
+      assert.equal(await envelopeBalance(db, env.gasId), 0);
+      assert.ok((await checkInvariant(db)).ok);
+
+      const gasHistory = (await envelopeHistory(db, env.gasId)).filter(
+        (event) => event.kind === 'transfer',
+      );
+      assert.equal(gasHistory.length, 2, 'the mistake is still on the record');
+      const original = gasHistory.find((event) => event.kind === 'transfer' && event.moveId === moveId)!;
+      const undo = gasHistory.find((event) => event.kind === 'transfer' && event.isUndo)!;
+      assert.ok(original.kind === 'transfer' && original.undone && !original.isUndo);
+      assert.ok(undo.kind === 'transfer' && !undo.undone);
+      assert.equal(undo.amountCents, -15000);
+      assert.equal(undo.date, '2026-09-19', 'dated with the original, so they cancel in its month');
+      assert.equal(undo.description, 'Undo of Road trip');
+    });
+
+    test('a transfer is undone once, however many times it is pressed', async () => {
+      const moveId = await mistakenTransfer();
+      const results = await Promise.allSettled([undoTransfer(db, moveId), undoTransfer(db, moveId)]);
+      assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+
+      await assert.rejects(() => undoTransfer(db, moveId), LedgerError);
+      assert.equal(await envelopeBalance(db, env.groceriesId), 50000);
+      assert.equal(await envelopeBalance(db, env.gasId), 0);
+    });
+
+    test('an undo is not itself undone', async () => {
+      const undoId = await undoTransfer(db, await mistakenTransfer());
+      await assert.rejects(() => undoTransfer(db, undoId), LedgerError);
+    });
+
+    test('an undo that would move money through an archived envelope is refused', async () => {
+      const groupId = await createGroup(db, 'Vehicle');
+      const retired = await createEnvelope(db, { groupId, name: 'Old' });
+      await fund(env.groceriesId, 50000);
+      const moveId = await transferBetweenEnvelopes(db, {
+        fromEnvelopeId: env.groceriesId,
+        toEnvelopeId: retired,
+        amountCents: 100,
+      });
+      await transferBetweenEnvelopes(db, {
+        fromEnvelopeId: retired,
+        toEnvelopeId: env.groceriesId,
+        amountCents: 100,
+      });
+      await archiveEnvelope(db, retired);
+
+      await assert.rejects(() => undoTransfer(db, moveId), TransferError);
     });
 
     test('history lists spending newest first and marks what is unconfirmed', async () => {

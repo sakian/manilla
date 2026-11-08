@@ -31,7 +31,12 @@ import {
   envelopes,
   transactions,
 } from '../../db/schema.ts';
-import { LedgerError, moveBetweenEnvelopes, unallocatedEnvelope } from '../ledger/ledger.ts';
+import {
+  LedgerError,
+  moveBetweenEnvelopes,
+  unallocatedEnvelope,
+  undoEnvelopeMove,
+} from '../ledger/ledger.ts';
 import {
   addMonths,
   assertMonth,
@@ -774,14 +779,7 @@ export async function reverseAllocation(db: Database, moveId: string): Promise<s
     throw new BudgetError('Only an allocation is reversed here; use a transfer to move money back');
   }
 
-  return moveBetweenEnvelopes(db, {
-    fromEnvelopeId: move.toEnvelopeId,
-    toEnvelopeId: move.fromEnvelopeId,
-    amountCents: Number(move.amountCents),
-    date: move.date,
-    kind: 'allocation',
-    note: `Reversal of ${move.note ?? 'an allocation'}`,
-  });
+  return undoEnvelopeMove(db, move, `Reversal of ${move.note ?? 'an allocation'}`);
 }
 
 /**

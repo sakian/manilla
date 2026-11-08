@@ -34,6 +34,7 @@ import {
   primaryKey,
   check,
   jsonb,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -754,6 +755,17 @@ export const envelopeMoves = pgTable(
      */
     externalId: text('external_id'),
     /**
+     * The move this one undoes, for undo from an envelope's history (FR-30,
+     * FR-34). Unique, so the same mistake cannot be sent back twice by two
+     * presses or two people at once, and the history can say which moves are
+     * already undone rather than offering to undo them again. Undoing an import
+     * deletes its moves, and an undo of one of those goes with it: it existed
+     * only to cancel that move, and left behind it would move the money twice.
+     */
+    reversesMoveId: uuid('reverses_move_id').references((): AnyPgColumn => envelopeMoves.id, {
+      onDelete: 'cascade',
+    }),
+    /**
      * Who moved the money. Moves are only ever added - undo is another move -
      * so the audit trail, which records changes, never sees one being made.
      * Filled by the database, as on `transactions`.
@@ -768,6 +780,7 @@ export const envelopeMoves = pgTable(
     index('envelope_moves_to_idx').on(table.toEnvelopeId),
     index('envelope_moves_batch_idx').on(table.importBatchId),
     uniqueIndex('envelope_moves_external_idx').on(table.externalId),
+    uniqueIndex('envelope_moves_reverses_idx').on(table.reversesMoveId),
   ],
 );
 

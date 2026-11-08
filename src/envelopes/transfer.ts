@@ -15,7 +15,7 @@
 import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client.ts';
 import { envelopeGroups, envelopeMoves, envelopes } from '../../db/schema.ts';
-import { moveBetweenEnvelopes } from '../ledger/ledger.ts';
+import { moveBetweenEnvelopes, undoEnvelopeMove } from '../ledger/ledger.ts';
 import { localToday } from '../budget/month.ts';
 
 export class TransferError extends Error {}
@@ -62,6 +62,35 @@ export async function transferBetweenEnvelopes(
     kind: 'transfer',
     note: input.note?.trim() ? input.note.trim() : undefined,
   });
+}
+
+/**
+ * Undo a transfer made by mistake (FR-34), by moving the money back.
+ *
+ * There is no edit: changing the amount on a past move would rewrite what both
+ * envelopes' histories say happened. Undo and move it again says the same thing
+ * honestly. Archived envelopes are refused for the same reason a new transfer
+ * refuses them - money moved into one would be money nobody can see.
+ */
+export async function undoTransfer(db: Database, moveId: string): Promise<string> {
+  const [move] = await db.select().from(envelopeMoves).where(eq(envelopeMoves.id, moveId)).limit(1);
+  if (!move) throw new TransferError(`No such envelope move: ${moveId}`);
+  if (move.kind !== 'transfer') {
+    throw new TransferError('Only a transfer is undone here; an allocation is sent back');
+  }
+
+  const ends = await db
+    .select({ name: envelopes.name, archivedAt: envelopes.archivedAt })
+    .from(envelopes)
+    .where(inArray(envelopes.id, [move.fromEnvelopeId, move.toEnvelopeId]));
+  const archived = ends.find((row) => row.archivedAt !== null);
+  if (archived) {
+    throw new TransferError(`${archived.name} is archived, so money cannot be moved through it`);
+  }
+
+  // No note of its own when the original had none, so the history describes it
+  // by the envelope on the other end, as it does every other transfer.
+  return undoEnvelopeMove(db, move, move.note ? `Undo of ${move.note}` : undefined);
 }
 
 export type CoverSource = {
