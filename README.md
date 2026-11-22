@@ -184,7 +184,8 @@ src/
     ai.ts               Claude layer for unknown merchants (CA-5, CA-8)
     pipeline.ts         rules -> history -> AI, with confidence bands (CA-7)
 spikes/                 runnable investigations; see docs/measurements.md
-deploy/                 Tailscale serve configs (tailnet; tailnet plus Funnel), an Nginx fallback
+deploy/                 Tailscale serve configs (tailnet; tailnet plus Funnel), an Nginx fallback,
+                        and the systemd unit that starts it after a reboot
 docs/                   requirements, design decisions, measurements
 data/samples/           synthetic fixtures, safe to commit
 data/private/           your real exports - gitignored
@@ -304,6 +305,20 @@ ends up half-written, so both are fatal rather than warnings: the app exits, and
 Docker keeps restarting it until the cause is fixed. A database that is still
 starting — Postgres recovering after a power cut, say — is waited for, for up to
 two minutes, before that counts as failure.
+
+**Install the boot unit too.** The app shares the sidecar's network, so it can
+only start once the sidecar is running, and Docker doesn't wait for that when it
+restores containers at boot. If it tries the app first, the start fails and is
+never retried, whatever the restart policy says. After a power cut on 2026-11-21
+it lost that race by three seconds, and Manilla returned 502s until someone
+started it by hand. `deploy/manilla.service` runs `docker compose up -d` once
+Docker is up, which starts things in order and does nothing if they're already
+running:
+
+```bash
+sed "s#@MANILLA_DIR@#$PWD#" deploy/manilla.service | sudo tee /etc/systemd/system/manilla.service
+sudo systemctl daemon-reload && sudo systemctl enable manilla.service
+```
 
 **Every rebuild leaves the last one behind.** `--build` keeps the previous image
 and the build cache, and Docker never clears either: on this project's own

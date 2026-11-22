@@ -1,0 +1,35 @@
+# Starts Manilla's containers in order once Docker is up, after every boot.
+#
+# The app has no network of its own (network_mode: service:tailscale), so it can
+# only start once the sidecar is running. Docker restores containers at boot
+# without regard to that, and a container that fails to start then is never
+# retried, whatever its restart policy says. Seen on 2026-11-21: after a power
+# cut, Docker tried the app three seconds before the sidecar was up, and the app
+# stayed stopped until someone noticed the 502.
+#
+# `docker compose up -d` follows depends_on (db healthy, then the sidecar, then
+# the app), so it starts whatever the restore missed. When everything is already
+# running, it does nothing.
+#
+# Install (from the checkout, which fills in the path below):
+#
+#   sed "s#@MANILLA_DIR@#$PWD#" deploy/manilla.service | sudo tee /etc/systemd/system/manilla.service
+#   sudo systemctl daemon-reload && sudo systemctl enable manilla.service
+
+[Unit]
+Description=Start Manilla's containers in order once Docker is up
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=@MANILLA_DIR@
+# --no-build, so a boot never builds whatever happens to be checked out
+ExecStart=/usr/bin/docker compose up -d --no-build
+# Waits for Postgres to report healthy, which takes longer after a power cut
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
