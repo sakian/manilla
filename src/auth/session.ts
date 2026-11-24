@@ -9,8 +9,11 @@
  *
  * Two timeouts, because NF-3 asks for session timeouts and one is not enough:
  *
- *  - an **idle timeout**, extended each time the session is used, so a laptop
- *    left open at the kitchen table stops being a way in overnight;
+ *  - an **idle timeout**, extended each time the session is used, so a device
+ *    nobody has opened Manilla on in a couple of weeks has to sign in again.
+ *    It was 12 hours, which meant a passkey nearly every time for someone who
+ *    checks in once a day. Manilla is mostly used on phones, and a phone's own
+ *    lock screen already guards it, so the shorter wait cost more than it saved;
  *  - an **absolute cap** from when the session was created, which no amount of
  *    activity extends, so a stolen cookie has a definite end.
  */
@@ -24,7 +27,7 @@ import { SESSION_COOKIE } from './cookie.ts';
 export { SESSION_COOKIE };
 
 /** Idle timeout: how long a session survives without being used. */
-export const IDLE_TIMEOUT_MS = 12 * 60 * 60 * 1000;
+export const IDLE_TIMEOUT_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** Absolute cap: how long a session can live at all, however busy. */
 export const ABSOLUTE_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000;
